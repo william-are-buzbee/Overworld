@@ -2,7 +2,7 @@
   
 This doc is full of design decisions. One liners that describe how the game is supposed to run. So, if it says here that underground layers are the same size as above ground layers, that is intended and should exist in the game. If it doesn't, it belongs on the todo list. 
 
-  -Architecture-
+        -Architecture-
   
 All layer transitions (stairs, towns, shops) go through teleportPlayer. No direct player.layer = X assignments.
 activateLayer() must be called on every layer transition.
