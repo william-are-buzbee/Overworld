@@ -1,25 +1,25 @@
 ## Lore:
-
 This is a loose approximated version of the game's lore, central narrative and the context of the world the player exists within. This is a junk drawer of ideas I use to build the narrative of the game. 
 
 ### Core Premise 
 An empty planet exists, barren except for a rudamentary, proto form of life. A demigod arrives at the planet, bringing with it the power of mutation. Mutation produces change. Over enough generations, mutation looks like evolution, speciation and the creation of full scale ecologies. 
 
 ### The Demigod
-Not a god. A demigod — very powerful, probably immortal and far from average... but not omniscient. They have a human-like disposition, more similar to greek gods that are flawed and have their own distinctive personalities. For clarity, what does that look like? The demigod can: 
-
--Lie and be deceived
--Grant favors, form relationships
--Masquerade as a normal creature
--Sacrifice for an idea or for another being
--Admit mistakes, show self-reflection
--Love, hate, resent
--Hold a coherent worldview and a vision for the planet
--Have sharp memory in some specific forms but forget a lot otherwise (too many memories)
+Not a god. A demigod — very powerful, probably immortal and far from average... but not omniscient. The demigod is capable of: lying and being deceived. Showing love, hate or resentment. Granting favors and forming relationships. Shapeshifting as any creature and masquerading among them. Sacrificing for another living being, or for an idea or belief. Admitting to mistakes and showing self-reflection. Having sharp memory in some ways, but a forgetful one otherwise.   
 
 ### Phases
-Critically, the demigod is also subject to mutation. As time goes on, the demigod goes through "phases"- long periods (centuries, millennia) where their personality, motivation, behavior, and morality are relatively stable before shifting into something new. The historical record of the world is intertwined with whatever phase the demigod was in at the time. These phases are not black and white or good vs evil, just someone changing overtime. By the end of the historical timeline, there are massive differences between the "versions" of each demigod throughout history.
+Crucially, the demigod is also subject to mutation. As time goes on, the demigod goes through "phases"- long periods (centuries, millennia) where its personality, motivation, behavior, and morality are relatively stable before shifting into something new. The historical record of the world is intertwined with whatever phase the demigod was in at the time. These phases are not black and white or good vs evil, just someone changing overtime. By the end of the historical timeline, there are massive differences between the "versions" of each demigod throughout history.
+
+### Early Phase
+Not long after arriving at the planet, the demigod tries to build ecosystems from scratch. Shaping creatures directly, like sculpting a tiger from clay. Then realizing you need prey, and the prey needs food, and it spirals into an absurd, lopsided ecosystem every time. Ecologies that confound traditional evolutionary logic. 
+Each failed attempt gets wiped. The demigod starts over. But wiping isn't always clean. Some things survive — intentionally, accidentally, or simply because the demigod didn't care enough to finish the job.
+
+### Dormancy Phase
+The demigod steps back. Maybe tired, maybe bored, maybe they recognized the direct approach wasn't working. They sleep, or simply stop intervening. The world is allowed to "evolve" through mutation organically as evolution did on Earth. In this post-wipe environment, the survivors have massive advantages — they're more complex than anything else alive. They explode in diversity, filling empty niches. Most modern creatures trace evolutionary threads back to these survivors. 
+
+### Intervention Phase
+The demigod returns (wakes up?) to find a world that evolved without them. Complex social structures exist. Things that resemble religion, civilization, trade, warfare, communication, territory. The demigod decides to live inside it. They shapeshift. Become a fish. See what that's like. Become a prey animal. Become a predator. Become a member of a social species. They occupy divine roles — become the deity a culture already worships. Become a revered ruler. Become a nobody. Each life leaves residue. The demigod falls in love, makes mistakes, succeeds, fails, resents their divinity, finds connection with other creatures, causes immense harm and attempts immense repair. They sink into identities. They bring pieces of each life into the next.
 
 ### The Central Theme
-Change. Not good vs evil, but mutation. 
-Mutation is the game mechanic version. But it also ends up creating difference between cultures, beliefs, ideas, morality, religion, etc. The demigod shapes the world, but the world shapes the demigod right back. Every life they live inside their creation changes them. After enough lives, they can't act the way they used to — not because they lost power, but because they gained context.
+Change. Not good vs evil, but mutation. Over enough time, 
+
