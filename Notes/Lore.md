@@ -1,4 +1,4 @@
-## Lore:
+## Lore
 This is a loose approximated version of the game's lore, central narrative and the context of the world the player exists within. This is a junk drawer of ideas I use to build the narrative of the game. 
 
 ### Core Premise 
