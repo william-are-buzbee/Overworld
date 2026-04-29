@@ -102,22 +102,10 @@ export function resistMult(tags, dmgType){
   return m;
 }
 
-// ==================== ATMOSPHERE NOISE CONFIG ====================
-// Noise parameters for each atmosphere field.
-//   octaves    — number of noise layers
-//   frequency  — base sample frequency (lower = larger features)
-//   lacunarity — frequency multiplier per octave
-//   gain       — amplitude multiplier per octave
-//   seedOffset — added to world seed for this field
-export const ATMOSPHERE_NOISE = {
-  moisture:  { octaves: 4, frequency: 0.028, lacunarity: 2.0, gain: 0.50, seedOffset: 1   },
-  elevation: { octaves: 4, frequency: 0.024, lacunarity: 2.0, gain: 0.48, seedOffset: 2   },
-  fungal:    { octaves: 3, frequency: 0.050, lacunarity: 2.0, gain: 0.50, seedOffset: 3   },
-};
-
 // ==================== BIOME TARGET MAP ====================
-// 16×16 low-resolution grid guiding atmosphere field generation.
-// Each cell names the dominant biome for a region of the map.
+// 16×16 low-resolution grid — the single source of truth for biome placement.
+// Each cell names the biome that owns that region.  Surface generation reads
+// this directly; no intermediate atmosphere fields are needed.
 // Rows run north (0) → south (15), columns west (0) → east (15).
 export const BIOME_TARGET = [
   ['mountain','mountain','forest','forest','forest','forest','forest','forest','forest','forest','stone','forest','stone','plains','forest','stone'],
@@ -137,72 +125,102 @@ export const BIOME_TARGET = [
   ['mountain','plains','desert','desert','desert','desert','desert','desert','desert','desert','desert','mushroom','mushroom','mushroom','plains','mushroom'],
   ['mountain','mountain','desert','desert','desert','desert','desert','desert','desert','mushroom','desert','desert','mushroom','mushroom','mushroom','mushroom'],
 ];
- 
 
-// Target biases per biome — what atmosphere values each biome pulls toward.
-// Each entry: { moisture, elevation, fungal } where each is a target value (0–1).
-// null means "don't bias this field, let noise decide."
-export const BIOME_TARGET_BIAS = {
-  plains:   { moisture: 0.35, elevation: 0.30, fungal: null   },
-  forest:   { moisture: 0.58, elevation: 0.38, fungal: null   },
-  desert:   { moisture: 0.10, elevation: 0.40, fungal: null   },
-  mountain: { moisture: null,  elevation: 0.82, fungal: null   },
-  stone:    { moisture: 0.18, elevation: 0.80, fungal: null   },
-  mushroom: { moisture: 0.45, elevation: 0.35, fungal: 0.65   },
-  water:    { moisture: 0.90, elevation: 0.15, fungal: null   },
+// ==================== BIOME PROFILES ====================
+// Self-contained definition for every biome that appears on the target map.
+// Adding a new biome = adding one entry here + placing it on BIOME_TARGET.
+//
+// Fields:
+//   ground      — primary ground terrain type (T.* numeric ID)
+//   covers      — array of { type, chance } objects.  Each is rolled
+//                  independently per tile; first hit wins.
+//   lakeChance  — probability of a coherent water pocket (noise-gated)
+//   deepChance  — for 'water' biome: probability of DEEP instead of WATER
+//   palette     — key into the BIOME palette table (for rendering)
+//   derived     — { moisture, elevation, fungal } values written to the
+//                  atmosphere fields so downstream systems can query them.
+//                  These do NOT drive biome selection.
+//
+// Numeric terrain IDs (from terrain.js T.*):
+//   0=PLAINS  1=FOREST  2=DESERT  3=MOUNTAIN  4=WATER  5=DEEP
+//   8=MUSHFOREST  10=STONE  11=CAVE  53=BOULDER  54=ROCK_OUTCROP
+
+export const BIOME_PROFILES = {
+  plains: {
+    ground: 0,
+    covers: [
+      { type: 1, chance: 0.08 },   // sparse trees
+    ],
+    lakeChance: 0.015,
+    palette: 'plains',
+    derived: { moisture: 0.35, elevation: 0.30, fungal: 0 },
+  },
+  forest: {
+    ground: 0,                      // forest floor is grass
+    covers: [
+      { type: 1, chance: 0.70 },   // dense canopy
+    ],
+    lakeChance: 0.008,
+    palette: 'forest',
+    derived: { moisture: 0.58, elevation: 0.38, fungal: 0 },
+  },
+  desert: {
+    ground: 2,
+    covers: [],
+    lakeChance: 0,
+    palette: 'desert',
+    derived: { moisture: 0.10, elevation: 0.40, fungal: 0 },
+  },
+  mountain: {
+    ground: 3,
+    covers: [
+      { type: 1, chance: 0.12 },   // occasional trees
+    ],
+    lakeChance: 0,
+    palette: 'mountain',
+    derived: { moisture: 0.30, elevation: 0.82, fungal: 0 },
+  },
+  stone: {
+    ground: 10,
+    covers: [
+      { type: 53, chance: 0.10 },  // boulders
+      { type: 54, chance: 0.08 },  // rock outcrops
+    ],
+    lakeChance: 0,
+    palette: 'stone',
+    derived: { moisture: 0.18, elevation: 0.80, fungal: 0 },
+  },
+  water: {
+    ground: 4,
+    deepChance: 0.40,               // noise-driven chance of DEEP (5)
+    covers: [],
+    lakeChance: 0,
+    palette: 'water',
+    derived: { moisture: 0.90, elevation: 0.15, fungal: 0 },
+  },
+  mushroom: {
+    ground: 11,                     // cave floor
+    covers: [
+      { type: 8, chance: 0.80 },   // mushroom forest
+    ],
+    lakeChance: 0,
+    palette: 'mushforest',
+    derived: { moisture: 0.45, elevation: 0.35, fungal: 0.65 },
+  },
 };
 
-// ==================== BIOME RULES TABLE ====================
-// Each rule is tested in order; the first match wins.
-//   moisture, elevation, fungal — [min, max] ranges (0–1 inclusive)
-//   ground  — terrain type for the ground layer (use T.* constants)
-//   cover   — terrain type for the cover layer, or 0 for none
-//   coverChance — probability (0–1) of actually placing cover (for sparse biomes)
-//
-// Import T dynamically — the rules reference numeric constants from terrain.js.
-// We store the raw numbers here; world-gen resolves them via T.
-//
-// NOTE: ground/cover values are set to numeric IDs matching terrain.js T.*
-//       0=PLAINS, 1=FOREST, 2=DESERT, 3=MOUNTAIN, 4=WATER, 5=DEEP,
-//       8=MUSHFOREST, 11=CAVE
-export const BIOME_RULES = [
-  // === Fungal override (mushroom forest) — small, southeast-biased field ===
-  { fungal: [0.40, 1.0], moisture: [0.0, 1.0], elevation: [0.0, 0.75],
-    ground: 11, cover: 8, coverChance: 1.0 },
-
-  // === Very high moisture → deep water / water ===
-  { moisture: [0.84, 1.0], elevation: [0.0, 1.0], fungal: [0.0, 1.0],
-    ground: 5, cover: 0, coverChance: 0 },
-  { moisture: [0.72, 0.84], elevation: [0.0, 0.65], fungal: [0.0, 1.0],
-    ground: 4, cover: 0, coverChance: 0 },
-
-  // === Low moisture + high elevation → stone / mountain ===
-  { moisture: [0.0, 0.30], elevation: [0.72, 1.0], fungal: [0.0, 1.0],
-    ground: 3, cover: 0, coverChance: 0 },
-
-  // === Very low moisture → desert ===
-  { moisture: [0.0, 0.22], elevation: [0.0, 0.72], fungal: [0.0, 1.0],
-    ground: 2, cover: 0, coverChance: 0 },
-
-  // === High elevation → mountains ===
-  { moisture: [0.0, 1.0], elevation: [0.72, 1.0], fungal: [0.0, 1.0],
-    ground: 3, cover: 0, coverChance: 0 },
-
-  // === Medium-high moisture + medium-high elevation → mountain with scattered trees ===
-  { moisture: [0.40, 1.0], elevation: [0.58, 0.72], fungal: [0.0, 1.0],
-    ground: 3, cover: 1, coverChance: 0.30 },
-
-  // === Lowland plains (tree cover applied as smooth moisture gradient in surface-gen) ===
-  { moisture: [0.22, 0.72], elevation: [0.0, 0.58], fungal: [0.0, 1.0],
-    ground: 0, cover: 0, coverChance: 0 },
-
-  // === Default → plains ===
-  { moisture: [0.0, 1.0], elevation: [0.0, 1.0], fungal: [0.0, 1.0],
-    ground: 0, cover: 0, coverChance: 0 },
-];
+// ==================== BLEND TUNING ====================
+// Controls how wide (in world tiles) the transition zone is between
+// adjacent biomes.  Higher = softer gradient, lower = sharper edge.
+// The bilinear sampling of the 16×16 map over 112×112 tiles gives a
+// natural ~7-tile blend.  BLEND_WIDTH adds noise-driven waviness on
+// top of that, so the effective transition is roughly 7 + BLEND_WIDTH.
+export const BLEND_WIDTH = 8;
 
 // ==================== ATMOSPHERE FIELD STORAGE ====================
-// Filled by world-gen.js after field generation.
+// Populated by surface-gen with values *derived from* the biome profile,
+// NOT used to select biomes.  Downstream systems (fire spread, creature
+// comfort, etc.) may query these; for now they are inert.
 // Structure: { moisture: Float32Array, elevation: Float32Array,
 //              fungal: Float32Array, w: number, h: number }
 // Access pattern: fields.moisture[y * w + x]

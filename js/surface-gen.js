@@ -2,8 +2,7 @@
 import { covers } from './state.js';
 import {
   W_SURF, H_SURF, LAYER_SURFACE, LAYER_UNDER,
-  ATMOSPHERE_NOISE, BIOME_RULES, ATMOSPHERE,
-  BIOME_TARGET, BIOME_TARGET_BIAS,
+  ATMOSPHERE, BIOME_TARGET, BIOME_PROFILES, BLEND_WIDTH,
 } from './constants.js';
 import { T, isWalkable } from './terrain.js';
 import { srand, rand, randi } from './rng.js';
@@ -60,10 +59,17 @@ function fbm(noiseFn, x, y, cfg) {
   return sum / maxAmp;  // ≈ [-1, 1]
 }
 
+// ==================== NOISE CONFIGS (surface-gen internal) ====================
+const BORDER_NOISE_CFG  = { octaves: 3, frequency: 0.10, lacunarity: 2.0, gain: 0.50 };
+const VARIATION_CFG     = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
+const LAKE_CFG          = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.50 };
+const DEPTH_CFG         = { octaves: 2, frequency: 0.09, lacunarity: 2.0, gain: 0.50 };
+
 // ==================== BIOME TARGET MAP SAMPLING ====================
-// Bilinear interpolation of the 16×16 target map at full-resolution coords.
-// Returns the blended bias values { moisture, elevation, fungal } for (x, y).
-function sampleTargetMap(x, y, w, h) {
+// Returns { biomeName: weight } for the biomes influencing world-tile (x, y).
+// Weights are bilinear interpolation coefficients from the 16×16 target map;
+// identical biomes in adjacent cells merge their weights.
+function sampleBiomeWeights(x, y, w, h) {
   const targetH = BIOME_TARGET.length;       // 16
   const targetW = BIOME_TARGET[0].length;    // 16
 
@@ -71,7 +77,6 @@ function sampleTargetMap(x, y, w, h) {
   const tx = (x / w) * targetW - 0.5;
   const ty = (y / h) * targetH - 0.5;
 
-  // Integer cell coords and fractional part
   const x0 = Math.max(0, Math.min(targetW - 1, Math.floor(tx)));
   const y0 = Math.max(0, Math.min(targetH - 1, Math.floor(ty)));
   const x1 = Math.min(targetW - 1, x0 + 1);
@@ -79,101 +84,35 @@ function sampleTargetMap(x, y, w, h) {
   const fx = Math.max(0, Math.min(1, tx - x0));
   const fy = Math.max(0, Math.min(1, ty - y0));
 
-  // Look up bias for four corners
-  const b00 = BIOME_TARGET_BIAS[BIOME_TARGET[y0][x0]];
-  const b10 = BIOME_TARGET_BIAS[BIOME_TARGET[y0][x1]];
-  const b01 = BIOME_TARGET_BIAS[BIOME_TARGET[y1][x0]];
-  const b11 = BIOME_TARGET_BIAS[BIOME_TARGET[y1][x1]];
+  const weights = {};
+  const add = (biome, wt) => { weights[biome] = (weights[biome] || 0) + wt; };
 
-  // Bilinear interpolation per field
-  function bilerp(field) {
-    const v00 = b00[field], v10 = b10[field], v01 = b01[field], v11 = b11[field];
-    // If any corner is null for this field, return null (no bias)
-    if (v00 == null || v10 == null || v01 == null || v11 == null) return null;
-    const top    = v00 + (v10 - v00) * fx;
-    const bottom = v01 + (v11 - v01) * fx;
-    return top + (bottom - top) * fy;
-  }
+  add(BIOME_TARGET[y0][x0], (1 - fx) * (1 - fy));
+  add(BIOME_TARGET[y0][x1], fx * (1 - fy));
+  add(BIOME_TARGET[y1][x0], (1 - fx) * fy);
+  add(BIOME_TARGET[y1][x1], fx * fy);
 
-  return {
-    moisture:  bilerp('moisture'),
-    elevation: bilerp('elevation'),
-    fungal:    bilerp('fungal'),
-  };
+  return weights;
 }
 
-// ==================== ATMOSPHERE FIELD GENERATION ====================
-function generateAtmosphereFields(seed, w, h) {
-  const mCfg = ATMOSPHERE_NOISE.moisture;
-  const eCfg = ATMOSPHERE_NOISE.elevation;
-  const fCfg = ATMOSPHERE_NOISE.fungal;
-
-  const mNoise = createNoise2D(seed + mCfg.seedOffset);
-  const eNoise = createNoise2D(seed + eCfg.seedOffset);
-  const fNoise = createNoise2D(seed + fCfg.seedOffset);
-
-  const moisture  = new Float32Array(w * h);
-  const elevation = new Float32Array(w * h);
-  const fungal    = new Float32Array(w * h);
-
-  const lakeNoise = createNoise2D(seed + 17);
-  const lakeCfg = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.5 };
-
-  const NOISE_WEIGHT  = 0.4;
-  const TARGET_WEIGHT = 0.6;
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const idx = y * w + x;
-      const target = sampleTargetMap(x, y, w, h);
-
-      // ---- Moisture ----
-      let mRaw = (fbm(mNoise, x, y, mCfg) + 1) * 0.5;   // noise → [0, 1]
-      // Scattered lake pockets — secondary noise adds moisture hotspots
-      const lakeVal = (fbm(lakeNoise, x, y, lakeCfg) + 1) * 0.5;
-      if (lakeVal > 0.72) mRaw += (lakeVal - 0.72) * 1.8;
-      mRaw = Math.max(0, Math.min(1, mRaw));
-      if (target.moisture != null) {
-        moisture[idx] = Math.max(0, Math.min(1, mRaw * NOISE_WEIGHT + target.moisture * TARGET_WEIGHT));
-      } else {
-        moisture[idx] = mRaw;
-      }
-
-      // ---- Elevation ----
-      let eRaw = (fbm(eNoise, x, y, eCfg) + 1) * 0.5;
-      eRaw = Math.max(0, Math.min(1, eRaw));
-      if (target.elevation != null) {
-        elevation[idx] = Math.max(0, Math.min(1, eRaw * NOISE_WEIGHT + target.elevation * TARGET_WEIGHT));
-      } else {
-        elevation[idx] = eRaw;
-      }
-
-      // ---- Fungal ----
-      let fRaw = (fbm(fNoise, x, y, fCfg) + 1) * 0.5;
-      fRaw = Math.max(0, Math.min(1, fRaw));
-      if (target.fungal != null) {
-        fungal[idx] = Math.max(0, Math.min(1, fRaw * NOISE_WEIGHT + target.fungal * TARGET_WEIGHT));
-      } else {
-        // Outside mushroom zones the fungal field should stay low
-        fungal[idx] = fRaw * 0.25;
-      }
-    }
+// Pick the biome with the highest weight from a weights map.
+function dominantBiome(weights) {
+  let best = null, bestW = -1;
+  for (const biome in weights) {
+    if (weights[biome] > bestW) { best = biome; bestW = weights[biome]; }
   }
-
-  return { moisture, elevation, fungal, w, h };
+  return best;
 }
 
-// ==================== BIOME RESOLUTION ====================
-function resolveBiome(m, e, f) {
-  for (let i = 0; i < BIOME_RULES.length; i++) {
-    const r = BIOME_RULES[i];
-    if (m < r.moisture[0]  || m > r.moisture[1])  continue;
-    if (e < r.elevation[0] || e > r.elevation[1]) continue;
-    if (r.fungal && (f < r.fungal[0] || f > r.fungal[1])) continue;
-    return r;
+// Interpolate a numeric value across biome profiles weighted by blend.
+// `accessor` is called with a profile and should return a number.
+function blendValue(weights, accessor) {
+  let sum = 0;
+  for (const biome in weights) {
+    const profile = BIOME_PROFILES[biome];
+    if (profile) sum += accessor(profile) * weights[biome];
   }
-  // Fallback
-  return { ground: 0, cover: 0, coverChance: 0 };
+  return sum;
 }
 
 // ==================== HELPERS ====================
@@ -181,9 +120,8 @@ function findWalkableNear(grid, coverGrid, tx, ty, w, h) {
   const walkable = (x, y) => {
     const g = grid[y][x];
     const c = coverGrid ? coverGrid[y][x] : 0;
-    return isWalkable(g, c) && !c; // walkable ground with no cover
+    return isWalkable(g, c) && !c;
   };
-  // Also accept walkable ground with walkable cover
   const walkableAny = (x, y) => {
     const g = grid[y][x];
     const c = coverGrid ? coverGrid[y][x] : 0;
@@ -202,7 +140,6 @@ function findWalkableNear(grid, coverGrid, tx, ty, w, h) {
       }
     }
   }
-  // Fallback: accept any walkable
   for (let r = 1; r < Math.max(w, h); r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
@@ -217,113 +154,135 @@ function findWalkableNear(grid, coverGrid, tx, ty, w, h) {
 }
 
 // ==================== SURFACE ====================
-export function makeSurface(seed){
+export function makeSurface(seed) {
   srand(seed);
+
+  // ---- Allocate grids ----
   const grid = [];
-  for (let y = 0; y < H_SURF; y++){
+  for (let y = 0; y < H_SURF; y++) {
     const row = [];
     for (let x = 0; x < W_SURF; x++) row.push(T.PLAINS);
     grid.push(row);
   }
-
-  // Initialize cover grid for surface
   const coverGrid = ensureCoverGrid(LAYER_SURFACE, W_SURF, H_SURF);
 
-  // ---- Generate atmosphere fields ----
-  const fields = generateAtmosphereFields(seed, W_SURF, H_SURF);
+  // ---- Noise generators ----
+  const borderNoiseX = createNoise2D(seed + 100);
+  const borderNoiseY = createNoise2D(seed + 101);
+  const variationNoise = createNoise2D(seed + 200);
+  const lakeNoise = createNoise2D(seed + 300);
+  const depthNoise = createNoise2D(seed + 400);
 
-  // Store atmosphere globally so other modules can query it
-  ATMOSPHERE.moisture  = fields.moisture;
-  ATMOSPHERE.elevation = fields.elevation;
-  ATMOSPHERE.fungal    = fields.fungal;
-  ATMOSPHERE.w         = fields.w;
-  ATMOSPHERE.h         = fields.h;
+  // ---- Derived atmosphere arrays (filled per-tile, inert) ----
+  const moisture  = new Float32Array(W_SURF * H_SURF);
+  const elevation = new Float32Array(W_SURF * H_SURF);
+  const fungal    = new Float32Array(W_SURF * H_SURF);
 
-  // ---- Apply biome rules per-tile ----
-  for (let y = 0; y < H_SURF; y++){
-    for (let x = 0; x < W_SURF; x++){
-      const idx = y * W_SURF + x;
-      const m = fields.moisture[idx];
-      const e = fields.elevation[idx];
-      const f = fields.fungal[idx];
+  // ---- Per-tile biome resolution ----
+  for (let y = 0; y < H_SURF; y++) {
+    for (let x = 0; x < W_SURF; x++) {
 
-      const rule = resolveBiome(m, e, f);
-      grid[y][x] = rule.ground;
+      // --- 1. Noise-perturbed biome sampling (wavy borders) ---
+      const bnx = fbm(borderNoiseX, x, y, BORDER_NOISE_CFG) * BLEND_WIDTH * 0.45;
+      const bny = fbm(borderNoiseY, x, y, BORDER_NOISE_CFG) * BLEND_WIDTH * 0.45;
+      const perturbedWeights = sampleBiomeWeights(x + bnx, y + bny, W_SURF, H_SURF);
 
-      if (rule.cover && rule.coverChance > 0) {
-        if (rand() < rule.coverChance) {
-          coverGrid[y][x] = rule.cover;
+      // The dominant biome after perturbation determines ground type.
+      const winner = dominantBiome(perturbedWeights);
+      const profile = BIOME_PROFILES[winner];
+
+      // --- 2. Ground type ---
+      let groundType = profile.ground;
+
+      // Water biome: noise-driven depth variation
+      if (winner === 'water') {
+        const dn = (fbm(depthNoise, x, y, DEPTH_CFG) + 1) * 0.5;
+        if (dn > (1.0 - (profile.deepChance || 0))) {
+          groundType = 5; // T.DEEP
         }
       }
-    }
-  }
 
-  // ---- Smooth tree-cover gradient driven by moisture ----
-  // For plains tiles with no cover, roll per-tile tree placement based on
-  // a smooth probability curve so trees gradually thicken from open
-  // grassland (low moisture) to dense forest (high moisture).
-  for (let y = 0; y < H_SURF; y++){
-    for (let x = 0; x < W_SURF; x++){
-      if (grid[y][x] !== T.PLAINS || coverGrid[y][x] !== 0) continue;
+      grid[y][x] = groundType;
 
-      const idx = y * W_SURF + x;
-      const m = fields.moisture[idx];
-
-      if (m < 0.28) continue; // pure open plains — no trees at all
-
-      // Quadratic ramp: ~0% at m=0.28, ~5% at m=0.35, ~25% at m=0.48,
-      //                 ~60% at m=0.58, ~95% at m=0.68+
-      const t = Math.min(1, (m - 0.28) / 0.40);
-      const treeChance = t * t * 0.95;
-
-      if (rand() < treeChance) {
-        coverGrid[y][x] = T.FOREST;
+      // --- 3. Lake pockets inside non-water biomes ---
+      if (profile.lakeChance > 0) {
+        const lv = (fbm(lakeNoise, x, y, LAKE_CFG) + 1) * 0.5;
+        // Noise must exceed a high threshold to form coherent water patches
+        if (lv > (1.0 - profile.lakeChance * 6)) {
+          grid[y][x] = T.WATER;
+          coverGrid[y][x] = 0;
+          // Still write derived atmosphere, then skip cover
+          const idx = y * W_SURF + x;
+          moisture[idx]  = 0.85;
+          elevation[idx] = 0.15;
+          fungal[idx]    = 0;
+          continue;
+        }
       }
-    }
-  }
 
-  // ---- Rock scatter on stone ground ----
-  // Boulders and outcrops break up large stone expanses and add cover variety.
-  // Density is modulated by elevation — higher elevation = denser rock scatter.
-  for (let y = 0; y < H_SURF; y++){
-    for (let x = 0; x < W_SURF; x++){
-      if (grid[y][x] !== T.STONE) continue;
-      if (coverGrid[y][x] !== 0) continue;
+      // --- 4. Cover: interpolate chances from smooth (unperturbed) weights ---
+      // Smooth weights give gradual density falloff across biome borders.
+      const smoothWeights = sampleBiomeWeights(x, y, W_SURF, H_SURF);
 
-      const idx = y * W_SURF + x;
-      const e = fields.elevation[idx];
+      // Local variation noise: modulates cover density within a biome.
+      // Values near 0 create clearings; values near 1 create dense patches.
+      const vn = (fbm(variationNoise, x, y, VARIATION_CFG) + 1) * 0.5;
+      const densityMod = 0.3 + vn * 1.4; // range [0.3, 1.7]
 
-      // Elevation-scaled probability: base + boost at high elevation
-      const eMul = 0.6 + 0.4 * Math.min(1, (e - 0.55) / 0.35);
-
-      const r = rand();
-      if (r < 0.12 * eMul){
-        coverGrid[y][x] = T.BOULDER;
-      } else if (r < 0.22 * eMul){
-        coverGrid[y][x] = T.ROCK_OUTCROP;
+      // Accumulate interpolated chances per cover type across all blended biomes.
+      const coverChances = {};
+      for (const biome in smoothWeights) {
+        const bp = BIOME_PROFILES[biome];
+        if (!bp || !bp.covers) continue;
+        const w = smoothWeights[biome];
+        for (const c of bp.covers) {
+          coverChances[c.type] = (coverChances[c.type] || 0) + c.chance * w;
+        }
       }
+
+      // Roll for each cover type; first hit wins.
+      for (const typeStr in coverChances) {
+        const chance = coverChances[typeStr] * densityMod;
+        if (rand() < chance) {
+          coverGrid[y][x] = Number(typeStr);
+          break;
+        }
+      }
+
+      // --- 5. Derived atmosphere (inert — for future gameplay systems) ---
+      const idx = y * W_SURF + x;
+      moisture[idx]  = blendValue(smoothWeights, p => p.derived.moisture);
+      elevation[idx] = blendValue(smoothWeights, p => p.derived.elevation);
+      fungal[idx]    = blendValue(smoothWeights, p => p.derived.fungal);
     }
   }
 
-  // ---- Beach: adjacency pass (tiles next to water) ----
-  for (let y = 0; y < H_SURF; y++){
-    for (let x = 0; x < W_SURF; x++){
+  // ---- Beach adjacency pass (tiles next to water) ----
+  for (let y = 0; y < H_SURF; y++) {
+    for (let x = 0; x < W_SURF; x++) {
       if (grid[y][x] !== T.PLAINS && grid[y][x] !== T.DESERT) continue;
-      if (coverGrid[y][x]) continue;  // don't overwrite cover tiles
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      if (coverGrid[y][x]) continue;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= W_SURF || ny >= H_SURF) continue;
-        if (grid[ny][nx] === T.WATER || grid[ny][nx] === T.DEEP){
+        if (grid[ny][nx] === T.WATER || grid[ny][nx] === T.DEEP) {
           grid[y][x] = T.BEACH;
-          coverGrid[y][x] = 0;  // clear any cover on beach
+          coverGrid[y][x] = 0;
           break;
         }
       }
     }
   }
 
+  // ---- Store derived atmosphere globally ----
+  ATMOSPHERE.moisture  = moisture;
+  ATMOSPHERE.elevation = elevation;
+  ATMOSPHERE.fungal    = fungal;
+  ATMOSPHERE.w         = W_SURF;
+  ATMOSPHERE.h         = H_SURF;
+
   // ---- SURFACE STAIRCASES ----
-  // SE staircase (in mushroom zone — find spot where fungal field is high)
+  // SE staircase (mushroom zone)
   {
     const seX = Math.floor(W_SURF * 0.68);
     const seY = Math.floor(H_SURF * 0.78);
@@ -337,7 +296,7 @@ export function makeSurface(seed){
       label: 'A staircase descends into the mushroom-choked dark.',
     });
   }
-  // NW staircase (in mountain zone — find spot where elevation is high)
+  // NW staircase (mountain zone)
   {
     const nwX = Math.floor(W_SURF * 0.18);
     const nwY = Math.floor(H_SURF * 0.15);
@@ -352,60 +311,60 @@ export function makeSurface(seed){
     });
   }
 
-  // Spawn monsters
+  // ---- Spawn monsters ----
   populateMonsters(grid, LAYER_SURFACE);
 
   return grid;
 }
 
 // ==================== DIRT ROADS ====================
-export function placeDirtRoads(grid, settlements){
+export function placeDirtRoads(grid, settlements) {
   if (!settlements || settlements.length < 2) return;
-  const pts = settlements.slice().sort((a,b) => a.x - b.x);
+  const pts = settlements.slice().sort((a, b) => a.x - b.x);
   const connected = new Set();
-  for (let i = 0; i < pts.length; i++){
+  for (let i = 0; i < pts.length; i++) {
     let best = [];
-    for (let j = 0; j < pts.length; j++){
+    for (let j = 0; j < pts.length; j++) {
       if (i === j) continue;
       const key = i < j ? `${i}-${j}` : `${j}-${i}`;
       if (connected.has(key)) continue;
       const dx = pts[j].x - pts[i].x;
       const dy = pts[j].y - pts[i].y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      best.push({j, dist, key});
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      best.push({ j, dist, key });
     }
-    best.sort((a,b) => a.dist - b.dist);
+    best.sort((a, b) => a.dist - b.dist);
     const links = Math.min(best.length, 1 + (rand() < 0.5 ? 1 : 0));
-    for (let k = 0; k < links; k++){
+    for (let k = 0; k < links; k++) {
       connected.add(best[k].key);
       dirtPathBetween(grid, pts[i].x, pts[i].y, pts[best[k].j].x, pts[best[k].j].y);
     }
   }
-  for (const s of settlements){
+  for (const s of settlements) {
     dirtRing(grid, s.x, s.y, 2);
   }
 }
 
-function dirtPathBetween(grid, x1, y1, x2, y2){
+function dirtPathBetween(grid, x1, y1, x2, y2) {
   let x = x1, y = y1;
   const coverGrid = covers[LAYER_SURFACE];
-  while (x !== x2 || y !== y2){
-    if (x >= 0 && y >= 0 && x < W_SURF && y < H_SURF){
+  while (x !== x2 || y !== y2) {
+    if (x >= 0 && y >= 0 && x < W_SURF && y < H_SURF) {
       const t = grid[y][x];
       const c = coverGrid ? coverGrid[y][x] : 0;
-      if ((t === T.PLAINS || t === T.DESERT || t === T.BEACH) && !c){
+      if ((t === T.PLAINS || t === T.DESERT || t === T.BEACH) && !c) {
         if (rand() < 0.72) grid[y][x] = T.DIRT_ROAD;
       }
     }
-    if (rand() < 0.25){
+    if (rand() < 0.25) {
       const perp = rand() < 0.5 ? 1 : -1;
-      if (Math.abs(x2 - x) > Math.abs(y2 - y)){
+      if (Math.abs(x2 - x) > Math.abs(y2 - y)) {
         y += perp;
       } else {
         x += perp;
       }
     } else {
-      if (rand() < 0.5){
+      if (rand() < 0.5) {
         if (x < x2) x++; else if (x > x2) x--;
       } else {
         if (y < y2) y++; else if (y > y2) y--;
@@ -414,16 +373,16 @@ function dirtPathBetween(grid, x1, y1, x2, y2){
   }
 }
 
-function dirtRing(grid, cx, cy, radius){
+function dirtRing(grid, cx, cy, radius) {
   const coverGrid = covers[LAYER_SURFACE];
-  for (let dy = -radius; dy <= radius; dy++){
-    for (let dx = -radius; dx <= radius; dx++){
-      if (dx*dx + dy*dy > radius*radius + 1) continue;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius + 1) continue;
       const x = cx + dx, y = cy + dy;
       if (x < 0 || y < 0 || x >= W_SURF || y >= H_SURF) continue;
       const t = grid[y][x];
       const c = coverGrid ? coverGrid[y][x] : 0;
-      if ((t === T.PLAINS || t === T.DESERT || t === T.BEACH) && !c && rand() < 0.6){
+      if ((t === T.PLAINS || t === T.DESERT || t === T.BEACH) && !c && rand() < 0.6) {
         grid[y][x] = T.DIRT_ROAD;
       }
     }
