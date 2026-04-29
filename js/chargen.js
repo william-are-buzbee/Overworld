@@ -182,9 +182,6 @@ function beginGame(){
 // ==================== DEATH / VICTORY ====================
 function onPlayerDeath(){
   state.gameState = 'death';
-  document.getElementById('death-sub').textContent = state.player.level >= 3
-    ? `Felled in the ${getRegionName()}. You reached level ${state.player.level}.`
-    : 'The world moves on. As worlds do.';
   document.getElementById('death').style.display = 'flex';
 }
 function onVictory(){

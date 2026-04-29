@@ -22,7 +22,6 @@ export const state = {
   activeLayer: null,
 };
 
-<<<<<<< HEAD
 // ==================== SPARSE WORLD STORAGE ====================
 // worlds is now an Object keyed by layerIndex (number → 2-D grid).
 // Layers are created on demand by the world generator and persist here
@@ -46,41 +45,17 @@ export const features = {};
 // monsters[layerIndex] → array of monster objects on that layer.
 // Only state.activeLayer's array is ticked each turn.
 export const monsters = {};
-=======
-// ==================== WORLD STORAGE ====================
-// Indexed arrays — one entry per layer.
-//   worlds[0]  → surface grid  (created at game start)
-//   worlds[1]  → first underground grid (created when first entered)
-//   worlds[n]  → any layer — town interiors, shop interiors, etc.
-
-export const worlds = [];
-export const covers = [];
-
-// features[layerIndex] → object keyed by "x,y" holding feature data.
-export const features = [];
-
-// monsters[layerIndex] → array of monster objects on that layer.
-// Only state.activeLayer's array is ticked each turn.
-export const monsters = [];
->>>>>>> b0f77dc (Initial commit)
 
 // Reverse look-up: cellKey (e.g. "millhaven") → layerIndex
 export const cellKeyToLayer = {};
 
 // ==================== LAYER HELPERS ====================
 
-<<<<<<< HEAD
 // Returns the next unused layerIndex.  Because worlds is an object we
 // just pick max(existing keys) + 1, or 0 if empty.
 export function nextLayerIndex() {
   const keys = Object.keys(worlds).map(Number);
   return keys.length === 0 ? 0 : Math.max(...keys) + 1;
-=======
-// Returns the next unused layerIndex — simply the current length of the
-// worlds array, since layers are appended sequentially.
-export function nextLayerIndex() {
-  return worlds.length;
->>>>>>> b0f77dc (Initial commit)
 }
 
 // Convenience: does layerIndex already have generated data?
