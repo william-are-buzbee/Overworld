@@ -65,63 +65,28 @@ function render(){
         }
         continue;
       }
-      // STONE tiles
-      if (ground === T.STONE){
-        const stoneHash = ((wx * 7919 + wy * 6271 + 1013) >>> 0) % 256;
-        if (layer === 0){
-          ctx.fillStyle = '#161414';
-          ctx.fillRect(px, py, TILE, TILE);
-          if (stoneHash < 60){
-            ctx.fillStyle = stoneHash < 20 ? '#1e1a1a' : (stoneHash < 40 ? '#121010' : '#201c1c');
-            const sx = (stoneHash * 3) % 20 + 4, sy = (stoneHash * 7) % 20 + 4;
-            ctx.save();
-            ctx.translate(px, py);
-            ctx.scale(S, S);
-            ctx.fillRect(sx, sy, 5, 3);
-            ctx.fillRect(sx + 2, sy + 3, 3, 2);
-            if (stoneHash < 30){
-              ctx.fillStyle = '#282424';
-              ctx.fillRect(sx + 8, sy + 1, 4, 2);
-            }
-            ctx.restore();
-          }
-        } else {
-          ctx.fillStyle = '#0e0c0c';
-          ctx.fillRect(px, py, TILE, TILE);
-          if (stoneHash < 50){
-            ctx.fillStyle = stoneHash < 25 ? '#141212' : '#0a0808';
-            const sx = (stoneHash * 3) % 20 + 4, sy = (stoneHash * 7) % 20 + 4;
-            ctx.save();
-            ctx.translate(px, py);
-            ctx.scale(S, S);
-            ctx.fillRect(sx, sy, 5, 3);
-            ctx.fillRect(sx + 2, sy + 3, 3, 2);
-            ctx.restore();
-          }
-        }
-        // Stone ground can still have cover on top (e.g. stairs on stone)
-        if (cover) {
-          const coverInfo = terrainInfo(cover);
-          ctx.drawImage(tintedSprite(coverInfo.sprite, coverInfo.palette), px, py, TILE, TILE);
-        }
-        // Fall through to monster/player drawing below (don't continue)
-        drawEntityAtTile(wx, wy, px, py, layer);
-        continue;
-      }
 
       const tileHash = ((wx * 7919 + wy * 6271 + 1013) >>> 0) % 256;
 
       // ---- Draw GROUND ----
       const groundInfo = terrainInfo(ground);
       const rotVariant = tileHash % 4;
-      if (!cover && (ground === T.PLAINS || ground === T.DESERT || ground === T.CAVE) && rotVariant > 0){
+
+      // Stone ground uses variant sprites for tiling variety
+      let groundSpriteName = groundInfo.sprite;
+      if (ground === T.STONE){
+        const stoneVar = ((wx * 3571 + wy * 2909) >>> 0) % 3;
+        groundSpriteName = stoneVar === 1 ? 'STONE_V2' : stoneVar === 2 ? 'STONE_V3' : 'STONE';
+      }
+
+      if (!cover && (ground === T.PLAINS || ground === T.DESERT || ground === T.CAVE || ground === T.STONE) && rotVariant > 0){
         ctx.save();
         ctx.translate(px + TILE/2, py + TILE/2);
         ctx.rotate(rotVariant * Math.PI/2);
-        ctx.drawImage(tintedSprite(groundInfo.sprite, groundInfo.palette), -TILE/2, -TILE/2, TILE, TILE);
+        ctx.drawImage(tintedSprite(groundSpriteName, groundInfo.palette), -TILE/2, -TILE/2, TILE, TILE);
         ctx.restore();
       } else {
-        ctx.drawImage(tintedSprite(groundInfo.sprite, groundInfo.palette), px, py, TILE, TILE);
+        ctx.drawImage(tintedSprite(groundSpriteName, groundInfo.palette), px, py, TILE, TILE);
       }
 
       // ---- Ground decorations ----
@@ -159,6 +124,29 @@ function render(){
           const dx2 = (decor*3)%22+3, dy2 = (decor*7)%20+6;
           ctx.fillRect(dx2, dy2, 4, 2);
           ctx.fillRect(dx2+1, dy2+2, 2, 1);
+        }
+        if (ground === T.STONE && decor < 30){
+          if (decor < 12){
+            // small pebble cluster
+            ctx.fillStyle = decor < 6 ? '#302e2a' : '#28262a';
+            const sx = (decor*4)%20+4, sy = (decor*6)%18+6;
+            ctx.fillRect(sx, sy, 3, 2);
+            ctx.fillRect(sx+1, sy+2, 2, 1);
+          } else if (decor < 20){
+            // scattered rock chips
+            ctx.fillStyle = '#383632';
+            const sx = (decor*3)%18+5, sy = (decor*5)%16+8;
+            ctx.fillRect(sx, sy, 2, 1);
+            ctx.fillRect(sx+6, sy+3, 2, 1);
+            ctx.fillRect(sx+3, sy+7, 1, 1);
+          } else {
+            // hairline crack across rock surface
+            ctx.fillStyle = 'rgba(10,8,6,0.35)';
+            const cy2 = (decor*3)%12+10;
+            ctx.fillRect(4, cy2, 7, 1);
+            ctx.fillRect(11, cy2-1, 5, 1);
+            ctx.fillRect(16, cy2, 8, 1);
+          }
         }
         if (ground === T.BEACH && decor < 30){
           if (decor < 8){

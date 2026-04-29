@@ -27,6 +27,8 @@ export const T = {
   RUIN_PILLAR:50,      // decorative ruin column
   VOID:51,             // impassable black void outside cave boundaries
   ROCK:52,             // solid cave rock wall — impassable, blocks LOS
+  BOULDER:53,          // large rock formation (cover, impassable)
+  ROCK_OUTCROP:54,     // smaller rocky protrusion (cover, impassable)
 };
 
 // ==================== TERRAIN LAYER CLASSIFICATION ====================
@@ -87,6 +89,8 @@ export const TERRAIN_INFO = {
   [T.FOUNTAIN]:  {name:'fountain',      sprite:'FOUNTAIN', palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
   [T.HOUSE_LG]:  {name:'large house',   sprite:'HOUSE_LG', palette:'town',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.RUIN_PILLAR]:{name:'ruined pillar',sprite:'RUIN_PILLAR',palette:'ruin', walk:false, cover:20,  terrainLayer:'cover', overlay:true},
+  [T.BOULDER]:   {name:'boulder',      sprite:'BOULDER',  palette:'stone',  walk:false, cover:40,  terrainLayer:'cover', overlay:true},
+  [T.ROCK_OUTCROP]:{name:'rock outcrop',sprite:'ROCK_OUTCROP',palette:'stone',walk:false,cover:25, terrainLayer:'cover', overlay:true},
 };
 
 // ==================== SINGLE-TYPE QUERIES ====================
@@ -173,6 +177,8 @@ const DEFAULT_GROUND_FOR_COVER = {
   [T.FOUNTAIN]:    T.PLAINS,
   [T.HOUSE_LG]:    T.PLAINS,
   [T.RUIN_PILLAR]: T.PLAINS,
+  [T.BOULDER]:     T.STONE,
+  [T.ROCK_OUTCROP]:T.STONE,
 };
 
 export function defaultGroundFor(coverType){

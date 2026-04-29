@@ -47,7 +47,7 @@ export const BIOME = {
   water:     {bg:'#18202e', fg:'#88a0c8', mid:'#485878', tint:null},
   deep:      {bg:'#0a0e18', fg:'#506078', mid:'#283040', tint:null},
   lava:      {bg:'#2a100a', fg:'#e08060', mid:'#a04020', tint:'#d06040'},
-  stone:     {bg:'#161414', fg:'#a0a0a0', mid:'#585858', tint:'#b0b0b0'},
+  stone:     {bg:'#1e1c1a', fg:'#a8a8a0', mid:'#5c5a50', tint:'#b0b0b0'},
   cave:      {bg:'#0e0a0a', fg:'#787878', mid:'#484040', tint:'#888090'},
   uwater:    {bg:'#0a1218', fg:'#406080', mid:'#203040', tint:'#6890b0'},
   town:      {bg:'#20181a', fg:'#e0d8b8', mid:'#a08c70', tint:null},
