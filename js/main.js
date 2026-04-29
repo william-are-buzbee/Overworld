@@ -13,11 +13,12 @@ import { setOnPlayerDeathCallback } from './enemy-ai.js';
 import { setOnVictoryCallback, toggleStealth } from './combat.js';
 import { useAction, showHelp, examineTile, readBook } from './interactions.js';
 import { openCharGen, setDiffButton, renderCharGen, randomizeAttrs, beginGame, onPlayerDeath, onVictory } from './chargen.js';
+import { hasSave, tryResume, deleteSave } from './save-load.js';
 
 // ==================== WIRE CALLBACKS ====================
 setUpdateUICallback(updateUI);
-setOnPlayerDeathCallback(onPlayerDeath);
-setOnVictoryCallback(onVictory);
+setOnPlayerDeathCallback(() => { deleteSave(); onPlayerDeath(); });
+setOnVictoryCallback(() => { deleteSave(); onVictory(); });
 
 // ==================== SAFE DISPATCH ====================
 // Wraps every player action so one bad throw doesn't brick the game.
@@ -192,12 +193,74 @@ function showScreen(id) {
     document.getElementById(s).style.display = s === id ? 'flex' : 'none';
   }
   state.gameState = id === 'title' ? 'title' : state.gameState;
+  // Update title screen to reflect save availability
+  if (id === 'title') updateTitleButtons();
 }
 
-document.getElementById('title-start').addEventListener('click', openCharGen);
-document.getElementById('title').addEventListener('click', openCharGen);
-document.getElementById('death').addEventListener('click', () => showScreen('title'));
-document.getElementById('victory').addEventListener('click', () => showScreen('title'));
+// ---- Save-aware title screen ----
+const titleStartEl = document.getElementById('title-start');
+const titleEl      = document.getElementById('title');
+
+// Create a "Continue" button (inserted before the start button)
+const continueEl = document.createElement('div');
+continueEl.className = 'flash';
+continueEl.id = 'title-continue';
+continueEl.textContent = '▶ CONTINUE ◀';
+continueEl.style.marginBottom = '8px';
+continueEl.style.display = 'none';
+titleStartEl.parentNode.insertBefore(continueEl, titleStartEl);
+
+function updateTitleButtons() {
+  if (hasSave()) {
+    continueEl.style.display = '';
+    titleStartEl.textContent = '▶ NEW GAME ◀';
+  } else {
+    continueEl.style.display = 'none';
+    titleStartEl.textContent = '▶ CLICK TO BEGIN ◀';
+  }
+}
+
+// Continue: resume saved game
+continueEl.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  if (tryResume()) {
+    titleEl.style.display = 'none';
+    state.gameState = 'play';
+    // Update UI after resuming
+    try { updateUI(); } catch(e) { console.error(e); }
+  } else {
+    // Save was corrupt — fall through to new game
+    deleteSave();
+    updateTitleButtons();
+  }
+});
+
+// New game: ignore save, open char gen
+titleStartEl.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  deleteSave();
+  openCharGen();
+});
+
+// Clicking title background (not on buttons) does nothing if a save exists;
+// otherwise starts new game.
+titleEl.addEventListener('click', (ev) => {
+  // If clicked directly on the title backdrop (not a child button)
+  if (ev.target === titleEl) {
+    if (hasSave()) return; // Don't auto-start if there's a save to resume
+    openCharGen();
+  }
+});
+
+// Death / Victory: delete save, return to title
+document.getElementById('death').addEventListener('click', () => {
+  deleteSave();
+  showScreen('title');
+});
+document.getElementById('victory').addEventListener('click', () => {
+  deleteSave();
+  showScreen('title');
+});
 
 // ==================== TITLE-SCREEN BACKDROP ====================
 function drawTitleBackdrop() {
@@ -209,3 +272,6 @@ function drawTitleBackdrop() {
   }
 }
 drawTitleBackdrop();
+
+// ==================== STARTUP: CHECK FOR SAVED GAME ====================
+updateTitleButtons();

@@ -13,6 +13,7 @@ import { render } from './rendering.js';
 import { endStealth, stealthDetectChance, rollHit } from './combat.js';
 import { fedDrainFor } from './player-actions.js';
 import { advanceTick } from './time-cycle.js';
+import { saveGame } from './save-load.js';
 
 // Forward references — set by main.js
 
@@ -22,7 +23,7 @@ let _useActionCallback = null;
 export function setUseActionCallback(fn){ _useActionCallback = fn; }
 
 
-function monstersHere(){ return monsters[state.player.layer]; }
+function monstersHere(){ return monsters[state.player.layer] || []; }
 
 let turnCount = 0;
 
@@ -130,10 +131,11 @@ function playerAdjacentToWater(layer){
       if (state.player.hp <= 0){ _onPlayerDeathCallback && _onPlayerDeathCallback(); return; }
     }
   }
-  for (let layer=0; layer<monsters.length; layer++){
-    monsters[layer] = monsters[layer].filter(m => m.hp > 0);
+  for (const layer of Object.keys(monsters)){
+    if (monsters[layer]) monsters[layer] = monsters[layer].filter(m => m.hp > 0);
   }
   render();
+  saveGame();  // Auto-save after every player action
 }
 
 /*

@@ -1,7 +1,17 @@
 // ==================== WORLD STATE HELPERS ====================
+<<<<<<< HEAD
 import { state, worlds, covers, features, monsters } from './state.js';
 import { T, isCover, defaultGroundFor } from './terrain.js';
 import { W_SURF, H_SURF, LAYER_META } from './constants.js';
+=======
+import { state, worlds, covers, features, monsters, cellKeyToLayer } from './state.js';
+import { T, isCover, defaultGroundFor } from './terrain.js';
+import { W_SURF, H_SURF, LAYER_META } from './constants.js';
+import { registerCellKeyToLayer } from './save-load.js';
+
+// Wire cellKeyToLayer into the save system so it can be serialized/restored.
+registerCellKeyToLayer(cellKeyToLayer);
+>>>>>>> b0f77dc (Initial commit)
 
 // ==================== REGIONAL SPAWN REGISTRY ====================
 const SPAWN_REGIONS = {
