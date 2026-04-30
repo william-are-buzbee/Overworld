@@ -114,22 +114,22 @@ export function resistMult(tags, dmgType){
 // The "mountain" biome has been removed.  All former mountain cells are now
 // "stone", which uses walkable rock ground with boulder/outcrop cover.
 export const BIOME_TARGET = [
-  ['stone','stone','forest','forest','forest','forest','forest','forest','forest','forest','stone','forest','stone','plains','forest','stone'],
-  ['stone','stone','forest','forest','forest','forest','forest','forest','forest','stone','stone','stone','stone','stone','stone','stone'],
-  ['stone','stone','forest','plains','plains','plains','plains','plains','plains','stone','stone','stone','stone','stone','stone','stone'],
-  ['stone','stone','plains','forest','plains','plains','plains','plains','plains','plains','plains','stone','stone','stone','water','stone'],
-  ['stone','stone','forest','plains','plains','plains','plains','plains','plains','plains','plains','plains','plains','water','water','water'],
-  ['stone','forest','plains','plains','plains','plains','plains','plains','plains','plains','plains','plains','water','water','water','water'],
-  ['stone','stone','plains','plains','plains','plains','plains','plains','plains','plains','plains','plains','water','water','water','water'],
-  ['stone','plains','plains','forest','plains','plains','plains','plains','plains','plains','plains','plains','water','water','water','water'],
+  ['stone','stone','stone','forest','forest','forest','forest','forest','forest','forest','forest','forest','stone','stone','forest','water'],
+  ['stone','stone','forest','forest','forest','stone','forest','forest','forest','forest','forest','stone','stone','stone','stone','forest'],
+  ['stone','stone','forest','forest','forest','forest','forest','forest','forest','stone','stone','stone','stone','stone','stone','water'],
+  ['stone','stone','plains','forest','plains','forest','forest','plains','plains','plains','plains','stone','stone','stone','stone','water'],
+  ['stone','plains','forest','stone','plains','plains','forest','plains','plains','stone','mud','stone','plains','water','water','water'],
+  ['stone','forest','plains','plains','plains','plains','plains','plains','plains','plains','plains','stone','water','water','water','water'],
+  ['stone','stone','plains','plains','plains','plains','plains','plains','plains','mud','water','water','water','water','water','water'],
+  ['stone','plains','plains','forest','plains','plains','dirt','dirt','plains','mud','mud','water','water','water','water','water'],
   ['stone','plains','plains','plains','plains','plains','plains','plains','plains','plains','plains','plains','water','water','water','water'],
-  ['stone','plains','stone','plains','plains','desert','desert','desert','desert','desert','plains','plains','plains','plains','mushroom','mushroom'],
-  ['stone','plains','plains','plains','desert','desert','desert','desert','desert','desert','desert','plains','mushroom','mushroom','mushroom','mushroom'],
-  ['stone','plains','plains','desert','desert','desert','desert','desert','desert','desert','desert','mushroom','mushroom','mushroom','mushroom','mushroom'],
-  ['stone','plains','desert','desert','desert','desert','desert','desert','desert','desert','mushroom','mushroom','mushroom','mushroom','mushroom','mushroom'],
-  ['stone','plains','desert','desert','desert','desert','desert','desert','desert','desert','desert','mushroom','mushroom','mushroom','mushroom','mushroom'],
-  ['stone','plains','desert','desert','desert','desert','desert','desert','desert','desert','desert','mushroom','mushroom','mushroom','plains','mushroom'],
-  ['stone','stone','desert','desert','desert','desert','desert','desert','desert','mushroom','desert','desert','mushroom','mushroom','mushroom','mushroom'],
+  ['plains','plains','stone','plains','plains','plains','plains','plains','plains','desert','plains','plains','mushroom','plains','mushroom','mushroom'],
+  ['plains','plains','plains','plains','plains','desert','plains','desert','plains','plains','mushroom','plains','mushroom','mushroom','mushroom','water'],
+  ['plains','plains','plains','plains','stone','desert','desert','desert','plains','desert','plains','mushroom','mushroom','mushroom','mushroom','mushroom'],
+  ['plains','plains','stone','desert','desert','desert','desert','desert','desert','plains','mushroom','mushroom','mushroom','mushroom','mushroom','mushroom'],
+  ['plains','plains','desert','desert','desert','desert','desert','desert','desert','desert','plains','mushroom','mushroom','mushroom','mushroom','water'],
+  ['plains','desert','desert','desert','desert','desert','desert','desert','desert','desert','plains','mushroom','mushroom','mushroom','plains','mushroom'],
+  ['desert','desert','desert','desert','desert','desert','desert','desert','desert','desert','desert','plains','mushroom','mushroom','mushroom','mushroom'],
 ];
 
 // ==================== BIOME PROFILES ====================
