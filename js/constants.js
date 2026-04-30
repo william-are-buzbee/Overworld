@@ -141,7 +141,6 @@ export const BIOME_TARGET = [
 //   covers      — array of { type, chance } objects.  Each is rolled
 //                  independently per tile; first hit wins.
 //   lakeChance  — probability of a coherent water pocket (noise-gated)
-//   deepChance  — for 'water' biome: probability of DEEP_WATER instead of WATER
 //   palette     — key into the BIOME palette table (for rendering)
 //   derived     — { moisture, elevation, fungal } values written to the
 //                  atmosphere fields so downstream systems can query them.
@@ -190,7 +189,6 @@ export const BIOME_PROFILES = {
   },
   water: {
     ground: 4,                      // T.WATER
-    deepChance: 0.40,               // noise-driven chance of DEEP_WATER (5)
     covers: [],
     lakeChance: 0,
     palette: 'water',

@@ -63,7 +63,9 @@ function fbm(noiseFn, x, y, cfg) {
 const BORDER_NOISE_CFG  = { octaves: 3, frequency: 0.10, lacunarity: 2.0, gain: 0.50 };
 const VARIATION_CFG     = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
 const LAKE_CFG          = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.50 };
-const DEPTH_CFG         = { octaves: 2, frequency: 0.09, lacunarity: 2.0, gain: 0.50 };
+
+// Minimum distance (in tiles) from any land tile for water to become deep.
+const DEEP_WATER_THRESHOLD = 4;
 
 // ==================== BIOME TARGET MAP SAMPLING ====================
 // Returns { biomeName: weight } for the biomes influencing world-tile (x, y).
@@ -171,7 +173,6 @@ export function makeSurface(seed) {
   const borderNoiseY = createNoise2D(seed + 101);
   const variationNoise = createNoise2D(seed + 200);
   const lakeNoise = createNoise2D(seed + 300);
-  const depthNoise = createNoise2D(seed + 400);
 
   // ---- Derived atmosphere arrays (filled per-tile, inert) ----
   const moisture  = new Float32Array(W_SURF * H_SURF);
@@ -193,14 +194,6 @@ export function makeSurface(seed) {
 
       // --- 2. Ground type ---
       let groundType = profile.ground;
-
-      // Water biome: noise-driven depth variation
-      if (winner === 'water') {
-        const dn = (fbm(depthNoise, x, y, DEPTH_CFG) + 1) * 0.5;
-        if (dn > (1.0 - (profile.deepChance || 0))) {
-          groundType = T.DEEP_WATER;
-        }
-      }
 
       grid[y][x] = groundType;
 
@@ -270,6 +263,46 @@ export function makeSurface(seed) {
           coverGrid[y][x] = 0;
           break;
         }
+      }
+    }
+  }
+
+  // ---- Deep water pass: distance-from-shore via multi-source BFS ----
+  // Initialise distance grid: 0 for every non-water tile, Infinity for water.
+  const dist = new Int32Array(W_SURF * H_SURF);
+  const queue = [];
+  for (let y = 0; y < H_SURF; y++) {
+    for (let x = 0; x < W_SURF; x++) {
+      if (grid[y][x] === T.WATER) {
+        dist[y * W_SURF + x] = 0x7fffffff; // Infinity stand-in
+      } else {
+        dist[y * W_SURF + x] = 0;
+        queue.push(y * W_SURF + x);
+      }
+    }
+  }
+  // BFS propagation from all land tiles simultaneously
+  let head = 0;
+  while (head < queue.length) {
+    const idx = queue[head++];
+    const cx = idx % W_SURF;
+    const cy = (idx - cx) / W_SURF;
+    const nd = dist[idx] + 1;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= W_SURF || ny >= H_SURF) continue;
+      const ni = ny * W_SURF + nx;
+      if (nd < dist[ni]) {
+        dist[ni] = nd;
+        queue.push(ni);
+      }
+    }
+  }
+  // Convert interior water tiles to deep water
+  for (let y = 0; y < H_SURF; y++) {
+    for (let x = 0; x < W_SURF; x++) {
+      if (grid[y][x] === T.WATER && dist[y * W_SURF + x] >= DEEP_WATER_THRESHOLD) {
+        grid[y][x] = T.DEEP_WATER;
       }
     }
   }
