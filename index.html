@@ -745,6 +745,22 @@
 
   /* Hidden action buttons for JS event compatibility */
   .hidden-compat{display:none;}
+
+  /* ─── Title screen buttons ─── */
+  .title-buttons{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    margin-top:20px;
+  }
+  .title-btn{
+    cursor:pointer;
+    padding:4px 8px;
+  }
+  .title-btn:hover{
+    text-shadow:0 0 8px rgba(255,255,255,0.5);
+  }
 </style>
 </head>
 <body>
@@ -865,6 +881,20 @@
 
       <div class="centered-screen" id="title">
         <h1>OverWorld</h1>
+        <div class="title-buttons" id="title-buttons">
+          <div class="flash title-btn" id="title-continue" style="display:none;">▶ CONTINUE ◀</div>
+          <div class="flash title-btn" id="title-newgame">▶ NEW GAME ◀</div>
+        </div>
+      </div>
+
+      <!-- In-game restart confirmation -->
+      <div class="centered-screen" id="restart-confirm" style="display:none;background:rgba(0,0,0,0.92);">
+        <h1 style="font-size:14px;letter-spacing:4px;">NEW GAME?</h1>
+        <div class="sub">This will delete your save.</div>
+        <div class="title-buttons">
+          <div class="flash title-btn" id="restart-yes">▶ YES, RESTART ◀</div>
+          <div class="flash title-btn" id="restart-no" style="animation-delay:0.5s;">▶ CANCEL ◀</div>
+        </div>
       </div>
 
       <div class="centered-screen" id="chargen-screen" style="display:none;">
@@ -903,7 +933,7 @@
   </div>
 
   <div class="controls">
-    <div><b>WASD</b>·Move <b>SPACE</b>·Wait <b>F</b>·Sneak <b>R</b>·Use <b>E</b>·Eat <b>?</b>·Help</div>
+    <div><b>WASD</b>·Move <b>SPACE</b>·Wait <b>F</b>·Sneak <b>R</b>·Use <b>E</b>·Eat <b>N</b>·New <b>?</b>·Help</div>
     <div>&nbsp;</div>
   </div>
 </div>
