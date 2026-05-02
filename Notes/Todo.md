@@ -20,12 +20,13 @@ Prompt queue and task tracker. Check things off as they're done.
 - [x] Remove scattered trees tile type, use regular forest cover with probability gradient
 - [x] Save system (localStorage, auto-save after every action, version number in save data)
 - [x] Fix surface stone/cave terrain visual (should look like rocky ground)
+- [x] Re-establish biome layout functionality (can use target map to generate any biome combinations in a 16 x 16 grid with natural blending)
+- [x] Make world size fully configurable (audit all hardcoded positions/distances)
 
 ## Up Next
-- [ ] Re-establish biome layout (tune target map and atmosphere thresholds)
-
-## Queued
-- [ ] Make world size fully configurable (audit all hardcoded positions/distances)
+- [ ] Increase biome variety, like light or dense forest
+- [ ] Underground generation improvements
+- [ ] Surface buildings with walls
 - [ ] Underground biome leakage mirrors surface (sample surface atmosphere at each coordinate, proportional bleed)
 
 ## Ideas (not yet scoped)
