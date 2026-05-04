@@ -145,7 +145,6 @@ export function resistMult(tags, dmgType){
 // and density falloffs with no special-case code.
 function B(biome, density) { return { biome, density }; }
 
-
 export const BIOME_TARGET = [
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
@@ -153,10 +152,10 @@ export const BIOME_TARGET = [
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
-  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',0.1), B('water',0.1), B('water',0.1), B('water',0.1), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
-  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',0.1), B('plains',1.0), B('plains',1.0), B('water',0.1), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
-  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',0.1), B('plains',1.0), B('plains',1.0), B('water',0.1), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
-  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',0.1), B('water',0.1), B('water',0.1), B('water',0.1), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
+  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
+  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('plains',1.0), B('plains',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
+  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('plains',1.0), B('plains',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
+  [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
@@ -164,6 +163,7 @@ export const BIOME_TARGET = [
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
   [B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)]
 ];
+
 
 
 
