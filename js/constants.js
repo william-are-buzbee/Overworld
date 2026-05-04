@@ -231,14 +231,10 @@ export const BIOME_PROFILES = {
     derived: { moisture: 0.18, elevation: 0.80, fungal: 0 },
   },
   water: {
-    ground: 55,                     // T.MUD — dry fallback; actual water placed by density+noise
-    waterBiome: true,               // flags density-driven water placement in surface-gen
-    covers: [
-      { type: 1, chance: 0.06 },   // sparse trees at swampy edges
-    ],
-    // Trees only appear at low water density (marshy fringes); suppressed when mostly water.
+    ground: 4,                      // T.WATER
+    covers: [],
     coverScale: (coverType, density) => {
-      if (coverType === 1) return Math.max(0, 0.08 * (1 - density * 1.4));
+      if (coverType === 1) return 0;
       return null;
     },
     lakeChance: 0,

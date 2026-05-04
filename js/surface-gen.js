@@ -63,7 +63,6 @@ function fbm(noiseFn, x, y, cfg) {
 const BORDER_NOISE_CFG  = { octaves: 3, frequency: 0.10, lacunarity: 2.0, gain: 0.50 };
 const VARIATION_CFG     = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
 const LAKE_CFG          = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.50 };
-const WATER_BODY_CFG    = { octaves: 4, frequency: 0.045, lacunarity: 2.0, gain: 0.50 };
 
 // Minimum distance (in tiles) from any land tile for water to become deep.
 // Scales with map size — ~3.6% of the smaller dimension, minimum 2.
@@ -142,37 +141,6 @@ function sampleDensity(x, y, w, h) {
        + d11 * fx * fy;
 }
 
-// Interpolate density only from 'water'-biome cells on the target map.
-// Returns the water-specific density at (x,y), uncontaminated by adjacent
-// non-water biomes' density values.  Returns 0 when no water cells are nearby.
-function sampleWaterDensity(x, y, w, h) {
-  const targetH = BIOME_TARGET.length;
-  const targetW = BIOME_TARGET[0].length;
-  const tx = (x / w) * targetW - 0.5;
-  const ty = (y / h) * targetH - 0.5;
-  const x0 = Math.max(0, Math.min(targetW - 1, Math.floor(tx)));
-  const y0 = Math.max(0, Math.min(targetH - 1, Math.floor(ty)));
-  const x1 = Math.min(targetW - 1, x0 + 1);
-  const y1 = Math.min(targetH - 1, y0 + 1);
-  const fx = Math.max(0, Math.min(1, tx - x0));
-  const fy = Math.max(0, Math.min(1, ty - y0));
-
-  let sum = 0, wt = 0;
-  const corners = [
-    [y0, x0, (1 - fx) * (1 - fy)],
-    [y0, x1,       fx  * (1 - fy)],
-    [y1, x0, (1 - fx) *       fy ],
-    [y1, x1,       fx  *       fy ],
-  ];
-  for (const [r, c, bw] of corners) {
-    if (BIOME_TARGET[r][c].biome === 'water') {
-      sum += BIOME_TARGET[r][c].density * bw;
-      wt  += bw;
-    }
-  }
-  return wt > 0 ? sum / wt : 0;
-}
-
 // ==================== HELPERS ====================
 function findWalkableNear(grid, coverGrid, tx, ty, w, h) {
   const walkable = (x, y) => {
@@ -229,7 +197,6 @@ export function makeSurface(seed) {
   const borderNoiseY = createNoise2D(seed + 101);
   const variationNoise = createNoise2D(seed + 200);
   const lakeNoise = createNoise2D(seed + 300);
-  const waterBodyNoise = createNoise2D(seed + 400);
 
   // ---- Derived atmosphere arrays (filled per-tile, inert) ----
   const moisture  = new Float32Array(W_SURF * H_SURF);
@@ -253,49 +220,6 @@ export function makeSurface(seed) {
       let groundType = profile.ground;
 
       grid[y][x] = groundType;
-
-      // --- 2b. Density-driven water placement ---
-      // Any tile influenced by the water biome uses noise + density to decide
-      // whether it becomes water, mud (shoreline), or stays as-is.
-      const waterWeight = perturbedWeights['water'] || 0;
-      if (waterWeight > 0.01) {
-        const wDensity = sampleWaterDensity(x, y, W_SURF, H_SURF);
-        // effectiveWater combines proximity to water biome with authored density.
-        // Deep in a density-1.0 ocean cell: ≈1.0.  At a 0.3-density marsh: ≈0.3.
-        // At a forest→water blend edge: waterWeight fades it further.
-        const effectiveWater = waterWeight * wDensity;
-
-        if (effectiveWater > 0.01) {
-          // Noise in [0,1] — large, blobby shapes for natural shorelines
-          const wn = (fbm(waterBodyNoise, x, y, WATER_BODY_CFG) + 1) * 0.5;
-          // Threshold: high effectiveWater → low threshold → most tiles become water.
-          //   ew 1.0 → threshold ≈ 0.03 (near-total water)
-          //   ew 0.5 → threshold ≈ 0.51 (roughly half water)
-          //   ew 0.1 → threshold ≈ 0.90 (only noise peaks become ponds)
-          const threshold = 1.0 - effectiveWater * 0.97;
-
-          if (wn > threshold) {
-            grid[y][x] = T.WATER;
-            coverGrid[y][x] = 0;
-            // Write atmosphere for this water tile and skip covers
-            const idx = y * W_SURF + x;
-            moisture[idx]  = 0.85;
-            elevation[idx] = 0.15;
-            fungal[idx]    = 0;
-            continue;
-          }
-
-          // Mud fringe: tiles just below the water threshold get wet ground,
-          // creating a marshy transition around every water body.
-          const mudMargin = 0.12;
-          if (wn > threshold - mudMargin) {
-            grid[y][x] = T.MUD;
-          } else if (effectiveWater > 0.3 && winner === 'water') {
-            // Interior of water zone but noise valley — still marshy
-            grid[y][x] = T.MUD;
-          }
-        }
-      }
 
       // --- 3. Lake pockets inside non-water biomes ---
       if (profile.lakeChance > 0) {
@@ -379,18 +303,13 @@ export function makeSurface(seed) {
   // ---- Beach adjacency pass (tiles next to water) ----
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
-      const g = grid[y][x];
-      if (g !== T.GRASS && g !== T.SAND && g !== T.MUD) continue;
+      if (grid[y][x] !== T.GRASS && grid[y][x] !== T.SAND) continue;
       if (coverGrid[y][x]) continue;
       for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= W_SURF || ny >= H_SURF) continue;
         if (grid[ny][nx] === T.WATER || grid[ny][nx] === T.DEEP_WATER) {
-          // Mud tiles adjacent to water stay as mud (marshy shore);
-          // grass/sand become beach.
-          if (g !== T.MUD) {
-            grid[y][x] = T.BEACH;
-          }
+          grid[y][x] = T.BEACH;
           coverGrid[y][x] = 0;
           break;
         }
@@ -429,15 +348,11 @@ export function makeSurface(seed) {
       }
     }
   }
-  // Convert interior water tiles to deep water — only where authored
-  // water density exceeds 0.7, so marshes and ponds stay shallow.
+  // Convert interior water tiles to deep water
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
       if (grid[y][x] === T.WATER && dist[y * W_SURF + x] >= DEEP_WATER_THRESHOLD) {
-        const wd = sampleWaterDensity(x, y, W_SURF, H_SURF);
-        if (wd > 0.7) {
-          grid[y][x] = T.DEEP_WATER;
-        }
+        grid[y][x] = T.DEEP_WATER;
       }
     }
   }
