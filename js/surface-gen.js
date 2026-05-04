@@ -3,6 +3,7 @@ import { covers } from './state.js';
 import {
   W_SURF, H_SURF, LAYER_SURFACE, LAYER_UNDER,
   ATMOSPHERE, BIOME_TARGET, BIOME_PROFILES, BLEND_WIDTH,
+  BIOME_GRID_W, BIOME_GRID_H,
 } from './constants.js';
 import { T, isWalkable, isCoverAllowedOnGround } from './terrain.js';
 import { srand, rand, randi } from './rng.js';
@@ -71,11 +72,11 @@ const DEEP_WATER_THRESHOLD = Math.max(2, Math.round(Math.min(W_SURF, H_SURF) * 0
 
 // ==================== BIOME TARGET MAP SAMPLING ====================
 // Returns { biomeName: weight } for the biomes influencing world-tile (x, y).
-// Weights are bilinear interpolation coefficients from the 16×16 target map;
+// Weights are bilinear interpolation coefficients from the target map;
 // identical biomes in adjacent cells merge their weights.
 function sampleBiomeWeights(x, y, w, h) {
-  const targetH = BIOME_TARGET.length;       // 16
-  const targetW = BIOME_TARGET[0].length;    // 16
+  const targetW = BIOME_GRID_W;
+  const targetH = BIOME_GRID_H;
 
   // Map full-res coords to target-map space (center of each target cell)
   const tx = (x / w) * targetW - 0.5;
@@ -119,11 +120,11 @@ function blendValue(weights, accessor) {
   return sum;
 }
 
-// Bilinearly interpolate the density scalar from the 16×16 target map.
+// Bilinearly interpolate the density scalar from the target map.
 // Returns a value in [0, 1] representing how "intense" the local biome is.
 function sampleDensity(x, y, w, h) {
-  const targetH = BIOME_TARGET.length;
-  const targetW = BIOME_TARGET[0].length;
+  const targetW = BIOME_GRID_W;
+  const targetH = BIOME_GRID_H;
   const tx = (x / w) * targetW - 0.5;
   const ty = (y / h) * targetH - 0.5;
   const x0 = Math.max(0, Math.min(targetW - 1, Math.floor(tx)));

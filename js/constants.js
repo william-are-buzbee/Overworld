@@ -3,6 +3,13 @@ export const TILE = 64, PIX = 2, SPR = 16;
 export const VIEW_W = 17, VIEW_H = 11;
 
 export const W_SURF = 164, H_SURF = 164;
+
+// Biome target map resolution.  Change this and supply a matching NxN grid
+// in BIOME_TARGET below.  Larger = finer biome control, smaller = broader zones.
+// Use separate W/H if you ever want a non-square grid.
+export const BIOME_GRID_W = 16;
+export const BIOME_GRID_H = 16;
+
 // Underground dimensions always match surface — change W_SURF/H_SURF and these follow.
 export const W_UNDER = W_SURF;
 export const H_UNDER = H_SURF;
@@ -121,10 +128,12 @@ export function resistMult(tags, dmgType){
 }
 
 // ==================== BIOME TARGET MAP ====================
-// 16×16 low-resolution grid — the single source of truth for biome placement.
-// Each cell names the biome that owns that region.  Surface generation reads
-// this directly; no intermediate atmosphere fields are needed.
-// Rows run north (0) → south (15), columns west (0) → east (15).
+// BIOME_GRID_W × BIOME_GRID_H low-resolution grid — the single source of truth
+// for biome placement.  Each cell names the biome that owns that region.
+// Surface generation reads this directly; no intermediate atmosphere fields
+// are needed.
+// Rows run north (0) → south (BIOME_GRID_H-1),
+// columns west (0) → east (BIOME_GRID_W-1).
 //
 // The "mountain" biome has been removed.  All former mountain cells are now
 // "stone", which uses walkable rock ground with boulder/outcrop cover.
@@ -154,6 +163,17 @@ export const BIOME_TARGET = [
   [B('plains',0.5), B('desert',0.6), B('desert',0.7), B('desert',0.7), B('desert',0.8), B('desert',0.8), B('desert',0.7), B('desert',0.7), B('desert',0.6), B('water',0.2), B('water',0.5), B('mushroom',0.7), B('mushroom',0.8), B('mushroom',0.8), B('water',0.9), B('water',1.0)],
   [B('desert',0.6), B('desert',0.7), B('desert',0.7), B('desert',0.8), B('desert',0.8), B('desert',0.8), B('desert',0.7), B('desert',0.7), B('desert',0.6), B('water',0.2), B('water',0.2), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0), B('water',1.0)],
 ];
+
+// ---- Target map validation ----
+if (BIOME_TARGET.length !== BIOME_GRID_H) {
+  console.warn(`BIOME_TARGET has ${BIOME_TARGET.length} rows but BIOME_GRID_H is ${BIOME_GRID_H}`);
+}
+for (let r = 0; r < BIOME_TARGET.length; r++) {
+  if (BIOME_TARGET[r].length !== BIOME_GRID_W) {
+    console.warn(`BIOME_TARGET row ${r} has ${BIOME_TARGET[r].length} cols but BIOME_GRID_W is ${BIOME_GRID_W}`);
+    break;          // one warning is enough
+  }
+}
 
 // ==================== BIOME PROFILES ====================
 // Self-contained definition for every biome that appears on the target map.
@@ -272,9 +292,9 @@ export const BIOME_PROFILES = {
 // ==================== BLEND TUNING ====================
 // Controls how wide (in world tiles) the transition zone is between
 // adjacent biomes.  Higher = softer gradient, lower = sharper edge.
-// The bilinear sampling of the 16×16 map over 112×112 tiles gives a
-// natural ~7-tile blend.  BLEND_WIDTH adds noise-driven waviness on
-// top of that, so the effective transition is roughly 7 + BLEND_WIDTH.
+// The bilinear sampling of the target map over the world grid gives a
+// natural blend whose width scales with (W_SURF / BIOME_GRID_W).
+// BLEND_WIDTH adds noise-driven waviness on top of that.
 export const BLEND_WIDTH = 8;
 
 // ==================== ATMOSPHERE FIELD STORAGE ====================
