@@ -63,6 +63,7 @@ function fbm(noiseFn, x, y, cfg) {
 const BORDER_NOISE_CFG  = { octaves: 3, frequency: 0.10, lacunarity: 2.0, gain: 0.50 };
 const VARIATION_CFG     = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
 const LAKE_CFG          = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.50 };
+const WATER_DENSITY_CFG = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
 
 // Minimum distance (in tiles) from any land tile for water to become deep.
 // Scales with map size — ~3.6% of the smaller dimension, minimum 2.
@@ -197,6 +198,7 @@ export function makeSurface(seed) {
   const borderNoiseY = createNoise2D(seed + 101);
   const variationNoise = createNoise2D(seed + 200);
   const lakeNoise = createNoise2D(seed + 300);
+  const waterDensityNoise = createNoise2D(seed + 400);
 
   // ---- Derived atmosphere arrays (filled per-tile, inert) ----
   const moisture  = new Float32Array(W_SURF * H_SURF);
@@ -218,6 +220,39 @@ export function makeSurface(seed) {
 
       // --- 2. Ground type ---
       let groundType = profile.ground;
+
+      // --- 2b. Water density: patchy→solid water based on density + noise ---
+      if (winner === 'water') {
+        const waterDensity = sampleDensity(x, y, W_SURF, H_SURF);
+        // Noise in [0,1]; threshold slides from ~1 (sparse) to 0 (solid).
+        const wn = (fbm(waterDensityNoise, x, y, WATER_DENSITY_CFG) + 1) * 0.5;
+        const threshold = 1.0 - waterDensity;
+
+        if (wn >= threshold) {
+          // This tile IS water — set and skip to next tile.
+          grid[y][x] = T.WATER;
+          coverGrid[y][x] = 0;
+          const idx = y * W_SURF + x;
+          moisture[idx]  = 0.90;
+          elevation[idx] = 0.15;
+          fungal[idx]    = 0;
+          continue;
+        }
+
+        // This tile is NOT water — use the best non-water biome from the
+        // blend so the ground matches whatever the surrounding biomes produce.
+        let fallbackGround = T.GRASS;
+        let bestFbW = -1;
+        for (const biome in perturbedWeights) {
+          if (biome === 'water') continue;
+          if (perturbedWeights[biome] > bestFbW) {
+            bestFbW = perturbedWeights[biome];
+            const fp = BIOME_PROFILES[biome];
+            if (fp) fallbackGround = fp.ground;
+          }
+        }
+        groundType = fallbackGround;
+      }
 
       grid[y][x] = groundType;
 
@@ -348,11 +383,14 @@ export function makeSurface(seed) {
       }
     }
   }
-  // Convert interior water tiles to deep water
+  // Convert interior water tiles to deep water (only at high density)
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
       if (grid[y][x] === T.WATER && dist[y * W_SURF + x] >= DEEP_WATER_THRESHOLD) {
-        grid[y][x] = T.DEEP_WATER;
+        const localDensity = sampleDensity(x, y, W_SURF, H_SURF);
+        if (localDensity >= 0.7) {
+          grid[y][x] = T.DEEP_WATER;
+        }
       }
     }
   }
