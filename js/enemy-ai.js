@@ -59,10 +59,10 @@ function getLeashDist(mon){
     case 'lurker':    return 2;
     case 'mummy':     return 3;
     case 'wolf': case 'dire_wolf':
-      if (mon.personality === 'leader')      return 18;
-      if (mon.personality === 'pair_bond')   return 15;
-      if (mon.personality === 'lone_hunter' || mon.personality === 'skittish') return 8;
-      return 10;
+      if (mon.personality === 'leader')      return 10;
+      if (mon.personality === 'pair_bond')   return 8;
+      if (mon.personality === 'lone_hunter' || mon.personality === 'skittish' || mon.personality === 'wary') return 4;
+      return 5;
     case 'hare':       return 99; // flee AI handles drift
     case 'cave_eel': case 'deep_squid': case 'drowned': return 0; // water-locked
     case 'cave_crab':  return 5;
@@ -523,6 +523,14 @@ function enemyAct(mon){
     } else {
     // Passive creatures ignore player unless attacked (handled above)
     if (mon.hostility === 0){
+      // Wary wolves: passive at range, but aggro if player is right next to them
+      if (mon.personality === 'wary' && (mon.key === 'wolf' || mon.key === 'dire_wolf') && d <= 1){
+        mon.aiState = 'chase';
+        mon.alerted = true;
+        mon.chaseTurnsLeft = mon.chase;
+        mon.lastSeenX = state.player.x; mon.lastSeenY = state.player.y;
+        // fall through to chase logic
+      } else {
       // Treants regen in forest when idle and not alerted (CON-based rest healing)
       // T.FOREST is now a cover type — check cover layer
       if (mon.key === 'treant' && !mon.alerted && mon.hp < mon.hpMax){
@@ -534,6 +542,7 @@ function enemyAct(mon){
       }
       if (rand() < 0.15) wanderInTerritory(mon);
       return;
+      }
     }
     // Territorial: only engage if player is within aggro AND in their territory
     if (mon.hostility === 1){
@@ -683,11 +692,11 @@ function enemyAct(mon){
 // ==================== MUSHROOM SWARM AI ====================
 // Phase 1 — Passive:  wander slowly, ignore player entirely
 // Phase 2 — Coalescing: drift toward player over many turns (organic, not a beeline)
-// Phase 3 — Surround trigger: 4+ mushrooms within 2 tiles → ALL nearby go hostile
+// Phase 3 — Surround trigger: 8+ mushrooms within 2 tiles → ALL nearby go hostile
 // Phase 4 — Mobbing: poison-touch every turn, chase briefly, reset at 6+ tile distance
 
 /** Threshold of mushrooms within 2 tiles of player to trigger the ambush. */
-const SWARM_TRIGGER_COUNT = 4;
+const SWARM_TRIGGER_COUNT = 8;
 /** Max distance from nearest swarm member before mobbing resets. */
 const SWARM_LEASH_DISTANCE = 6;
 /** Radius to count as "local group" for trigger and mobbing. */

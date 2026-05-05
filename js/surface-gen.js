@@ -64,7 +64,20 @@ function fbm(noiseFn, x, y, cfg) {
 const BORDER_NOISE_CFG  = { octaves: 3, frequency: 0.10, lacunarity: 2.0, gain: 0.50 };
 const VARIATION_CFG     = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
 const LAKE_CFG          = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.50 };
-const WATER_DENSITY_CFG = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
+const GROUND_PALETTE_CFG = { octaves: 3, frequency: 0.12, lacunarity: 2.0, gain: 0.50 };
+const GROUND_NOISE_AMP  = 0.30;  // additive noise amplitude for ground type competition
+const GROUND_SCATTER    = 0.20;  // fraction of tiles that re-roll against raw palette weights
+
+// Collect every ground-type ID that appears in any biome groundPalette.
+// Each gets its own noise channel so types compete spatially.
+const ALL_PALETTE_GROUND_TYPES = (() => {
+  const s = new Set();
+  for (const key in BIOME_PROFILES) {
+    const gp = BIOME_PROFILES[key].groundPalette;
+    if (gp) for (const t in gp) s.add(Number(t));
+  }
+  return [...s].sort((a, b) => a - b);
+})();
 
 // Minimum distance (in tiles) from any land tile for water to become deep.
 // Scales with map size — ~3.6% of the smaller dimension, minimum 2.
@@ -199,7 +212,14 @@ export function makeSurface(seed) {
   const borderNoiseY = createNoise2D(seed + 101);
   const variationNoise = createNoise2D(seed + 200);
   const lakeNoise = createNoise2D(seed + 300);
-  const waterDensityNoise = createNoise2D(seed + 400);
+
+  // One noise channel per ground type that appears in any palette.
+  // Each channel uses a unique seed so the patterns are uncorrelated.
+  const groundNoiseChannels = {};
+  let channelSeed = seed + 500;
+  for (const tId of ALL_PALETTE_GROUND_TYPES) {
+    groundNoiseChannels[tId] = createNoise2D(channelSeed++);
+  }
 
   // ---- Derived atmosphere arrays (filled per-tile, inert) ----
   const moisture  = new Float32Array(W_SURF * H_SURF);
@@ -215,49 +235,64 @@ export function makeSurface(seed) {
       const bny = fbm(borderNoiseY, x, y, BORDER_NOISE_CFG) * BLEND_WIDTH * 0.45;
       const perturbedWeights = sampleBiomeWeights(x + bnx, y + bny, W_SURF, H_SURF);
 
-      // The dominant biome after perturbation determines ground type.
+      // The dominant biome after perturbation (for cover scaling, lake pockets).
       const winner = dominantBiome(perturbedWeights);
       const profile = BIOME_PROFILES[winner];
 
-      // --- 2. Ground type ---
-      let groundType = profile.ground;
-
-      // --- 2b. Water density: patchy→solid water based on density + noise ---
-      if (winner === 'water') {
-        const waterDensity = sampleDensity(x, y, W_SURF, H_SURF);
-        // Noise in [0,1]; threshold slides from ~1 (sparse) to 0 (solid).
-        const wn = (fbm(waterDensityNoise, x, y, WATER_DENSITY_CFG) + 1) * 0.5;
-        const threshold = 1.0 - waterDensity;
-
-        if (wn >= threshold) {
-          // This tile IS water — set and skip to next tile.
-          grid[y][x] = T.WATER;
-          coverGrid[y][x] = 0;
-          const idx = y * W_SURF + x;
-          moisture[idx]  = 0.90;
-          elevation[idx] = 0.15;
-          fungal[idx]    = 0;
-          continue;
+      // --- 2. Ground type via multi-channel palette blending ---
+      // Interpolate ground palettes from all contributing biomes weighted
+      // by the perturbed biome weights.  Each ground type accumulates a
+      // blended probability across all biomes.
+      const blendedPalette = {};
+      for (const biome in perturbedWeights) {
+        const bp = BIOME_PROFILES[biome];
+        if (!bp || !bp.groundPalette) continue;
+        const w = perturbedWeights[biome];
+        for (const tType in bp.groundPalette) {
+          blendedPalette[tType] = (blendedPalette[tType] || 0) + bp.groundPalette[tType] * w;
         }
+      }
 
-        // This tile is NOT water — use the best non-water biome from the
-        // blend so the ground matches whatever the surrounding biomes produce.
-        let fallbackGround = T.GRASS;
-        let bestFbW = -1;
-        for (const biome in perturbedWeights) {
-          if (biome === 'water') continue;
-          if (perturbedWeights[biome] > bestFbW) {
-            bestFbW = perturbedWeights[biome];
-            const fp = BIOME_PROFILES[biome];
-            if (fp) fallbackGround = fp.ground;
+      // Each ground type has its own noise channel.  Score = weight + amplitude * noise.
+      // Additive competition means the noise perturbs around the weight rather than
+      // scaling it — a 0.3-weight type can beat a 0.4-weight type whenever its noise
+      // is moderately higher, producing organic blob boundaries.
+      let groundType = profile.ground; // fallback
+      let bestScore = -Infinity;
+      for (const tTypeStr in blendedPalette) {
+        const tId = Number(tTypeStr);
+        const weight = blendedPalette[tTypeStr];
+        if (weight <= 0) continue;
+        const noiseFn = groundNoiseChannels[tId];
+        if (!noiseFn) continue;
+        const n = fbm(noiseFn, x, y, GROUND_PALETTE_CFG); // ≈ [-1, 1]
+        const score = weight + GROUND_NOISE_AMP * n;
+        if (score > bestScore) {
+          bestScore = score;
+          groundType = tId;
+        }
+      }
+
+      // --- 2b. Scatter pass: seed individual minority-type tiles ---
+      // The blob competition above can only produce blob-sized features.
+      // Minority palette types (e.g. water at 0.3 in wetlands) may never win
+      // a full blob.  The scatter pass gives a fraction of tiles a fresh roll
+      // against the raw palette weights, producing individual tiles of
+      // minority types dotted into the dominant blob regions.
+      if (rand() < GROUND_SCATTER) {
+        let r = rand();
+        for (const tTypeStr in blendedPalette) {
+          r -= blendedPalette[tTypeStr];
+          if (r <= 0) {
+            groundType = Number(tTypeStr);
+            break;
           }
         }
-        groundType = fallbackGround;
       }
 
       grid[y][x] = groundType;
 
-      // --- 3. Lake pockets inside non-water biomes ---
+      // --- 3. Lake pockets inside land biomes ---
       if (profile.lakeChance > 0) {
         const lv = (fbm(lakeNoise, x, y, LAKE_CFG) + 1) * 0.5;
         // Noise must exceed a high threshold to form coherent water patches
@@ -273,9 +308,26 @@ export function makeSurface(seed) {
         }
       }
 
+      // Skip cover placement on non-walkable ground (water, deep water, etc.)
+      if (!isWalkable(grid[y][x], 0)) {
+        const idx = y * W_SURF + x;
+        moisture[idx]  = blendValue(perturbedWeights, p => p.derived.moisture);
+        elevation[idx] = blendValue(perturbedWeights, p => p.derived.elevation);
+        fungal[idx]    = blendValue(perturbedWeights, p => p.derived.fungal);
+        continue;
+      }
+
       // --- 4. Cover: interpolate chances from smooth (unperturbed) weights ---
       // Smooth weights give gradual density falloff across biome borders.
       const smoothWeights = sampleBiomeWeights(x, y, W_SURF, H_SURF);
+
+      // Use the smooth dominant biome for cover scaling — NOT the perturbed
+      // winner.  The perturbed winner drives ground type (wavy borders), but
+      // cover scaling must match the smooth weights that drive cover chances.
+      // Otherwise border noise can flip the coverScale profile deep into the
+      // wrong biome, producing tree/mushroom swaps at boundaries.
+      const smoothWinner = dominantBiome(smoothWeights);
+      const coverProfile = BIOME_PROFILES[smoothWinner];
 
       // Interpolated density from the target map (smooth coords, matching cover blend).
       const interpDensity = sampleDensity(x, y, W_SURF, H_SURF);
@@ -295,12 +347,12 @@ export function makeSurface(seed) {
         }
       }
 
-      // Apply density scaling: the dominant biome's coverScale replaces the
-      // blended chance for any cover type it has an opinion about.  This lets
-      // the target map's density value directly drive tree probability.
-      if (profile.coverScale) {
+      // Apply density scaling: the smooth dominant biome's coverScale replaces
+      // the blended chance for any cover type it has an opinion about.  This
+      // lets the target map's density value directly drive tree probability.
+      if (coverProfile.coverScale) {
         for (const typeStr in coverChances) {
-          const scaled = profile.coverScale(Number(typeStr), interpDensity);
+          const scaled = coverProfile.coverScale(Number(typeStr), interpDensity);
           if (scaled !== null && scaled !== undefined) {
             coverChances[typeStr] = scaled;
           }
@@ -314,8 +366,8 @@ export function makeSurface(seed) {
       // Non-scaled covers keep the wider original modulation.
       for (const typeStr in coverChances) {
         const ct = Number(typeStr);
-        const wasScaled = profile.coverScale
-          ? profile.coverScale(ct, interpDensity) !== null
+        const wasScaled = coverProfile.coverScale
+          ? coverProfile.coverScale(ct, interpDensity) !== null
           : false;
         const mod = wasScaled
           ? 0.85 + vn * 0.30          // range [0.85, 1.15]
@@ -336,10 +388,14 @@ export function makeSurface(seed) {
     }
   }
 
-  // ---- Beach adjacency pass (tiles next to water) ----
+  // ---- Beach adjacency pass (land tiles next to water → beach) ----
+  // Only certain ground types convert to beach.  Mud, fungal grass, and rock
+  // naturally border water in their biomes and should stay as-is.
+  const BEACH_ELIGIBLE = new Set([T.GRASS, T.SAND, T.DIRT, T.DIRT_ROAD]);
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
-      if (grid[y][x] !== T.GRASS && grid[y][x] !== T.SAND) continue;
+      const gt = grid[y][x];
+      if (!BEACH_ELIGIBLE.has(gt)) continue;
       if (coverGrid[y][x]) continue;
       for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = x + dx, ny = y + dy;
@@ -354,12 +410,12 @@ export function makeSurface(seed) {
   }
 
   // ---- Deep water pass: distance-from-shore via multi-source BFS ----
-  // Initialise distance grid: 0 for every non-water tile, Infinity for water.
+  // Initialise distance grid: 0 for every land tile, Infinity for water/deep water.
   const dist = new Int32Array(W_SURF * H_SURF);
   const queue = [];
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
-      if (grid[y][x] === T.WATER) {
+      if (grid[y][x] === T.WATER || grid[y][x] === T.DEEP_WATER) {
         dist[y * W_SURF + x] = 0x7fffffff; // Infinity stand-in
       } else {
         dist[y * W_SURF + x] = 0;

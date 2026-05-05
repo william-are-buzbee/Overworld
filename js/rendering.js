@@ -8,6 +8,14 @@ import { updateUI } from './ui.js';
 import { drawTimeTint } from './time-cycle.js';
 
 export const canvas = document.getElementById('viewport');
+canvas.width  = VIEW_W * TILE;
+canvas.height = VIEW_H * TILE;
+
+// Publish viewport dimensions as CSS custom properties so the device shell,
+// overlays, and display-size canvas all derive from VIEW_W / VIEW_H / TILE.
+document.documentElement.style.setProperty('--vp-w', canvas.width  + 'px');
+document.documentElement.style.setProperty('--vp-h', canvas.height + 'px');
+
 export const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 canvas.style.imageRendering = 'pixelated';

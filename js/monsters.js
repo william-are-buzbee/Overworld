@@ -23,9 +23,9 @@ const MON = {
                ['flesh','beast'], DMG.BLADE,
                [T.FOREST],            LAYER_SURFACE,
                40, 2,
-               2, 5,
+               1, 3,                // territorial (was aggressive), reduced aggro range
                [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.DIRT_ROAD,T.BEACH],  // wolves roam freely across most terrain
-               4, 2,
+               5, 2,                // solo chase ~5 tiles; personalities adjust for pack/wary
                '#888078',           // brown-grey (not green!)
                null],
   goblin:     ['Forest Goblin',  'GOBLIN',
@@ -59,7 +59,7 @@ const MON = {
                35, 3,
                1, 3,
                [T.SAND,T.BEACH],
-               3, 0,
+               2, 0,                // short chase — gives up quickly
                '#a88838',           // tan-yellow
                null],
   lurker:     ['Sand Lurker',    'SAND_LURKER',
@@ -70,7 +70,7 @@ const MON = {
                30, 3,
                2, 4,
                [T.SAND],
-               4, 0,                // aggressive but won't search — ambush predator
+               2, 0,                // ambush predator — strikes then gives up
                '#c4a068',
                null],
   mummy:      ['Desert Mummy',   'MUMMY',
@@ -81,7 +81,7 @@ const MON = {
                20, 3,
                1, 2,
                [T.SAND],
-               6, 2,                // slow but persistent
+               3, 1,                // slow, short pursuit
                '#a09070',
                null],
   // MOUNTAIN
@@ -291,11 +291,12 @@ const PERSONALITY_POOL = {
     {trait:'skulker', weight:0.12},      // prefers stealth, retreats if hurt
   ],
   wolf: [
-    {trait:'normal', weight:0.35},
-    {trait:'lone_hunter', weight:0.20},  // hunts alone, slightly stronger
+    {trait:'normal', weight:0.25},
+    {trait:'lone_hunter', weight:0.15},  // hunts alone, slightly stronger
     {trait:'pair_bond', weight:0.15},    // stays near a bonded partner
     {trait:'leader', weight:0.10},       // pack follows
-    {trait:'skittish', weight:0.20},     // flees at low HP
+    {trait:'skittish', weight:0.15},     // flees at low HP
+    {trait:'wary', weight:0.20},         // passive unless very close or attacked
   ],
   dire_wolf: [
     {trait:'normal', weight:0.40},
@@ -337,7 +338,7 @@ MON.dire_wolf = ['Dire Wolf',      'WOLF',
                ['flesh','beast'], DMG.BLADE,
                [T.FOREST],            LAYER_SURFACE,
                45, 4,
-               2, 5,
+               1, 3,                // territorial, reduced aggro range (matches wolf)
                [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.DIRT_ROAD,T.BEACH],
                5, 2,
                '#5a4840',           // darker brown
@@ -439,13 +440,20 @@ function spawnMonster(key){
   if (key === 'wolf' || key === 'dire_wolf'){
     m.avoidBiomes = [T.SAND, T.ROCK];  // won't chase deep into desert or stone
     m.avoidLeash = 3;  // give up after 3 tiles into avoided terrain
-    if (personality === 'lone_hunter' || personality === 'skittish'){
-      m.chase = Math.max(2, m.chase - 2);  // shorter chase range
+    if (personality === 'wary'){
+      m.hostility = 0;     // passive — only fights when attacked or player is adjacent
+      m.aggroRange = 2;    // very short detection
+      m.chase = 4;         // gives up quickly
+      m.avoidLeash = 2;
+    } else if (personality === 'lone_hunter' || personality === 'skittish'){
+      m.chase = 4;           // shorter chase range
       m.avoidLeash = 2;
     } else if (personality === 'leader'){
-      m.chase += 2;  // pack leaders range wider
+      m.chase = 10;          // pack leaders range wider
+      m.aggroRange = 4;      // slightly more alert than solo
       m.avoidLeash = 5;
     } else if (personality === 'pair_bond'){
+      m.chase = 8;           // bonded pairs pursue moderately
       m.avoidLeash = 4;
     }
   }
@@ -467,6 +475,13 @@ function getSpawnRules(key){
   return d[24] || null;
 }
 
+// ==================== SPAWN BLACKLIST ====================
+// Creatures whose definitions are kept but should never appear in the world.
+// World-gen spawner must skip any key in this set.
+const SPAWN_BLACKLIST = new Set([
+  'ice_wraith',   // removed from rotation — too punishing; kept for potential future use
+]);
+
 // Re-export everything that other modules need
-export { MON, DREAD_KING, MON_SPEED, PERSONALITY_POOL };
+export { MON, DREAD_KING, MON_SPEED, PERSONALITY_POOL, SPAWN_BLACKLIST };
 export { rollPersonality, monHP, monDodge, monAcc, monCritChance, monCritMult, monDamage, spawnMonster, getSpawnRules };
