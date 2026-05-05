@@ -99,8 +99,8 @@
   .screen{
     position:relative;
     background:#000;
-    width:992px;
-    height:672px;
+    width:var(--vp-w, 992px);
+    height:var(--vp-h, 672px);
     border-radius:3px;
     overflow:hidden;
   }
@@ -121,8 +121,8 @@
   /* ─── Canvas — fills the entire screen, world renders edge-to-edge ─── */
   #viewport{
     display:block;
-    width:992px;
-    height:672px;
+    width:var(--vp-w, 992px);
+    height:var(--vp-h, 672px);
     background:#000;
     image-rendering:pixelated;
     image-rendering:crisp-edges;
@@ -773,7 +773,7 @@
 
   <div class="screen-frame">
     <div class="screen">
-      <canvas id="viewport" width="992" height="672"></canvas>
+      <canvas id="viewport"></canvas>
 
       <aside class="sidebar" id="hud-sidebar">
         <!-- Panel area (appears left of icons) -->
