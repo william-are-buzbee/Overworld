@@ -223,6 +223,8 @@ export const BIOME_PROFILES = {
   plains: {
     groundPalette: { 0: 0.85, 57: 0.15 },   // grass 85%, dirt 15%
     ground: 0,                                // legacy: dominant ground (T.GRASS)
+    scatter: 0.10,                            // occasional dirt tiles, mostly grass
+    noiseAmp: 0.30,
     covers: [
       { type: 1, chance: 0.08 },              // sparse trees
     ],
@@ -237,6 +239,8 @@ export const BIOME_PROFILES = {
   forest: {
     groundPalette: { 0: 0.9, 57: 0.1 },      // grass 90%, dirt 10%
     ground: 0,
+    scatter: 0.08,                             // mostly grass, rare dirt
+    noiseAmp: 0.30,
     covers: [
       { type: 1, chance: 0.70 },              // dense canopy
     ],
@@ -251,6 +255,8 @@ export const BIOME_PROFILES = {
   desert: {
     groundPalette: { 2: 1.0 },                // sand 100%
     ground: 2,
+    scatter: 0.03,                             // near-solid sand
+    noiseAmp: 0.25,
     covers: [],
     coverScale: (coverType, density) => {
       if (coverType === 1) return 0;
@@ -263,6 +269,8 @@ export const BIOME_PROFILES = {
   rock: {
     groundPalette: { 3: 1.0 },                // rock 100%
     ground: 3,
+    scatter: 0.05,                             // solid rock
+    noiseAmp: 0.25,
     covers: [
       { type: 53, chance: 0.10 },             // boulders
       { type: 54, chance: 0.08 },             // rock outcrops
@@ -278,6 +286,8 @@ export const BIOME_PROFILES = {
   ocean: {
     groundPalette: { 5: 0.7, 4: 0.3 },       // deep_water 70%, water 30%
     ground: 5,
+    scatter: 0.05,                             // mostly solid deep/shallow mix
+    noiseAmp: 0.25,
     covers: [],
     coverScale: (coverType, density) => {
       if (coverType === 1) return 0;
@@ -290,6 +300,8 @@ export const BIOME_PROFILES = {
   shallows: {
     groundPalette: { 4: 0.7, 0: 0.15, 2: 0.15 }, // water 70%, grass 15%, sand 15%
     ground: 4,
+    scatter: 0.15,                             // moderate intermixing at coast
+    noiseAmp: 0.30,
     covers: [],
     coverScale: (coverType, density) => {
       if (coverType === 1) return 0;
@@ -302,6 +314,8 @@ export const BIOME_PROFILES = {
   wetland: {
     groundPalette: { 55: 0.4, 4: 0.3, 0: 0.3 }, // mud 40%, water 30%, grass 30%
     ground: 55,
+    scatter: 0.35,                             // heavy speckling — puddles everywhere
+    noiseAmp: 0.20,
     covers: [],
     coverScale: (coverType, density) => {
       if (coverType === 1) return 0.01 + density * 0.04;
@@ -314,6 +328,8 @@ export const BIOME_PROFILES = {
   fungal: {
     groundPalette: { 56: 0.9, 55: 0.1 },     // fungal_grass 90%, mud 10%
     ground: 56,
+    scatter: 0.12,                             // some mud speckling in fungal ground
+    noiseAmp: 0.25,
     covers: [
       { type: 8, chance: 0.80 },              // mushroom forest
     ],

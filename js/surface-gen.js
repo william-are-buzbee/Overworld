@@ -65,8 +65,6 @@ const BORDER_NOISE_CFG  = { octaves: 3, frequency: 0.10, lacunarity: 2.0, gain: 
 const VARIATION_CFG     = { octaves: 3, frequency: 0.08, lacunarity: 2.0, gain: 0.50 };
 const LAKE_CFG          = { octaves: 2, frequency: 0.06, lacunarity: 2.0, gain: 0.50 };
 const GROUND_PALETTE_CFG = { octaves: 3, frequency: 0.12, lacunarity: 2.0, gain: 0.50 };
-const GROUND_NOISE_AMP  = 0.30;  // additive noise amplitude for ground type competition
-const GROUND_SCATTER    = 0.20;  // fraction of tiles that re-roll against raw palette weights
 
 // Collect every ground-type ID that appears in any biome groundPalette.
 // Each gets its own noise channel so types compete spatially.
@@ -257,6 +255,11 @@ export function makeSurface(seed) {
       // Additive competition means the noise perturbs around the weight rather than
       // scaling it — a 0.3-weight type can beat a 0.4-weight type whenever its noise
       // is moderately higher, producing organic blob boundaries.
+      // noiseAmp and scatter are blended per-tile from biome profiles using the same
+      // perturbed weights that drive palette blending.
+      const blendedNoiseAmp = blendValue(perturbedWeights, p => p.noiseAmp);
+      const blendedScatter  = blendValue(perturbedWeights, p => p.scatter);
+
       let groundType = profile.ground; // fallback
       let bestScore = -Infinity;
       for (const tTypeStr in blendedPalette) {
@@ -266,7 +269,7 @@ export function makeSurface(seed) {
         const noiseFn = groundNoiseChannels[tId];
         if (!noiseFn) continue;
         const n = fbm(noiseFn, x, y, GROUND_PALETTE_CFG); // ≈ [-1, 1]
-        const score = weight + GROUND_NOISE_AMP * n;
+        const score = weight + blendedNoiseAmp * n;
         if (score > bestScore) {
           bestScore = score;
           groundType = tId;
@@ -279,7 +282,7 @@ export function makeSurface(seed) {
       // a full blob.  The scatter pass gives a fraction of tiles a fresh roll
       // against the raw palette weights, producing individual tiles of
       // minority types dotted into the dominant blob regions.
-      if (rand() < GROUND_SCATTER) {
+      if (rand() < blendedScatter) {
         let r = rand();
         for (const tTypeStr in blendedPalette) {
           r -= blendedPalette[tTypeStr];
