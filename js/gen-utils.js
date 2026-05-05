@@ -3,11 +3,14 @@ import { worlds, covers, features, monsters } from './state.js';
 import { LAYER_SURFACE, LAYER_UNDER, LAYER_META, getAtmosphere } from './constants.js';
 import { T, isWalkable } from './terrain.js';
 import { rand, choice } from './rng.js';
-import { MON, getSpawnRules, spawnMonster } from './monsters.js';
+import { MON, getSpawnRules, spawnMonster, SPAWN_BLACKLIST } from './monsters.js';
 import { isCoordInRegion } from './world-state.js';
 
 // ==================== SPAWN FILTER REGISTRY ====================
 export function validateMonsterSpawn(monsterKey, x, y, layerIndex){
+  // Blacklisted creatures never spawn anywhere
+  if (SPAWN_BLACKLIST.has(monsterKey)) return false;
+
   const rules = getSpawnRules(monsterKey);
 
   if (rules && rules.restrictedRegion){

@@ -4,7 +4,7 @@ import { LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, W_UNDER, H_UNDER, DIFFICULT
 import { T, isWalkable, isCover } from './terrain.js';
 import { rand, randi, choice } from './rng.js';
 import { BOOKS } from './items.js';
-import { spawnMonster, MON } from './monsters.js';
+import { spawnMonster, MON, SPAWN_BLACKLIST } from './monsters.js';
 import { SIGN_TEXTS } from './npcs.js';
 import { worldDims, getFeature, setFeature, inBounds, chebyshev, getCover, setCover } from './world-state.js';
 import { generateLayer } from './world-gen.js';
@@ -379,6 +379,7 @@ export function spawnMonstersInWorld(){
       const density = surfaceDensity[biomeKey] || 0;
       if (rand() >= density) continue;
       let eligible = Object.keys(MON).filter(k => {
+        if (SPAWN_BLACKLIST.has(k)) return false;
         const d = MON[k];
         return d[12].includes(biomeKey) && d[13] === LAYER_SURFACE;
       });
@@ -441,6 +442,7 @@ export function spawnMonstersInWorld(){
       if (rand() >= density) continue;
       const targetT = biomeHint || ground;
       const eligible = Object.keys(MON).filter(k => {
+        if (SPAWN_BLACKLIST.has(k)) return false;
         const d = MON[k];
         return d[12].includes(targetT) && d[13] === LAYER_UNDER;
       });

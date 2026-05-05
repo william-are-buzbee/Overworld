@@ -479,7 +479,14 @@ function getSpawnRules(key){
 // Creatures whose definitions are kept but should never appear in the world.
 // World-gen spawner must skip any key in this set.
 const SPAWN_BLACKLIST = new Set([
-  'ice_wraith',   // removed from rotation — too punishing; kept for potential future use
+  'ice_wraith',    // removed from rotation — too punishing
+  'magma_hound',   // lava monsters disabled
+  'lava_fiend',    // lava monsters disabled
+  'zombie',        // undead disabled
+  'skeleton',      // undead disabled
+  'knight',        // undead disabled (Fallen Knight)
+  'mummy',         // undead disabled (Desert Mummy)
+  'drowned',       // undead disabled (The Drowned)
 ]);
 
 // Re-export everything that other modules need
