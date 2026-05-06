@@ -49,9 +49,9 @@ export const TERRAIN_INFO = {
                   allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
   [T.ROCK]:      {name:'rock',          sprite:'ROCK',       palette:'rock',       walk:true,  cover:10,  terrainLayer:'ground',
                   allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
-  [T.WATER]:     {name:'water',         sprite:'WATER',      palette:'water',      walk:false, cover:0,   terrainLayer:'ground',
+  [T.WATER]:     {name:'water',         sprite:'WATER',      palette:'water',      walk:false, cover:0,   terrainLayer:'ground', transparent:true,
                   allowedCover:[]},
-  [T.DEEP_WATER]:{name:'deep water',    sprite:'DEEP_WATER', palette:'deep',       walk:false, cover:0,   terrainLayer:'ground',
+  [T.DEEP_WATER]:{name:'deep water',    sprite:'DEEP_WATER', palette:'deep',       walk:false, cover:0,   terrainLayer:'ground', transparent:true,
                   allowedCover:[]},
   [T.ROAD]:      {name:'road',          sprite:'ROAD',       palette:'road',       walk:true,  cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
@@ -63,7 +63,7 @@ export const TERRAIN_INFO = {
                   allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_PILLAR]},
   [T.LAVA]:      {name:'lava',          sprite:'LAVA',       palette:'lava',       walk:false, cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
-  [T.UWATER]:    {name:'dark water',    sprite:'DEEP_WATER', palette:'uwater',     walk:false, cover:0,   terrainLayer:'ground',
+  [T.UWATER]:    {name:'dark water',    sprite:'DEEP_WATER', palette:'uwater',     walk:false, cover:0,   terrainLayer:'ground', transparent:true,
                   allowedCover:[]},
   [T.WOOD_FLOOR]:{name:'wood floor',    sprite:'WOOD_FLOOR', palette:'wood_floor', walk:true,  cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
@@ -87,8 +87,8 @@ export const TERRAIN_INFO = {
                   allowedCover:[T.FOREST,T.MUSHFOREST,T.WHEAT,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
 
   // ---- COVER types ----
-  [T.FOREST]:    {name:'forest',        sprite:'FOREST',   palette:'forest',   walk:true,  cover:45,  terrainLayer:'cover', overlay:true},
-  [T.MUSHFOREST]:{name:'mushroom forest',sprite:'MUSHFOREST',palette:'mushforest',walk:true,cover:45, terrainLayer:'cover', overlay:true, noRotate:true},
+  [T.FOREST]:    {name:'forest',        sprite:'FOREST',   palette:'forest',   walk:true,  cover:45,  terrainLayer:'cover', overlay:true, blocksVision:true},
+  [T.MUSHFOREST]:{name:'mushroom forest',sprite:'MUSHFOREST',palette:'mushforest',walk:true,cover:45, terrainLayer:'cover', overlay:true, noRotate:true, blocksVision:true},
   [T.WHEAT]:     {name:'wheat',         sprite:'WHEAT',    palette:'wheat',    walk:true,  cover:20,  terrainLayer:'cover', overlay:true},
   [T.TOWN]:      {name:'town',          sprite:'TOWN',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.CASTLE]:    {name:'castle',        sprite:'CASTLE',   palette:'castle',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
@@ -221,4 +221,24 @@ const DEFAULT_GROUND_FOR_COVER = {
 
 export function defaultGroundFor(coverType){
   return DEFAULT_GROUND_FOR_COVER[coverType] || T.GRASS;
+}
+
+// ==================== VISION BLOCKING ====================
+// Used by FOV calculation. A tile blocks vision if:
+//   • The cover has explicit blocksVision:true (walkable but opaque, e.g. trees)
+//   • The cover is non-walkable (walls, boulders, barrels, etc.)
+//   • The ground is non-walkable (cave walls, void, etc.)
+//   • The terrain has transparent:false set explicitly
+// Ground-only tiles that are walkable (grass, sand, water, rock) never block.
+export function tileBlocksVision(ground, coverType){
+  if (coverType) {
+    const ci = terrainInfo(coverType);
+    if (ci.blocksVision) return true;
+    if (ci.transparent === false) return true;
+    if (!ci.walk) return true;
+  }
+  const gi = terrainInfo(ground);
+  if (gi.transparent === false) return true;
+  if (gi.transparent === true) return false;   // explicitly see-through (water, etc.)
+  return !gi.walk;
 }

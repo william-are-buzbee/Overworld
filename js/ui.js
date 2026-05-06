@@ -103,7 +103,7 @@ function computeUIData() {
     fedWarn:  p.fed <= 40,
 
     // attributes
-    str: p.str, con: p.con, dex: p.dex, int: p.int,
+    str: p.str, con: p.con, dex: p.dex, int: p.int, per: p.per,
     gold: p.gold,
     slotsText: `${p.inventory.length}/${INV_SLOTS} · ${tWt}/${cap}wt`,
 
@@ -162,7 +162,7 @@ function buildPerksHTML(player) {
   if (all.length === 0) return EMPTY_HTML;
 
   return all.map(line =>
-    `<div class="perkline">${line.replace(/^(STR|CON|DEX|INT) (\d+):/, '<b>$1 $2:</b>')}</div>`
+    `<div class="perkline">${line.replace(/^(STR|CON|DEX|INT|PER) (\d+):/, '<b>$1 $2:</b>')}</div>`
   ).join('');
 }
 
@@ -292,6 +292,7 @@ function applyToDOM(d) {
   hi($('a-con'), d.con);
   hi($('a-dex'), d.dex);
   hi($('a-int'), d.int);
+  hi($('a-per'), d.per);
 
   // Combat (Character tab)
   $('d-atk').textContent   = d.atkText;

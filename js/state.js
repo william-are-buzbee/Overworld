@@ -4,10 +4,9 @@
 
 export const state = {
   player: null,
-  difficulty: 'normal',
   gameState: 'title',
   turnCount: 0,
-  cgAttrs: { str: 1, con: 1, dex: 1, int: 1 },
+  cgAttrs: { str: 1, con: 1, dex: 1, int: 1, per: 1 },
   npcTurnIdx: {},
   shopTab: 'buy',
 
@@ -15,6 +14,20 @@ export const state = {
   // Global tick counter — incremented every player action.
   // Persists across layer transitions. A full cycle is 200 ticks.
   worldTick: 0,
+
+  // ---- Player facing direction ----
+  // dx/dy pair representing which way the player is looking.
+  // Updated on move and attack; unchanged on rest/wait.
+  // Default: facing south (down the screen).
+  facing: { dx: 0, dy: 1 },
+
+  // ---- Field of Vision ----
+  // fovSet: Set of "x,y" strings for tiles currently visible this turn.
+  // Recomputed each player action; read by the renderer.
+  fovSet: null,
+  // explored: { layerIndex → Set<"x,y"> } — tiles the player has ever seen.
+  // Persists across turns so revisiting shows remembered terrain (dimmed).
+  explored: {},
 
   // ---- Dynamic layer tracking ----
   // Index of the layer currently being rendered / ticked.

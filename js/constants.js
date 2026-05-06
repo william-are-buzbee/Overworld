@@ -374,9 +374,11 @@ export function getAtmosphere(x, y) {
   };
 }
 
-// ==================== DIFFICULTY ====================
-export const DIFFICULTIES = {
-  easy:   {label:'Easy',    enemyHp:0.75, enemyAtk:0.70, goldMul:1.30, foodMul:1.30, startGold:60, startPoints:14},
-  normal: {label:'Normal',  enemyHp:1.00, enemyAtk:1.00, goldMul:1.00, foodMul:1.00, startGold:30, startPoints:12},
-  hard:   {label:'Hard',    enemyHp:1.25, enemyAtk:1.25, goldMul:0.80, foodMul:0.80, startGold:20, startPoints:10},
-};
+// ==================== BALANCE CONSTANTS ====================
+// Single balance curve (formerly "easy" difficulty).
+export const STARTING_POINTS = 16;
+export const STARTING_GOLD   = 60;
+export const ENEMY_HP_MUL    = 0.75;
+export const ENEMY_ATK_MUL   = 0.70;
+export const GOLD_DROP_MUL   = 1.30;
+export const FOOD_DROP_MUL   = 1.30;

@@ -12,7 +12,7 @@ import { attemptMove, restAction, eatBest, eatItem, usePotion, dropItem, equipWe
 import { setOnPlayerDeathCallback } from './enemy-ai.js';
 import { setOnVictoryCallback, toggleStealth } from './combat.js';
 import { useAction, showHelp, examineTile, readBook } from './interactions.js';
-import { openCharGen, setDiffButton, renderCharGen, randomizeAttrs, beginGame, onPlayerDeath, onVictory } from './chargen.js';
+import { openCharGen, renderCharGen, randomizeAttrs, beginGame, onPlayerDeath, onVictory } from './chargen.js';
 import { hasSave, tryResume, deleteSave } from './save-load.js';
 
 // ==================== WIRE CALLBACKS ====================
@@ -192,15 +192,9 @@ document.getElementById('items-list').addEventListener('click', (ev) => {
 });
 
 // ==================== CHARGEN CONTROLS ====================
-document.querySelectorAll('.diff-btn').forEach(b =>
-  b.addEventListener('click', () => {
-    state.difficulty = b.dataset.diff;
-    setDiffButton();
-  })
-);
 document.getElementById('cg-random').addEventListener('click', randomizeAttrs);
 document.getElementById('cg-reset').addEventListener('click', () => {
-  state.cgAttrs = { str: 1, con: 1, dex: 1, int: 1 };
+  state.cgAttrs = { str: 1, con: 1, dex: 1, int: 1, per: 1 };
   renderCharGen();
 });
 document.getElementById('cg-begin').addEventListener('click', beginGame);

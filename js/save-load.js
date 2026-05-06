@@ -7,6 +7,7 @@ import { LAYER_META } from './constants.js';
 import { findWeapon, findArmor } from './items.js';
 import { render } from './rendering.js';
 import { log } from './log.js';
+import { updatePlayerFOV } from './fov.js';
 
 const SAVE_KEY = 'overworld_zero_save';
 const SAVE_VERSION = 1;
@@ -17,6 +18,28 @@ const SAVE_VERSION = 1;
 // We access it at call time, not import time, to avoid circular deps.
 let _cellKeyToLayer = null;
 export function registerCellKeyToLayer(obj) { _cellKeyToLayer = obj; }
+
+// ==================== EXPLORED SET SERIALIZATION ====================
+// state.explored is { layerIndex → Set<"x,y"> }. Sets don't survive
+// JSON.stringify, so we convert to/from arrays of strings.
+
+function serializeExplored(explored) {
+  if (!explored) return {};
+  const out = {};
+  for (const layer of Object.keys(explored)) {
+    out[layer] = explored[layer] ? [...explored[layer]] : [];
+  }
+  return out;
+}
+
+function deserializeExplored(raw) {
+  if (!raw) return {};
+  const out = {};
+  for (const layer of Object.keys(raw)) {
+    out[layer] = new Set(raw[layer] || []);
+  }
+  return out;
+}
 
 // ==================== SERIALIZATION ====================
 
@@ -46,6 +69,8 @@ function deserializePlayer(raw) {
   p.armor  = findArmor(raw._armorKey)   || findArmor('rags');
   delete p._weaponKey;
   delete p._armorKey;
+  // Backwards compat: PER attribute added post-launch
+  if (p.per == null) p.per = 1;
   // Reconstruct Sets
   p.npcsMet   = new Set(raw._npcsMet   || []);
   p.booksRead = new Set(raw._booksRead || []);
@@ -159,7 +184,6 @@ export function saveGame() {
       // Core state fields
       state: {
         player: serializePlayer(state.player),
-        difficulty: state.difficulty,
         turnCount: state.turnCount,
         worldTick: state.worldTick,
         activeLayer: state.activeLayer,
@@ -183,6 +207,9 @@ export function saveGame() {
 
       // Town cell → layer mappings
       cellKeyToLayer: _cellKeyToLayer ? { ..._cellKeyToLayer } : {},
+
+      // FOV explored tiles per layer — Set<"x,y"> → array of strings
+      explored: serializeExplored(state.explored),
     };
 
     const json = JSON.stringify(saveData);
@@ -243,7 +270,6 @@ export function loadGame() {
     // --- Restore core state ---
     const savedState = data.state;
     state.player     = deserializePlayer(savedState.player);
-    state.difficulty  = savedState.difficulty || 'normal';
     state.turnCount   = savedState.turnCount  || 0;
     state.worldTick   = savedState.worldTick  || 0;
     state.activeLayer = savedState.activeLayer || 0;
@@ -300,6 +326,10 @@ export function loadGame() {
       }
     }
 
+    // --- Restore FOV explored tiles ---
+    state.explored = deserializeExplored(data.explored);
+    // fovSet is recomputed on the first action (or by tryResume before render)
+
     return true;
   } catch (err) {
     console.error('[Save] Failed to load game:', err);
@@ -316,6 +346,7 @@ export function tryResume() {
   if (!hasSave()) return false;
   if (!loadGame()) return false;
   try {
+    updatePlayerFOV();  // compute FOV before first render
     render();
     log('Game resumed.', 'system');
   } catch (err) {

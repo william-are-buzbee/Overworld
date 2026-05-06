@@ -1,6 +1,6 @@
 // ==================== CHARACTER CREATION + DEATH/VICTORY ====================
 import { state } from './state.js';
-import { DIFFICULTIES } from './constants.js';
+import { STARTING_POINTS } from './constants.js';
 import { rand, choice } from './rng.js';
 import { freshPlayer, deriveHP, poisonResistance } from './player.js';
 import { findArmor } from './items.js';
@@ -8,47 +8,31 @@ import { initWorld } from './world-logic.js';
 import { log, logEl } from './log.js';
 import { render } from './rendering.js';
 import { getRegionName } from './ui.js';
+import { updatePlayerFOV } from './fov.js';
 
 // cgAttrs lives in state.js
-function getCGPool(){ return DIFFICULTIES[state.difficulty].startPoints || 12; }
+function getCGPool(){ return STARTING_POINTS; }
 
 function openCharGen(){
   document.getElementById('title').style.display = 'none';
   document.getElementById('chargen-screen').style.display = 'flex';
-  state.cgAttrs = {str:1, con:1, dex:1, int:1};
-  state.difficulty = 'normal';
-  setDiffButton();
-  renderCharGen();
-}
-function setDiffButton(){
-  document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('on', b.dataset.diff === state.difficulty));
-  const descs = {
-    easy:'Easier fights, more gold, 14 attribute points.',
-    normal:'A balanced journey. 12 attribute points.',
-    hard:'Deadlier enemies. Less gold. 10 attribute points.'
-  };
-  document.getElementById('diff-desc').textContent = descs[state.difficulty];
-  // Reset attrs if over-allocated for new state.difficulty
-  const total = state.cgAttrs.str + state.cgAttrs.con + state.cgAttrs.dex + state.cgAttrs.int;
-  const pool = getCGPool();
-  if (total - 4 > pool){
-    state.cgAttrs = {str:1, con:1, dex:1, int:1};
-  }
+  state.cgAttrs = {str:1, con:1, dex:1, int:1, per:1};
   renderCharGen();
 }
 
 function renderCharGen(){
   const rows = document.getElementById('chargen-rows');
-  const total = state.cgAttrs.str + state.cgAttrs.con + state.cgAttrs.dex + state.cgAttrs.int;
-  const remaining = getCGPool() - (total - 4);  // start 1/1/1/1 = 4, distribute pool
+  const total = state.cgAttrs.str + state.cgAttrs.con + state.cgAttrs.dex + state.cgAttrs.int + state.cgAttrs.per;
+  const remaining = getCGPool() - (total - 5);  // start 1/1/1/1/1 = 5, distribute pool
   document.getElementById('cg-pool').textContent = remaining;
 
   // Which derived stats each attribute affects
   const attrDerived = {
     str: ['melee','carry','bluntap','critdmg','hp','poison'],
     con: ['hp','hplvl','resthp','regen','poison'],
-    dex: ['dodge','acc','crit','stealth'],
+    dex: ['dodge','crit','stealth'],
     int: ['xp','critdmg','shop','sell'],
+    per: ['acc','vision'],
   };
 
   const attrs = [
@@ -56,6 +40,7 @@ function renderCharGen(){
     {key:'con', name:'CON'},
     {key:'dex', name:'DEX'},
     {key:'int', name:'INT'},
+    {key:'per', name:'PER'},
   ];
   rows.innerHTML = attrs.map(a => {
     const v = state.cgAttrs[a.key];
@@ -104,8 +89,8 @@ function renderCharGen(){
   const carry = 4 + state.cgAttrs.str*2;
   const melee = 2 + Math.round(state.cgAttrs.str*0.6);  // +2 from dagger, approximate
   const avgAP = ((state.cgAttrs.str - 1) * (3 / 9));
-  // Hit chance: 35 + DEX*4 + weapon.acc (5 for dagger) − armor accPenalty, clamped 5–95
-  const rawAcc = 35 + state.cgAttrs.dex*4 + 5 - armorAccPen;
+  // Hit chance: 35 + PER*4 + weapon.acc (5 for dagger) − armor accPenalty, clamped 5–95
+  const rawAcc = 35 + state.cgAttrs.per*4 + 5 - armorAccPen;
   const hitChance = Math.min(95, Math.max(5, rawAcc));
   // Dodge: DEX only, minus armor dodgePenalty (flat), floor 0
   const dodge = Math.max(0, (state.cgAttrs.dex-1)*3.5 - armorDodgePen);
@@ -137,6 +122,8 @@ function renderCharGen(){
   const shopStr = disc > 0 ? `−${Math.round(disc*100)}%` : '—';
   // Sell value
   const sellPct = Math.round((0.25 + (state.cgAttrs.int-1) * (0.35/9))*100);
+  // Vision radius (mirrors playerViewRadius)
+  const visionR = Math.round(4 + (state.cgAttrs.per - 1) * (4 / 9));
 
   document.getElementById('cg-derived').innerHTML = `
     <div class="kv" id="cg-d-hp"><span class="k">Health</span><span class="v">${hp}</span></div>
@@ -152,6 +139,7 @@ function renderCharGen(){
     <div class="kv" id="cg-d-xp"><span class="k">Experience Gain</span><span class="v">${xpDisplay}</span></div>
     <div class="kv" id="cg-d-resthp"><span class="k">Rest Healing</span><span class="v">1–${maxRest}</span></div>
     <div class="kv" id="cg-d-regen"><span class="k">Passive Regen</span><span class="v">1 per ${regenIv}t</span></div>
+    <div class="kv" id="cg-d-vision"><span class="k">Vision Radius</span><span class="v">${visionR} tiles</span></div>
     <div class="kv" id="cg-d-shop"><span class="k">Shop Discount</span><span class="v">${shopStr}</span></div>
     <div class="kv" id="cg-d-sell"><span class="k">Sell Value</span><span class="v">${sellPct}%</span></div>
     <div class="kv" id="cg-d-poison"><span class="k">Poison Resist</span><span class="v">${Math.round(poisonResistance({con:state.cgAttrs.con,str:state.cgAttrs.str,level:1,perks:{}}).damageReduction*100)}%</span></div>
@@ -161,9 +149,9 @@ function renderCharGen(){
 }
 
 function randomizeAttrs(){
-  state.cgAttrs = {str:1, con:1, dex:1, int:1};
+  state.cgAttrs = {str:1, con:1, dex:1, int:1, per:1};
   let pool = getCGPool();
-  const keys = ['str','con','dex','int'];
+  const keys = ['str','con','dex','int','per'];
   while (pool > 0){
     const k = choice(keys);
     if (state.cgAttrs[k] < 10){ state.cgAttrs[k]++; pool--; }
@@ -172,14 +160,14 @@ function randomizeAttrs(){
 }
 
 function beginGame(){
-  state.player = freshPlayer(state.cgAttrs, state.difficulty);
+  state.player = freshPlayer(state.cgAttrs);
   initWorld(Math.floor(Math.random()*999999));
   document.getElementById('chargen-screen').style.display = 'none';
   state.gameState = 'play';
   logEl.innerHTML = '';
-  log(`Difficulty: ${DIFFICULTIES[state.difficulty].label}.`, 'system');
   log('You stand at the gates of Millhaven. Step through to enter.', 'system');
   log('Listen to townsfolk. Information matters more than steel.', 'system');
+  updatePlayerFOV();  // compute initial FOV before first render
   render();
 }
 
@@ -196,5 +184,5 @@ function onVictory(){
 
 // getRegionName already imported above
 
-export { openCharGen, setDiffButton, renderCharGen, randomizeAttrs, beginGame,
-         getCGPool, onPlayerDeath, onVictory };
+export { openCharGen, renderCharGen, randomizeAttrs, beginGame,
+         onPlayerDeath, onVictory };

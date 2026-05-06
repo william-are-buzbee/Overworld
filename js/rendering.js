@@ -37,6 +37,12 @@ function render(){
   const layer = state.player.layer;
   const coverGrid = covers[layer];
 
+  // FOV visibility — when fovSet is null (first frame before any action),
+  // treat all tiles as visible for backward compatibility.
+  const fovActive  = state.fovSet !== null;
+  const fovVisible = state.fovSet;
+  const fovExplored = state.explored[layer];
+
   for (let vy=0; vy<VIEW_H; vy++){
     for (let vx=0; vx<VIEW_W; vx++){
       const wx = ox+vx, wy = oy+vy;
@@ -44,6 +50,18 @@ function render(){
 
       if (!inBounds(layer, wx, wy)){
         ctx.fillStyle = '#050505';
+        ctx.fillRect(px, py, TILE, TILE);
+        continue;
+      }
+
+      // ---- FOV: tile visibility state ----
+      const tileKey = `${wx},${wy}`;
+      const isVisible  = !fovActive || fovVisible.has(tileKey);
+      const isExplored = !fovActive || (fovExplored && fovExplored.has(tileKey));
+
+      // Unexplored: pure black
+      if (!isExplored){
+        ctx.fillStyle = '#000';
         ctx.fillRect(px, py, TILE, TILE);
         continue;
       }
@@ -281,8 +299,15 @@ function render(){
         ctx.drawImage(tintedSprite(coverInfo.sprite, coverInfo.palette), px, py, TILE, TILE);
       }
 
-      // ---- Entities (monster, player) ----
-      drawEntityAtTile(wx, wy, px, py, layer);
+      // ---- FOV: fog overlay for seen-but-not-visible tiles ----
+      if (!isVisible){
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(px, py, TILE, TILE);
+        // Entities are NOT drawn on remembered-but-not-visible tiles
+      } else {
+        // ---- Entities (monster, player) ----
+        drawEntityAtTile(wx, wy, px, py, layer);
+      }
     }
   }
 

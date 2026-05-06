@@ -1,6 +1,6 @@
 // ==================== WORLD LOGIC — placement, spawning, init ====================
 import { state, worlds, covers, features, monsters, activateLayer } from './state.js';
-import { LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, W_UNDER, H_UNDER, DIFFICULTIES, LAYER_META, getAtmosphere } from './constants.js';
+import { LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, W_UNDER, H_UNDER, ENEMY_HP_MUL, ENEMY_ATK_MUL, LAYER_META, getAtmosphere } from './constants.js';
 import { T, isWalkable, isCover } from './terrain.js';
 import { rand, randi, choice } from './rng.js';
 import { BOOKS } from './items.js';
@@ -220,9 +220,9 @@ export function placeStructures(){
     dk.homeX = dk.x; dk.homeY = dk.y;
     worlds[LAYER_UNDER][dk.y][dk.x] = T.ROCK;
     dk.isBoss = true;
-    dk.hpMax = Math.round(dk.hpMax * DIFFICULTIES[state.difficulty].enemyHp);
+    dk.hpMax = Math.round(dk.hpMax * ENEMY_HP_MUL);
     dk.hp = dk.hpMax;
-    dk.weaponAtk = Math.round(dk.weaponAtk * DIFFICULTIES[state.difficulty].enemyAtk);
+    dk.weaponAtk = Math.round(dk.weaponAtk * ENEMY_ATK_MUL);
     monsters[LAYER_UNDER].push(dk);
   }
 
@@ -278,18 +278,18 @@ export function placeStructures(){
             const m = spawnMonster(pick);
             m.x = nx; m.y = ny;
             m.homeX = nx; m.homeY = ny;
-            m.hpMax = Math.round(m.hpMax * DIFFICULTIES[state.difficulty].enemyHp);
+            m.hpMax = Math.round(m.hpMax * ENEMY_HP_MUL);
             m.hp = m.hpMax;
-            m.weaponAtk = Math.round(m.weaponAtk * DIFFICULTIES[state.difficulty].enemyAtk);
+            m.weaponAtk = Math.round(m.weaponAtk * ENEMY_ATK_MUL);
             monsters[LAYER_SURFACE].push(m);
           } else if (nt === T.BEACH && rand() < 0.15 * SPAWN_DENSITY_MULT){
             // Crabs only on beach (amphibious)
             const m = spawnMonster('cave_crab');
             m.x = nx; m.y = ny;
             m.homeX = nx; m.homeY = ny;
-            m.hpMax = Math.round(m.hpMax * DIFFICULTIES[state.difficulty].enemyHp);
+            m.hpMax = Math.round(m.hpMax * ENEMY_HP_MUL);
             m.hp = m.hpMax;
-            m.weaponAtk = Math.round(m.weaponAtk * DIFFICULTIES[state.difficulty].enemyAtk);
+            m.weaponAtk = Math.round(m.weaponAtk * ENEMY_ATK_MUL);
             monsters[LAYER_SURFACE].push(m);
           }
         }
@@ -343,7 +343,6 @@ export function placeStructures(){
 const SPAWN_DENSITY_MULT = 0.5;
 
 export function spawnMonstersInWorld(){
-  const diffMul = DIFFICULTIES[state.difficulty];
 
   const surfaceDensity = {
     [T.GRASS]:    0.008  * SPAWN_DENSITY_MULT,
@@ -381,7 +380,7 @@ export function spawnMonstersInWorld(){
       let eligible = Object.keys(MON).filter(k => {
         if (SPAWN_BLACKLIST.has(k)) return false;
         const d = MON[k];
-        return d[12].includes(biomeKey) && d[13] === LAYER_SURFACE;
+        return d[13].includes(biomeKey) && d[14] === LAYER_SURFACE;
       });
       if (cover === T.MUSHFOREST){
         eligible = ['mushroom'];
@@ -403,9 +402,9 @@ export function spawnMonstersInWorld(){
       const m = spawnMonster(picked);
       m.x = x; m.y = y;
       m.homeX = x; m.homeY = y;
-      m.hpMax = Math.round(m.hpMax * diffMul.enemyHp);
+      m.hpMax = Math.round(m.hpMax * ENEMY_HP_MUL);
       m.hp = m.hpMax;
-      m.weaponAtk = Math.round(m.weaponAtk * diffMul.enemyAtk);
+      m.weaponAtk = Math.round(m.weaponAtk * ENEMY_ATK_MUL);
       monsters[LAYER_SURFACE].push(m);
       if (picked === 'wolf' || picked === 'dire_wolf') spawnedWolves.push(m);
     }
@@ -444,15 +443,15 @@ export function spawnMonstersInWorld(){
       const eligible = Object.keys(MON).filter(k => {
         if (SPAWN_BLACKLIST.has(k)) return false;
         const d = MON[k];
-        return d[12].includes(targetT) && d[13] === LAYER_UNDER;
+        return d[13].includes(targetT) && d[14] === LAYER_UNDER;
       });
       if (!eligible.length) continue;
       const m = spawnMonster(choice(eligible));
       m.x = x; m.y = y;
       m.homeX = x; m.homeY = y;
-      m.hpMax = Math.round(m.hpMax * diffMul.enemyHp);
+      m.hpMax = Math.round(m.hpMax * ENEMY_HP_MUL);
       m.hp = m.hpMax;
-      m.weaponAtk = Math.round(m.weaponAtk * diffMul.enemyAtk);
+      m.weaponAtk = Math.round(m.weaponAtk * ENEMY_ATK_MUL);
       monsters[LAYER_UNDER].push(m);
     }
   }

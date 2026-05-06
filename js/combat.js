@@ -2,7 +2,7 @@
 import { render } from './rendering.js';
 import { monsterMelee } from './enemy-ai.js';
 import { state, worlds, monsters } from './state.js';
-import { DMG, DIFFICULTIES, resistMult } from './constants.js';
+import { DMG, GOLD_DROP_MUL, resistMult } from './constants.js';
 import { T, coverBonus } from './terrain.js';
 import { rand, randi, randRange, roll100 } from './rng.js';
 import { playerMelee, playerAcc, playerDodge, playerDef, playerCritChance,
@@ -139,7 +139,7 @@ function alertNearby(src, radius){
 function killMonster(mon){
   const player = state.player;
   const xp = xpFromKill(player, mon.xp);
-  const gold = Math.round(randRange(mon.goldRange[0], mon.goldRange[1]) * DIFFICULTIES[state.difficulty].goldMul);
+  const gold = Math.round(randRange(mon.goldRange[0], mon.goldRange[1]) * GOLD_DROP_MUL);
   state.player.xp += xp;
   state.player.gold += gold;
   log(`${mon.name} falls. [+${xp} XP, +${gold}g]`, 'dead');

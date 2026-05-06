@@ -1,19 +1,20 @@
 // ==================== PLAYER ====================
-import { DMG, DIFFICULTIES, LAYER_SURFACE, PRICE_CAT } from './constants.js';
+import { DMG, STARTING_GOLD, LAYER_SURFACE, PRICE_CAT, LAYER_META } from './constants.js';
+import { getTimePhase } from './time-cycle.js';
+import { state } from './state.js';
 import { rand, randomRound } from './rng.js';
 import { findWeapon, findArmor } from './items.js';
 
 // player object lives in state.js — functions here take player as parameter `p`
 
-function freshPlayer(attrs, diff){
-  const diffData = DIFFICULTIES[diff];
+function freshPlayer(attrs){
   const p = {
     layer: LAYER_SURFACE,
     x:0, y:0,
     returnLayer: LAYER_SURFACE, returnX:0, returnY:0,  // where to go back after town
-    str: attrs.str, con: attrs.con, dex: attrs.dex, int: attrs.int,
+    str: attrs.str, con: attrs.con, dex: attrs.dex, int: attrs.int, per: attrs.per,
     level:1, xp:0, xpNext:15,
-    gold: diffData.startGold,
+    gold: STARTING_GOLD,
     weapon: findWeapon('dagger'),
     armor: findArmor('rags'),
     inventory:[],
@@ -94,11 +95,11 @@ function effectiveAP(p){
 
 function playerDef(p){ return p.armor.def; }
 
-// Accuracy: DEX only (INT no longer contributes)
+// Accuracy: PER only (moved from DEX)
 // Armor accPenalty = dodgePenalty / 2, applied as flat subtraction.
 function playerAcc(p){
   const accPen = (p.armor.dodgePenalty || 0) / 2;
-  return 35 + Math.round(p.dex*4) + (p.weapon.acc||0) - accPen;
+  return 35 + Math.round(p.per*4) + (p.weapon.acc||0) - accPen;
 }
 // Dodge: DEX only, minus armor dodgePenalty (flat subtraction, floor 0).
 function playerDodge(p){
@@ -174,6 +175,77 @@ function stealthBonus(p){
   let b = p.dex*4;
   if (p.perks && p.perks.stealth_bonus) b += 20;
   return b;
+}
+
+// Perception check — roll modified by PER. Used for detecting hidden things,
+// spotting stealthed enemies, noticing traps, finding secrets.
+// Returns a value 0–100; caller compares against a difficulty threshold.
+function perceptionCheck(p){
+  const roll = Math.floor(rand() * 100) + 1;  // 1–100
+  const bonus = p.per * 4;  // PER 1 = +4, PER 10 = +40
+  return Math.min(100, roll + bonus);
+}
+
+// Vision radius — PER driven base, modified by time of day and layer.
+//
+// Base (day): PER 1 = 4 tiles, PER 5 = 6 tiles, PER 10 = 8 tiles.
+// Dawn/Dusk:  base - 2, minimum 3.
+// Night:      roughly halved. PER 1 = 2, PER 10 = 4. Minimum 2.
+// Underground: always uses night radius (caves are dark).
+//
+// lightBonus: additive tiles from future light sources (torches, perks, etc.).
+//             Applied AFTER phase reduction, before the per-phase minimum.
+//             Defaults to 0.
+function baseViewRadius(p){
+  return Math.round(4 + (p.per - 1) * (4 / 9));
+}
+
+// Awareness radius — the small omnidirectional bubble around the player
+// that is always visible regardless of facing direction.
+// Always exactly 1 tile (the 8 adjacent squares). You can sense your
+// immediate surroundings but you don't have eyes on the back of your head.
+// NOT reduced by night or underground.
+function awarenessRadius(p){
+  return 1;
+}
+
+function playerViewRadius(p, lightBonus){
+  const bonus = lightBonus || 0;
+  const base  = baseViewRadius(p);
+
+  // Determine if the player's current layer is "dark" (underground, lava, etc.)
+  // Surface and town/shop interiors use time-based lighting; everything else is dark.
+  const meta = LAYER_META[p.layer];
+  const layerType = meta ? meta.type : (p.layer === LAYER_SURFACE ? 'surface' : 'underground');
+  const isDark = layerType !== 'surface' && layerType !== 'town' && layerType !== 'shop';
+
+  if (isDark){
+    // Underground / caves — always night-equivalent radius.
+    // PER 1 → 2, PER 10 → 4.  Linear interpolation.
+    const nightBase = Math.round(2 + (p.per - 1) * (2 / 9));
+    return Math.max(2, nightBase + bonus);
+  }
+
+  // Surface / town — apply time-of-day scaling.
+  const { phase } = getTimePhase(state.worldTick);
+
+  switch (phase){
+    case 'day':
+      return Math.max(3, base + bonus);
+
+    case 'dawn':
+    case 'dusk':
+      return Math.max(3, base - 2 + bonus);
+
+    case 'night': {
+      // Same formula as underground darkness.
+      const nightBase = Math.round(2 + (p.per - 1) * (2 / 9));
+      return Math.max(2, nightBase + bonus);
+    }
+
+    default:
+      return Math.max(3, base + bonus);
+  }
 }
 
 // No level cap — INT drives XP gain naturally, so high-INT characters
@@ -279,6 +351,12 @@ function describeAttributePerks(p){
   if (p.int < 2){
     lines.push(`INT 1: speech stunted — folk speak simply`);
   }
+  // PER: accuracy
+  if (p.per >= 2){
+    const accPen = (p.armor.dodgePenalty || 0) / 2;
+    const acc = 35 + Math.round(p.per*4) + (p.weapon.acc||0) - accPen;
+    lines.push(`PER ${p.per}: accuracy ${acc}%`);
+  }
   return lines;
 }
 
@@ -327,5 +405,5 @@ export {
   playerCritChance, playerCritMult, xpMult, xpFromKill, buyPriceMul, innPriceMul, sellValueMul,
   foodFedMul, stealthBonus, levelCap, cursedBaneMul,
   passiveRegenInterval, poisonResistance, restHealAmount,
-  describeAttributePerks, addItem, defaultWeight,
+  describeAttributePerks, addItem, defaultWeight, perceptionCheck, baseViewRadius, playerViewRadius, awarenessRadius,
 };

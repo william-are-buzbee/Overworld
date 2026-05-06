@@ -1,6 +1,6 @@
 // ==================== CASTLE MODAL ====================
 import { state, worlds, monsters } from './state.js';
-import { DIFFICULTIES, LAYER_SURFACE } from './constants.js';
+import { ENEMY_HP_MUL, ENEMY_ATK_MUL, LAYER_SURFACE } from './constants.js';
 import { T, isWalkable, terrainName } from './terrain.js';
 import { choice } from './rng.js';
 import { findWeapon, findArmor } from './items.js';
@@ -41,9 +41,9 @@ function openSunward(f, x, y){
       k.name = 'Guardian Knight';
       // Guardians can pursue anywhere around Sunward
       k.territory = [T.PLAINS,T.MOUNTAIN,T.FOREST,T.DESERT];
-      k.hpMax = Math.round(k.hpMax * DIFFICULTIES[state.difficulty].enemyHp);
+      k.hpMax = Math.round(k.hpMax * ENEMY_HP_MUL);
       k.hp = k.hpMax;
-      k.weaponAtk = Math.round(k.weaponAtk * DIFFICULTIES[state.difficulty].enemyAtk);
+      k.weaponAtk = Math.round(k.weaponAtk * ENEMY_ATK_MUL);
       monsters[LAYER_SURFACE].push(k);
       f.knightSpawned = true;
       html += `<div class="dialogue" style="color:#d4a050;">A knight rises! "Prove thyself worthy, or begone."</div>`;

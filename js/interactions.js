@@ -1,22 +1,23 @@
 // ==================== USE / INTERACT — core hub ====================
 import { state, worlds, covers, features, monsters } from './state.js';
-import { DMG, DIFFICULTIES, resistMult, LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, PRICE_CAT, FED_MAX } from './constants.js';
+import { DMG, resistMult, LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, PRICE_CAT, FED_MAX } from './constants.js';
 import { T, terrainName, coverBonus } from './terrain.js';
 import { rand, randi, choice } from './rng.js';
 import { FOOD, POTIONS, BOOKS, findWeapon, findArmor, itemPriceCategory } from './items.js';
 import { INV_SLOTS, carryCapacity, totalWeight, overWeight, bagFull, addItem,
          defaultWeight, buyPriceMul, innPriceMul, sellValueMul, deriveHP,
-         playerMelee, playerDef, playerAcc, playerDodge,
-         playerCritChance, playerCritMult, poisonResistance, foodFedMul } from './player.js';
-import { monDodge, monAcc, monDamage, monCritChance, spawnMonster } from './monsters.js';
+         playerMelee, effectiveAP, playerDef, playerAcc, playerDodge,
+         playerCritChance, playerCritMult, stealthBonus, poisonResistance, foodFedMul } from './player.js';
+import { monDodge, monAcc, monDamage, monCritChance, monCritMult, spawnMonster } from './monsters.js';
 import { NPCS, SHOPS } from './npcs.js';
 import { inBounds, monsterAt, chebyshev, getFeature, setFeature, fkey,
          getCover, setCover } from './world-state.js';
 import { log } from './log.js';
 import { openModal, closeModal, showModal, modalEl } from './modal.js';
-import { updateUI, interactable, adjacentFeature } from './ui.js';
+import { updateUI, interactable, adjacentFeature, effectLabel } from './ui.js';
 import { render } from './rendering.js';
 import { endPlayerTurn } from './enemy-ai.js';
+import { updatePlayerFOV } from './fov.js';
 
 import { openShop, renderShop, buyCost, sellValue, itemBaseValue } from './shops.js';
 import { openNPC } from './dialogue.js';
@@ -313,6 +314,7 @@ function openProfileShop(shopKey){
 function useStairs(f){
   teleportPlayer(f.targetLayer, f.targetX, f.targetY);
   log(f.dir === 'down' ? 'You descend into the dark.' : 'You climb up to the world.', 'warn');
+  updatePlayerFOV();  // compute FOV for new layer before render
   render();
   endPlayerTurn('move');
 }
@@ -493,37 +495,287 @@ function showHelp(){
 function examineTile(x, y){
   const player = state.player;
   if (!inBounds(state.player.layer, x, y)) return;
+
+  // Self-inspect: right-click your own tile
+  if (x === player.x && y === player.y && player.layer === state.player.layer){
+    openModal(buildPlayerCard(player));
+    document.getElementById('btn-close').onclick = closeModal;
+    return;
+  }
+
   const ground = worlds[state.player.layer][y][x];
   const cover = getCover(state.player.layer, x, y);
   const mon = monsterAt(x, y, state.player.layer);
-  let html = `<h2>Examine</h2>`;
-  html += `<div class="shop-h">Terrain</div>`;
-  html += `<div class="dialogue" style="font-style:normal;">${terrainName(ground, cover)}${coverBonus(ground, cover)?` <span class="sub">(cover +${coverBonus(ground, cover)})</span>`:''}</div>`;
+
   if (mon){
-    html += `<div class="shop-h">${mon.name}</div>`;
-    html += `<div class="dialogue" style="font-style:normal;font-size:10px;">`;
-    html += `HP: ${mon.hp}/${mon.hpMax}<br>`;
-    html += `STR ${mon.str} · CON ${mon.con} · DEX ${mon.dex} · INT ${mon.int}<br>`;
-    html += `Attack: ${monDamage(mon)} ${mon.dmgType} · Def ${mon.def} · Dodge ${Math.round(monDodge(mon))}%<br>`;
-    html += `Tags: <b>${mon.tags.join(', ')}</b><br>`;
-    html += `Percept: ${mon.percept} · Hostility: ${['passive','territorial','aggressive'][mon.hostility]}<br>`;
-    html += `AI: ${mon.aiState}${mon.search>0?' (searches)':' (no search)'} · Speed: ${mon.speed||60}<br>`;
-    if (mon.personality && mon.personality !== 'normal') html += `Trait: <b>${mon.personality.replace(/_/g,' ')}</b><br>`;
-    const dtypes = [DMG.BLADE, DMG.BLUNT, DMG.FIRE, DMG.COLD, DMG.ELEC, DMG.POISON];
-    const weaks = dtypes.map(d => ({d, m:resistMult(mon.tags, d)}));
-    const immune = weaks.filter(w => w.m === 0).map(w=>w.d);
-    const weakTo = weaks.filter(w => w.m >= 1.3 && w.m !== 0).map(w=>w.d);
-    const resists = weaks.filter(w => w.m < 1 && w.m > 0 && w.m <= 0.7).map(w=>w.d);
-    if (weakTo.length) html += `WEAK: <b style="color:#e0a060">${weakTo.join(', ')}</b><br>`;
-    if (resists.length) html += `RESIST: <b style="color:#888">${resists.join(', ')}</b><br>`;
-    if (immune.length)  html += `IMMUNE: <b style="color:#444">${immune.join(', ')}</b>`;
-    html += `</div>`;
+    openModal(buildMonsterCard(mon, player, ground, cover));
+    document.getElementById('btn-close').onclick = closeModal;
+    return;
+  }
+
+  // Plain terrain examine (no monster)
+  const tName = terrainName(ground, cover);
+  const cb = coverBonus(ground, cover);
+  let html = cardCSS();
+  html += `<div class="ex-card">`;
+  html += `<div class="ex-header"><span class="ex-name">${tName}</span></div>`;
+  if (cb){
+    html += `<div class="ex-sep"></div>`;
+    html += `<div class="ex-row"><span class="ex-dim">Cover</span> <span class="ex-val">+${cb} defense</span></div>`;
   }
   const f = getFeature(state.player.layer, x, y);
-  if (f){ html += `<div class="shop-h">Feature</div><div class="dialogue" style="font-style:normal;font-size:10px;">${f.type}${f.name?' — '+f.name:''}</div>`; }
+  if (f){
+    html += `<div class="ex-sep"></div>`;
+    html += `<div class="ex-row"><span class="ex-dim">${f.type}</span> <span>${f.name||''}</span></div>`;
+  }
+  html += `</div>`;
   html += `<div class="close-row"><button class="btn" id="btn-close">OK</button></div>`;
   openModal(html);
   document.getElementById('btn-close').onclick = closeModal;
+}
+
+// ==================== STAT CARD: EMBEDDED STYLES ====================
+function cardCSS(){
+  return `<style>
+    .ex-card { font-size:11px; line-height:1.5; padding:4px 0; }
+    .ex-card * { box-sizing:border-box; }
+    .ex-header { display:flex; align-items:baseline; gap:8px; padding:2px 4px 6px; }
+    .ex-name { font-size:14px; font-weight:bold; color:#e0d0b0; letter-spacing:.5px; }
+    .ex-sep { height:1px; background:#555; margin:8px 0; opacity:0.6; }
+    .ex-dim { color:#777; }
+    .ex-val { color:#ddd; }
+    .ex-row { display:flex; justify-content:space-between; align-items:baseline; padding:4px 4px; }
+    .ex-pair { display:flex; justify-content:space-between; padding:4px 4px; }
+    .ex-pair > span { flex:1; display:flex; gap:5px; align-items:baseline; }
+    .ex-attrs { display:flex; justify-content:space-between; padding:5px 4px; font-size:11px; }
+    .ex-attrs > span { display:flex; gap:4px; align-items:baseline; color:#ddd; }
+    .ex-specials { padding:2px 4px; }
+    .ex-special-line { color:#c8a050; font-size:10px; line-height:1.8; padding:1px 0; }
+    .ex-special-line:before { content:'· '; color:#666; }
+    .ex-terrain { font-size:10px; }
+    .ex-terrain .ex-dim { color:#666; }
+  </style>`;
+}
+
+// ==================== STAT CARD: HP BAR HELPER ====================
+function hpBar(hp, hpMax, width){
+  const pct = Math.max(0, Math.min(1, hp / hpMax));
+  const filled = Math.round(pct * width);
+  const empty  = width - filled;
+  const color = pct > 0.5 ? '#6a4' : pct > 0.25 ? '#ca4' : '#c44';
+  return `<span style="color:${color}">${'█'.repeat(filled)}</span><span style="color:#444">${'░'.repeat(empty)}</span>`;
+}
+
+// ==================== STAT CARD: MONSTER (INT-GATED) ====================
+function buildMonsterCard(mon, player, ground, cover){
+  const pInt = player.int;
+  let h = cardCSS();
+  h += `<div class="ex-card">`;
+
+  // --- Always visible: name, level, HP ---
+  h += `<div class="ex-header">`;
+  h += `<span class="ex-name">${mon.name}</span>`;
+  h += `<span class="ex-dim">(Level ${mon.tier})</span>`;
+  h += `</div>`;
+  h += `<div class="ex-sep"></div>`;
+  h += `<div class="ex-row"><span class="ex-dim">HP</span> ${hpBar(mon.hp, mon.hpMax, 10)} <span class="ex-val">${mon.hp}/${mon.hpMax}</span></div>`;
+  h += `<div class="ex-pair">`;
+  h += `<span><span class="ex-dim">ATK</span> <span class="ex-val">${monDamage(mon)}</span></span>`;
+  h += `<span><span class="ex-dim">DEF</span> <span class="ex-val">${mon.def}</span></span>`;
+  h += `</div>`;
+
+  // --- INT 3+: attributes, accuracy, dodge ---
+  if (pInt >= 3){
+    h += `<div class="ex-sep"></div>`;
+    h += `<div class="ex-attrs">`;
+    h += `<span><span class="ex-dim">STR</span> ${mon.str}</span>`;
+    h += `<span><span class="ex-dim">CON</span> ${mon.con}</span>`;
+    h += `<span><span class="ex-dim">DEX</span> ${mon.dex}</span>`;
+    h += `<span><span class="ex-dim">INT</span> ${mon.int}</span>`;
+    h += `<span><span class="ex-dim">PER</span> ${mon.per}</span>`;
+    h += `</div>`;
+    h += `<div class="ex-sep"></div>`;
+    h += `<div class="ex-pair">`;
+    h += `<span><span class="ex-dim">Accuracy</span> <span class="ex-val">${monAcc(mon)}%</span></span>`;
+    h += `<span><span class="ex-dim">Dodge</span> <span class="ex-val">${Math.round(monDodge(mon))}%</span></span>`;
+    h += `</div>`;
+  }
+
+  // --- INT 5+: crit, AP, stealth, specials ---
+  if (pInt >= 5){
+    h += `<div class="ex-sep"></div>`;
+    const critCh = monCritChance(mon);
+    const critMl = monCritMult(mon);
+    h += `<div class="ex-pair">`;
+    h += `<span><span class="ex-dim">Crit</span> <span class="ex-val">${Math.round(critCh)}%</span></span>`;
+    h += `<span><span class="ex-dim">Crit Dmg</span> <span class="ex-val">×${critMl.toFixed(2)}</span></span>`;
+    h += `</div>`;
+    if (mon.weaponAtk && mon.def){
+      h += `<div class="ex-row"><span class="ex-dim">Armor Pierce</span> <span class="ex-val">0</span></div>`;
+    }
+    h += `<div class="ex-row"><span class="ex-dim">Percept</span> <span class="ex-val">${mon.percept}</span></div>`;
+
+    // Special abilities
+    const specials = [];
+    if (mon.dmgType === DMG.POISON) specials.push('Poison touch');
+    if (mon.dmgType === DMG.FIRE) specials.push('Fire attack');
+    if (mon.dmgType === DMG.COLD) specials.push('Cold attack');
+    if (mon.dmgType === DMG.ELEC) specials.push('Electric attack');
+    if (mon.mods && mon.mods.waterHeal) specials.push('Water healing');
+    if (mon.mods && mon.mods.blindsight) specials.push(`Blindsight (${mon.mods.blindsight})`);
+    const dtypes = [DMG.BLADE, DMG.BLUNT, DMG.FIRE, DMG.COLD, DMG.ELEC, DMG.POISON];
+    const weaks  = dtypes.map(d => ({d, m:resistMult(mon.tags, d)}));
+    const weakTo  = weaks.filter(w => w.m >= 1.3 && w.m !== 0).map(w => w.d);
+    const resists = weaks.filter(w => w.m < 1 && w.m > 0 && w.m <= 0.7).map(w => w.d);
+    const immune  = weaks.filter(w => w.m === 0).map(w => w.d);
+    if (weakTo.length)  specials.push(`<span style="color:#e0a060">Weak: ${weakTo.join(', ')}</span>`);
+    if (resists.length) specials.push(`<span style="color:#888">Resist: ${resists.join(', ')}</span>`);
+    if (immune.length)  specials.push(`<span style="color:#555">Immune: ${immune.join(', ')}</span>`);
+
+    if (specials.length){
+      h += `<div class="ex-sep"></div>`;
+      h += `<div class="ex-specials">`;
+      for (const s of specials) h += `<div class="ex-special-line">${s}</div>`;
+      h += `</div>`;
+    }
+  }
+
+  // --- INT 7+: behavior, leash, biome, night vision ---
+  if (pInt >= 7){
+    h += `<div class="ex-sep"></div>`;
+    const hostNames = ['Passive','Territorial','Aggressive'];
+    const traits = [];
+    traits.push(hostNames[mon.hostility] || 'Unknown');
+    if (mon.personality && mon.personality !== 'normal'){
+      traits.push(mon.personality.replace(/_/g, ' '));
+    }
+    h += `<div class="ex-row"><span class="ex-dim">Behavior</span> <span class="ex-val">${traits.join(' · ')}</span></div>`;
+    h += `<div class="ex-pair">`;
+    h += `<span><span class="ex-dim">Leash</span> <span class="ex-val">${mon.chase} tiles</span></span>`;
+    h += `<span><span class="ex-dim">Search</span> <span class="ex-val">${mon.search > 0 ? mon.search + ' turns' : 'none'}</span></span>`;
+    h += `</div>`;
+    const visionTraits = [];
+    if (mon.mods && mon.mods.nightVision) visionTraits.push('Night vision');
+    if (mon.mods && mon.mods.blindsight) visionTraits.push('Blindsight');
+    if (visionTraits.length){
+      h += `<div class="ex-row"><span class="ex-dim">Senses</span> <span class="ex-val">${visionTraits.join(', ')}</span></div>`;
+    }
+    h += `<div class="ex-row"><span class="ex-dim">Speed</span> <span class="ex-val">${mon.speed || 60}</span></div>`;
+  }
+
+  // --- INT 9+: exact damage range, loot hints ---
+  if (pInt >= 9){
+    h += `<div class="ex-sep"></div>`;
+    const baseDmg = monDamage(mon);
+    const low = Math.max(1, baseDmg - Math.floor(mon.str * 0.25));
+    const high = baseDmg + Math.floor(mon.str * 0.25);
+    h += `<div class="ex-row"><span class="ex-dim">Dmg Range</span> <span class="ex-val">${low}–${high} ${mon.dmgType}</span></div>`;
+    if (mon.goldRange){
+      h += `<div class="ex-row"><span class="ex-dim">Loot</span> <span class="ex-val">${mon.goldRange[0]}–${mon.goldRange[1]} gold</span></div>`;
+    }
+    h += `<div class="ex-row"><span class="ex-dim">XP Value</span> <span class="ex-val">${mon.xp}</span></div>`;
+  }
+
+  // Terrain footer
+  h += `<div class="ex-sep"></div>`;
+  const cb = coverBonus(ground, cover);
+  h += `<div class="ex-row ex-terrain"><span class="ex-dim">${terrainName(ground, cover)}</span>${cb ? `<span>cover +${cb}</span>` : ''}</div>`;
+
+  h += `</div>`;
+  h += `<div class="close-row"><button class="btn" id="btn-close">OK</button></div>`;
+  return h;
+}
+
+// ==================== STAT CARD: PLAYER (SELF-INSPECT) ====================
+function buildPlayerCard(p){
+  let h = cardCSS();
+  h += `<div class="ex-card">`;
+
+  // Header
+  h += `<div class="ex-header">`;
+  h += `<span class="ex-name">Adventurer</span>`;
+  h += `<span class="ex-dim">(Level ${p.level})</span>`;
+  h += `</div>`;
+  h += `<div class="ex-sep"></div>`;
+
+  // HP bar
+  h += `<div class="ex-row"><span class="ex-dim">HP</span> ${hpBar(p.hp, p.hpMax, 10)} <span class="ex-val">${p.hp}/${p.hpMax}</span></div>`;
+
+  // FED bar
+  const fedFilled = Math.round(Math.max(0, p.fed) / 10);
+  const fedEmpty = 10 - fedFilled;
+  const fedColor = p.fed > 40 ? '#6a4' : p.fed > 15 ? '#ca4' : '#c44';
+  h += `<div class="ex-row"><span class="ex-dim">FED</span> <span style="color:${fedColor}">${'█'.repeat(fedFilled)}</span><span style="color:#444">${'░'.repeat(fedEmpty)}</span> <span class="ex-val">${Math.round(p.fed)}/100</span></div>`;
+
+  // Attributes
+  h += `<div class="ex-sep"></div>`;
+  h += `<div class="ex-attrs">`;
+  h += `<span><span class="ex-dim">STR</span> ${p.str}</span>`;
+  h += `<span><span class="ex-dim">CON</span> ${p.con}</span>`;
+  h += `<span><span class="ex-dim">DEX</span> ${p.dex}</span>`;
+  h += `<span><span class="ex-dim">INT</span> ${p.int}</span>`;
+  h += `<span><span class="ex-dim">PER</span> ${p.per}</span>`;
+  h += `</div>`;
+
+  // Equipment
+  h += `<div class="ex-sep"></div>`;
+  const elemTag = p.weapon.elem ? '+' + p.weapon.elem : '';
+  h += `<div class="ex-row"><span class="ex-dim">Weapon</span> <span class="ex-val">${p.weapon.name} <span class="ex-dim">[${p.weapon.type}${elemTag}]</span></span></div>`;
+  h += `<div class="ex-row"><span class="ex-dim">Armor</span> <span class="ex-val">${p.armor.name} <span class="ex-dim">DEF ${playerDef(p)}</span></span></div>`;
+
+  // Derived combat stats
+  h += `<div class="ex-sep"></div>`;
+  h += `<div class="ex-pair">`;
+  h += `<span><span class="ex-dim">ATK</span> <span class="ex-val">~${playerMelee(p)}</span></span>`;
+  h += `<span><span class="ex-dim">DEF</span> <span class="ex-val">${playerDef(p)}</span></span>`;
+  h += `</div>`;
+  h += `<div class="ex-pair">`;
+  h += `<span><span class="ex-dim">Accuracy</span> <span class="ex-val">${playerAcc(p)}%</span></span>`;
+  h += `<span><span class="ex-dim">Dodge</span> <span class="ex-val">${Math.round(playerDodge(p))}%</span></span>`;
+  h += `</div>`;
+  h += `<div class="ex-pair">`;
+  h += `<span><span class="ex-dim">Crit</span> <span class="ex-val">${Math.round(playerCritChance(p))}%</span></span>`;
+  h += `<span><span class="ex-dim">Crit Dmg</span> <span class="ex-val">×${playerCritMult(p).toFixed(2)}</span></span>`;
+  h += `</div>`;
+
+  // Armor piercing (only if weapon has any)
+  const ap = p.weapon.ap || 0;
+  let displayAP = ap;
+  if (p.weapon.type === DMG.BLUNT) displayAP += (p.str - 1) * (3 / 9);
+  if (displayAP > 0){
+    h += `<div class="ex-row"><span class="ex-dim">Armor Pierce</span> <span class="ex-val">~${displayAP.toFixed(1)}</span></div>`;
+  }
+
+  // Stealth
+  const sb = stealthBonus(p);
+  if (sb > 0){
+    h += `<div class="ex-row"><span class="ex-dim">Stealth</span> <span class="ex-val">${sb}${p.stealth ? ' (active)' : ''}</span></div>`;
+  }
+
+  // Active effects
+  if (p.effects.length > 0){
+    h += `<div class="ex-sep"></div>`;
+    const poisonStacks = p.effects.filter(e => e.type === 'poison');
+    const others = p.effects.filter(e => e.type !== 'poison');
+    for (const e of others){
+      const dur = e.turns === 999 ? '∞' : e.turns + 't';
+      h += `<div class="ex-row"><span class="ex-dim">${effectLabel(e)}</span> <span class="ex-val">${dur}</span></div>`;
+    }
+    if (poisonStacks.length > 0){
+      const maxT = Math.max(...poisonStacks.map(s => s.turns));
+      const pr = poisonResistance(p);
+      h += `<div class="ex-row"><span class="ex-dim">Poisoned ×${poisonStacks.length}</span> <span class="ex-val">${maxT}t <span class="ex-dim">(-${Math.round(pr.damageReduction*100)}% resist)</span></span></div>`;
+    }
+  }
+
+  // XP
+  h += `<div class="ex-sep"></div>`;
+  h += `<div class="ex-row"><span class="ex-dim">XP</span> <span class="ex-val">${p.xp} / ${p.xpNext}</span></div>`;
+  h += `<div class="ex-row"><span class="ex-dim">Gold</span> <span class="ex-val">${p.gold}</span></div>`;
+
+  h += `</div>`;
+  h += `<div class="close-row"><button class="btn" id="btn-close">OK</button></div>`;
+  return h;
 }
 
 function readBook(idx){

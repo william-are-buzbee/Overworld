@@ -26,10 +26,16 @@ function attemptMove(dx, dy){
   if (!inBounds(state.player.layer, nx, ny)){ log('The world ends here.', 'muted'); return; }
   if (isImpassable(state.player.layer, nx, ny)) return;
   const mon = monsterAt(nx, ny, state.player.layer);
-  if (mon){ const didHit = playerAttack(mon); endPlayerTurn(didHit ? 'attack' : 'miss'); return; }
+  if (mon){
+    // Face the enemy when attacking
+    state.facing.dx = dx; state.facing.dy = dy;
+    const didHit = playerAttack(mon); endPlayerTurn(didHit ? 'attack' : 'miss'); return;
+  }
   const ground = worlds[state.player.layer][ny][nx];
   const cover = getCover(state.player.layer, nx, ny);
   if (!isWalkable(ground, cover)){ log(`Blocked by ${terrainName(ground, cover)}.`, 'muted'); return; }
+  // Face movement direction
+  state.facing.dx = dx; state.facing.dy = dy;
   state.player.x = nx; state.player.y = ny;
   const f = getFeature(state.player.layer, nx, ny);
   if (f){

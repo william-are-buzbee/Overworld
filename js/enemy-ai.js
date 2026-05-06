@@ -2,7 +2,7 @@
 // End-of-turn processing, monster state machine, movement, and melee.
 
 import { state, worlds, covers, monsters } from './state.js';
-import { DMG } from './constants.js';
+import { DMG, LAYER_META, LAYER_SURFACE } from './constants.js';
 import { T, isWalkable } from './terrain.js';
 import { rand, randi, roll100 } from './rng.js';
 import { playerDef, playerDodge, poisonResistance, passiveRegenInterval, restHealAmount } from './player.js';
@@ -12,8 +12,9 @@ import { log } from './log.js';
 import { render } from './rendering.js';
 import { endStealth, stealthDetectChance, rollHit } from './combat.js';
 import { fedDrainFor } from './player-actions.js';
-import { advanceTick } from './time-cycle.js';
+import { advanceTick, getTimePhase } from './time-cycle.js';
 import { saveGame } from './save-load.js';
+import { updatePlayerFOV, hasLOS } from './fov.js';
 
 // Forward references — set by main.js
 
@@ -252,6 +253,7 @@ function playerAdjacentToWater(layer){
   for (const layer of Object.keys(monsters)){
     if (monsters[layer]) monsters[layer] = monsters[layer].filter(m => m.hp > 0);
   }
+  updatePlayerFOV();  // recompute FOV before rendering
   render();
   saveGame();  // Auto-save after every player action
 }
@@ -280,15 +282,71 @@ function monInOwnTerritory(mon){
   return mon.territory.includes(mt);
 }
 
-// True if monster currently has "line of sight" to player:
-// simple check — within perception range and player is in monster's territory OR very close
-function canSeePlayer(mon){
+// ==================== ENEMY VISION ====================
+// Monster vision radius — mirrors player's baseViewRadius formula.
+// PER 1 = 4 tiles, PER 10 = 8 tiles.  Night / underground reduces vision
+// the same way as the player, unless the creature has nightVision or blindsight.
+function monsterViewRadius(mon){
+  // Blindsight creatures don't use vision at all (handled separately)
+  if (mon.mods && mon.mods.blindsight != null) return 0;
+
+  const base = Math.round(4 + (mon.per - 1) * (4 / 9));
+
+  // Night vision — no reduction from darkness or underground
+  if (mon.mods && mon.mods.nightVision) return base;
+
+  // Determine if current layer is dark (underground, lava, etc.)
+  const layer = state.player.layer;
+  const meta = LAYER_META[layer];
+  const layerType = meta ? meta.type : (layer === LAYER_SURFACE ? 'surface' : 'underground');
+  const isDark = layerType !== 'surface' && layerType !== 'town' && layerType !== 'shop';
+
+  if (isDark){
+    // Underground darkness — same formula as player night vision
+    return Math.round(2 + (mon.per - 1) * (2 / 9));
+  }
+
+  // Surface — apply time-of-day scaling
+  const { phase } = getTimePhase(state.worldTick);
+  switch (phase){
+    case 'day':   return base;
+    case 'dawn':
+    case 'dusk':  return Math.max(2, base - 2);
+    case 'night': return Math.round(2 + (mon.per - 1) * (2 / 9));
+    default:      return base;
+  }
+}
+
+// Can the monster see the player's tile?  (vision range + LOS, no stealth check)
+// Used by idle-state aggro logic which handles stealth separately.
+function canSeePlayerTile(mon){
   const d = chebyshev(mon.x, mon.y, state.player.x, state.player.y);
-  if (d > Math.max(mon.aggroRange * 2, 8)) return false;
-  // Stealth obscures distant detection even when alerted — closer = harder to hide
-  if (state.player.stealth && d > 1){
-    const chance = stealthDetectChance(mon);
-    return roll100() <= chance;
+
+  // Blindsight — proximity detection, ignores LOS and light entirely
+  if (mon.mods && mon.mods.blindsight != null){
+    return d <= mon.mods.blindsight;
+  }
+
+  // Quick distance reject — skip expensive LOS if out of vision range
+  const vr = monsterViewRadius(mon);
+  if (d > vr) return false;
+
+  // LOS raycast — cheap Bresenham check, only runs for enemies within range
+  return hasLOS(state.player.layer, mon.x, mon.y, state.player.x, state.player.y);
+}
+
+// Full detection check: can the monster see the player's tile AND detect them
+// through stealth?  Used by chase/search states where stealth is bundled in.
+function canSeePlayer(mon){
+  if (!canSeePlayerTile(mon)) return false;
+
+  // Stealth gate — even if the tile is visible, a stealthed player may go unnoticed
+  if (state.player.stealth){
+    const d = chebyshev(mon.x, mon.y, state.player.x, state.player.y);
+    if (d > 1){
+      const chance = stealthDetectChance(mon);
+      return roll100() <= chance;
+    }
   }
   return true;
 }
@@ -417,7 +475,7 @@ function enemyAct(mon){
       mon.lastSeenX = state.player.x; mon.lastSeenY = state.player.y;
       return;
     }
-    if (d <= mon.aggroRange && canSeePlayer(mon)){
+    if (canSeePlayer(mon)){
       mon.aiState = 'chase';
       mon.alerted = true;
       mon.chaseTurnsLeft = mon.chase;
@@ -544,16 +602,16 @@ function enemyAct(mon){
       return;
       }
     }
-    // Territorial: only engage if player is within aggro AND in their territory
+    // Territorial: only engage if can SEE the player AND player is in their territory
     if (mon.hostility === 1){
-      if (d > mon.aggroRange || !playerInTerritory(mon)){
+      if (!canSeePlayerTile(mon) || !playerInTerritory(mon)){
         if (rand() < 0.15) wanderInTerritory(mon);
         return;
       }
     }
-    // Aggressive: engage if within aggroRange (territory check relaxed — still prefer home)
+    // Aggressive: engage if can see the player (territory check relaxed — still prefer home)
     if (mon.hostility === 2){
-      if (d > mon.aggroRange){
+      if (!canSeePlayerTile(mon)){
         if (rand() < 0.2) wanderInTerritory(mon);
         return;
       }
@@ -942,7 +1000,8 @@ export function monsterMelee(mon){
   if (state.player.stealth) endStealth('Your cover is blown!');
 }
 
-export { endPlayerTurn, enemyAct, playerInTerritory, monInOwnTerritory, canSeePlayer,
+export { endPlayerTurn, enemyAct, playerInTerritory, monInOwnTerritory,
+         canSeePlayer, canSeePlayerTile, monsterViewRadius,
          mushroomPackAI, mushroomTouch, wanderInTerritory, moveMonsterToward,
          wanderMonster, moveMonsterTowardPlayer,
          isWaterLocked, isWaterTile };

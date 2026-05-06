@@ -694,14 +694,14 @@
   .chargen-derived{
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:3px 14px;
-    padding:10px 12px;
+    gap:4px 14px;
+    padding:12px 14px;
     margin-top:6px;
     border:2px solid var(--fg-dark);
     background:#000;
-    font-size:8px;
+    font-size:9px;
   }
-  .chargen-derived .kv{padding:2px 0;transition:none;}
+  .chargen-derived .kv{padding:3px 0;transition:none;}
   .chargen-derived .kv.highlight{
     text-decoration:underline;
     text-decoration-color:var(--accent);
@@ -709,35 +709,6 @@
   }
   .chargen-derived .kv.highlight .k{color:var(--accent)!important;}
   .chargen-derived .kv.highlight .v{color:var(--accent)!important;}
-
-  .chargen-diff{
-    display:flex;
-    gap:6px;
-    padding:8px 0 4px;
-    justify-content:center;
-  }
-  .diff-btn{
-    flex:1;
-    background:#000;
-    border:2px solid var(--fg-dark);
-    color:var(--fg-dim);
-    padding:7px 4px;
-    font-family:inherit;
-    font-size:8px;
-    letter-spacing:1px;
-    cursor:pointer;
-    text-transform:uppercase;
-    transition:none;
-  }
-  .diff-btn:hover{border-color:var(--fg-dim);color:var(--fg);}
-  .diff-btn.on{background:var(--fg);color:#000;border-color:var(--fg);font-weight:bold;}
-  .diff-desc{
-    color:var(--fg-dim);
-    font-size:7px;
-    text-align:center;
-    padding:2px 0 6px;
-    font-style:italic;
-  }
 
   .chargen-actions{
     display:flex;justify-content:space-between;gap:10px;margin-top:10px;
@@ -797,6 +768,7 @@
               <div class="attr"><span class="n">CON</span><span class="v" id="a-con">1</span></div>
               <div class="attr"><span class="n">DEX</span><span class="v" id="a-dex">1</span></div>
               <div class="attr"><span class="n">INT</span><span class="v" id="a-int">1</span></div>
+              <div class="attr"><span class="n">PER</span><span class="v" id="a-per">1</span></div>
             </div>
 
             <div class="sect-h">Combat</div>
@@ -903,14 +875,6 @@
           <div class="pool-label">Points remaining: <b id="cg-pool">10</b></div>
           <div id="chargen-rows"></div>
           <div class="chargen-derived" id="cg-derived"></div>
-
-          <div class="sect-h" style="margin-top:8px;color:var(--fg-dim);font-size:7px;letter-spacing:2px;border-bottom:1px dashed var(--fg-dark);padding:4px 0;text-transform:uppercase;">Difficulty</div>
-          <div class="chargen-diff">
-            <button class="diff-btn" data-diff="easy">Easy</button>
-            <button class="diff-btn on" data-diff="normal">Normal</button>
-            <button class="diff-btn" data-diff="hard">Hard</button>
-          </div>
-          <div class="diff-desc" id="diff-desc">A balanced journey.</div>
 
           <div class="chargen-actions">
             <button class="btn" id="cg-random" title="Randomize">&#x1F3B2;</button>

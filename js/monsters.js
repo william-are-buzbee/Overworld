@@ -6,7 +6,7 @@ import { rand, randi, roll100 } from './rng.js';
 const MON = {
   // PLAINS
   hare:       ['Dust Hare',      'HARE',
-               1, 1, 6, 1,  1, 0,
+               1, 1, 6, 1, 2,  1, 0,
                2,  [0,1],
                ['flesh','beast'], DMG.BLADE,
                [T.GRASS],          LAYER_SURFACE,
@@ -18,7 +18,7 @@ const MON = {
                null],
   // FOREST
   wolf:       ['Grey Wolf',      'WOLF',
-               2, 2, 6, 3,  2, 1,
+               2, 2, 6, 3, 6,  2, 1,
                12, [2,6],
                ['flesh','beast'], DMG.BLADE,
                [T.FOREST],            LAYER_SURFACE,
@@ -27,9 +27,9 @@ const MON = {
                [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.DIRT_ROAD,T.BEACH],  // wolves roam freely across most terrain
                5, 2,                // solo chase ~5 tiles; personalities adjust for pack/wary
                '#888078',           // brown-grey (not green!)
-               null],
+               {nightVision:true}],
   goblin:     ['Forest Goblin',  'GOBLIN',
-               3, 3, 5, 4,  2, 2,
+               3, 3, 5, 4, 4,  2, 2,
                12, [6,16],
                ['flesh'], DMG.BLADE,
                [T.FOREST], LAYER_SURFACE,
@@ -38,9 +38,9 @@ const MON = {
                [T.FOREST],
                3, 3,                // search a bit — they're clever
                '#887040',           // dirty brown — distinct from treant green
-               null],
+               {nightVision:true}],
   treant:     ['Treant',         'TREANT',
-               8, 8, 1, 1,  3, 5,
+               8, 8, 1, 1, 2,  3, 5,
                35, [8,18],
                ['plant'], DMG.BLUNT,
                [T.FOREST], LAYER_SURFACE,
@@ -52,7 +52,7 @@ const MON = {
                null],
   // DESERT
   scorpion:   ['Dune Scorpion',  'SCORPION',
-               4, 3, 6, 1,  3, 4,
+               4, 3, 6, 1, 3,  3, 4,
                22, [4,12],
                ['insect','shelled'], DMG.POISON,
                [T.SAND],           LAYER_SURFACE,
@@ -61,9 +61,9 @@ const MON = {
                [T.SAND,T.BEACH],
                2, 0,                // short chase — gives up quickly
                '#a88838',           // tan-yellow
-               null],
+               {nightVision:true}],
   lurker:     ['Sand Lurker',    'SAND_LURKER',
-               5, 4, 4, 2,  3, 3,
+               5, 4, 4, 2, 5,  3, 3,
                24, [6,16],
                ['flesh','beast'], DMG.BLADE,
                [T.SAND],           LAYER_SURFACE,
@@ -72,9 +72,9 @@ const MON = {
                [T.SAND],
                2, 0,                // ambush predator — strikes then gives up
                '#c4a068',
-               null],
+               {nightVision:true}],
   mummy:      ['Desert Mummy',   'MUMMY',
-               6, 6, 1, 3,  3, 3,
+               6, 6, 1, 3, 2,  3, 3,
                32, [12,28],
                ['flesh','undead'], DMG.BLUNT,
                [T.SAND],           LAYER_SURFACE,
@@ -83,10 +83,10 @@ const MON = {
                [T.SAND],
                3, 1,                // slow, short pursuit
                '#a09070',
-               null],
+               {nightVision:true}],
   // MOUNTAIN
   ice_wraith: ['Ice Wraith',     'ICE_WRAITH',
-               3, 4, 8, 5,  4, 1,
+               3, 4, 8, 5, 7,  4, 1,
                38, [14,32],
                ['undead','ice'], DMG.COLD,
                [T.ROCK],           LAYER_SURFACE,
@@ -95,9 +95,9 @@ const MON = {
                [T.ROCK],
                5, 4,                // intelligent undead — searches
                '#b0c8d8',
-               {dodgeMul:1.4}],
+               {dodgeMul:1.4, nightVision:true}],
   frost_troll:['Frost Troll',    'FROST_TROLL',
-               10, 10, 2, 1,  4, 5,
+               10, 10, 2, 1, 3,  4, 5,
                70, [25,55],
                ['flesh','ice','beast'], DMG.BLUNT,
                [T.ROCK],           LAYER_SURFACE,
@@ -109,7 +109,7 @@ const MON = {
                null],
   // UNDERGROUND
   skeleton:   ['Skeleton',       'SKELETON',
-               4, 3, 4, 2,  3, 3,
+               4, 3, 4, 2, 3,  3, 3,
                22, [6,14],
                ['bone','undead'], DMG.BLADE,
                [T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
@@ -118,9 +118,9 @@ const MON = {
                [T.CAVE_FLOOR,T.ROCK],
                4, 0,
                '#c8c4b8',
-               null],
+               {nightVision:true}],
   zombie:     ['Zombie',         'ZOMBIE',
-               5, 5, 1, 1,  3, 2,
+               5, 5, 1, 1, 1,  3, 2,
                24, [4,10],
                ['flesh','undead'], DMG.BLADE,
                [T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
@@ -129,9 +129,9 @@ const MON = {
                [T.CAVE_FLOOR,T.ROCK],
                4, 0,
                '#708070',
-               null],
+               {nightVision:true}],
   knight:     ['Fallen Knight',  'KNIGHT',
-               8, 8, 3, 5,  4, 9,
+               8, 8, 3, 5, 6,  4, 9,
                90, [30,70],
                ['armored','undead'], DMG.BLADE,
                [T.ROCK], LAYER_UNDER,
@@ -140,10 +140,10 @@ const MON = {
                [T.CAVE_FLOOR,T.ROCK],
                5, 3,                // disciplined — searches
                '#b0b0c0',
-               null],
+               {nightVision:true}],
   // LAVA
   magma_hound:['Magma Hound',    'MAGMA_HOUND',
-               5, 4, 6, 3,  4, 3,
+               5, 4, 6, 3, 6,  4, 3,
                40, [10,22],
                ['fire','beast'], DMG.FIRE,
                [T.LAVA,T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
@@ -152,9 +152,9 @@ const MON = {
                [T.LAVA,T.CAVE_FLOOR,T.ROCK],
                5, 3,                // hounds track
                '#d06040',
-               null],
+               {nightVision:true}],
   lava_fiend: ['Lava Fiend',     'LAVA_FIEND',
-               8, 8, 4, 6,  4, 4,
+               8, 8, 4, 6, 5,  4, 4,
                85, [25,55],
                ['fire'], DMG.FIRE,
                [T.LAVA,T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
@@ -163,11 +163,11 @@ const MON = {
                [T.LAVA,T.CAVE_FLOOR],
                4, 4,                // intelligent, searches
                '#e07030',
-               null],
+               {nightVision:true}],
 
   // MUSHROOM FOREST (SE)
   mushroom:   ['Sporecap',        'MUSHROOM',
-               0, 8, 0, 7,  0, 2,  // no STR/DEX, high CON/INT, zero weaponAtk
+               0, 8, 0, 7, 0,  0, 2,  // no STR/DEX, high CON/INT, zero weaponAtk
                28, [8,20],
                ['plant','fungal'], DMG.POISON,
                [T.MUSHFOREST], LAYER_SURFACE,
@@ -175,10 +175,11 @@ const MON = {
                0, 0,               // passive, zero aggro range
                [T.MUSHFOREST,T.FUNGAL_GRASS],
                0, 0,               // no chase, no search — swarm AI handles everything
-               null],
+               null,               // no tint
+               {blindsight:5}],    // spore/vibration sense — ignores LOS and light
   // NORTHEAST CAVES — surface
   rock_golem: ['Rock Golem',      'ROCK_GOLEM',
-               7, 10, 1, 1,  4, 8,
+               7, 10, 1, 1, 2,  4, 8,
                65, [20,45],
                ['stone','rockite'], DMG.BLUNT,
                [T.CAVE_FLOOR,T.ROCK], LAYER_SURFACE,
@@ -187,11 +188,11 @@ const MON = {
                [T.CAVE_FLOOR,T.ROCK],
                2, 0,
                '#808080',
-               null,
+               {nightVision:true},
                { restrictedRegion: 'NE_QUADRANT', layers: [0, 1] }],
   // WATER CAVES — aquatic enemies
   cave_eel:   ['Cave Eel',        'EEL',
-               4, 3, 7, 2,  3, 1,
+               4, 3, 7, 2, 5,  3, 1,
                30, [8,18],
                ['aquatic','beast'], DMG.ELEC,
                [T.WATER,T.DEEP_WATER,T.UWATER], LAYER_SURFACE,
@@ -200,9 +201,9 @@ const MON = {
                [T.WATER,T.DEEP_WATER,T.UWATER],
                3, 0,
                '#4090b0',
-               {waterHeal:true}],
+               {waterHeal:true, nightVision:true}],
   cave_crab:  ['Cave Crab',       'CAVE_CRAB',
-               5, 6, 3, 1,  3, 6,
+               5, 6, 3, 1, 3,  3, 6,
                35, [10,25],
                ['aquatic','shelled'], DMG.BLUNT,
                [T.WATER,T.DEEP_WATER,T.UWATER,T.BEACH], LAYER_SURFACE,
@@ -211,10 +212,10 @@ const MON = {
                [T.WATER,T.DEEP_WATER,T.UWATER,T.BEACH,T.GRASS,T.SAND],
                2, 0,
                '#607868',
-               null],
+               {nightVision:true}],
   // UNDERGROUND OCEAN
   drowned:    ['The Drowned',    'DROWNED',
-               5, 6, 3, 2,  3, 2,
+               5, 6, 3, 2, 2,  3, 2,
                46, [12,30],
                ['undead','aquatic'], DMG.BLADE,
                [T.UWATER,T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
@@ -223,9 +224,9 @@ const MON = {
                [T.UWATER,T.CAVE_FLOOR],
                3, 0,
                '#6890a8',
-               null],
+               {nightVision:true}],
   deep_squid: ['Deep Squid',     'DEEP_SQUID',
-               8, 10, 5, 4,  4, 4,
+               8, 10, 5, 4, 6,  4, 4,
                120,[30,75],
                ['aquatic','beast'], DMG.BLADE,
                [T.UWATER], LAYER_UNDER,
@@ -234,11 +235,11 @@ const MON = {
                [T.UWATER],
                2, 0,
                '#4080a0',
-               null],
+               {nightVision:true}],
 };
 // Boss: intelligent undead. High search, won't pursue beyond throne chamber.
 const DREAD_KING = ['The Dread King','DREAD_KING',
-               14, 14, 7, 10,  6, 10,
+               14, 14, 7, 10, 8,  6, 10,
                900, [800,1200],
                ['cursed','undead','armored'], DMG.BLADE,
                [], LAYER_UNDER,
@@ -247,7 +248,7 @@ const DREAD_KING = ['The Dread King','DREAD_KING',
                [T.CAVE_FLOOR,T.ROCK],  // throne area
                99, 99,              // never gives up
                '#6a6080',
-               {critMul:2.0}];
+               {critMul:2.0, nightVision:true}];
 
 // Monster derived stats — mirrors player math where sensible
 function monHP(mon){ return 10 + mon.con * 4 + (mon.tier||0) * 3; }
@@ -333,7 +334,7 @@ function rollPersonality(key){
 // ==================== DIRE WOLF DATA ====================
 // Rarer, higher STR/CON, lower DEX, same INT, tends toward lone or small packs
 MON.dire_wolf = ['Dire Wolf',      'WOLF',
-               5, 5, 4, 3,  4, 2,
+               5, 5, 4, 3, 7,  4, 2,
                22, [6,14],
                ['flesh','beast'], DMG.BLADE,
                [T.FOREST],            LAYER_SURFACE,
@@ -342,7 +343,7 @@ MON.dire_wolf = ['Dire Wolf',      'WOLF',
                [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.DIRT_ROAD,T.BEACH],
                5, 2,
                '#5a4840',           // darker brown
-               null];
+               {nightVision:true}];
 function monDodge(mon){
   const raw = (mon.dex - 1) * 2.5 + (mon.int - 1) * 0.8;
   const m = (mon.mods && mon.mods.dodgeMul) || 1;
@@ -361,13 +362,53 @@ function monDamage(mon){
   return (mon.weaponAtk || 1) + Math.floor(mon.str * 0.5);
 }
 
+// ==================== VISION PROFILES ====================
+// Per-species vision type and cone parameters.
+// visionType: 'cone' (directional) or 'radius' (omnidirectional).
+// coneAngle: forward vision arc in degrees (only used for cone type).
+// awarenessRadius is computed from PER at runtime, not stored here.
+// These properties are defined on monsters for future AI use but are
+// currently only read for the player's own FOV calculation.
+const VISION_PROFILES = {
+  // Humanoids — wide forward arc
+  goblin:      { visionType: 'cone', coneAngle: 120 },
+  knight:      { visionType: 'cone', coneAngle: 120 },
+  mummy:       { visionType: 'cone', coneAngle: 120 },
+  dread_king:  { visionType: 'cone', coneAngle: 120 },
+  // Wolves / predators — focused hunting cone
+  wolf:        { visionType: 'cone', coneAngle: 90 },
+  dire_wolf:   { visionType: 'cone', coneAngle: 90 },
+  magma_hound: { visionType: 'cone', coneAngle: 90 },
+  // Prey animals — near-panoramic awareness
+  hare:        { visionType: 'cone', coneAngle: 170 },
+  // Desert predators — moderate forward cone
+  scorpion:    { visionType: 'cone', coneAngle: 100 },
+  lurker:      { visionType: 'cone', coneAngle: 100 },
+  // Aquatic — moderate cone
+  cave_eel:    { visionType: 'cone', coneAngle: 110 },
+  deep_squid:  { visionType: 'cone', coneAngle: 110 },
+  drowned:     { visionType: 'cone', coneAngle: 110 },
+  // Full-radius vision (omnidirectional / blindsight)
+  cave_crab:   { visionType: 'radius' },
+  mushroom:    { visionType: 'radius' },  // blindsight — spore/vibration
+  // Slow / rooted creatures — wide radius
+  treant:      { visionType: 'radius' },
+  rock_golem:  { visionType: 'radius' },
+  // Undead / spectral — wide cone
+  skeleton:    { visionType: 'cone', coneAngle: 120 },
+  zombie:      { visionType: 'cone', coneAngle: 120 },
+  ice_wraith:  { visionType: 'cone', coneAngle: 130 },
+  frost_troll: { visionType: 'cone', coneAngle: 100 },
+  lava_fiend:  { visionType: 'cone', coneAngle: 120 },
+};
+
 function spawnMonster(key){
   let d;
   if (key === 'dread_king') d = DREAD_KING;
   else d = MON[key];
   if (!d) return null;
   const [name, spr,
-         str, con, dex, intel,
+         str, con, dex, intel, per,
          weaponAtk, def,
          xp, gold,
          tags, dmgT,
@@ -382,7 +423,7 @@ function spawnMonster(key){
   const personality = rollPersonality(key);
   const m = {
     key, name, spr,
-    str, con, dex, int: intel,
+    str, con, dex, int: intel, per,
     weaponAtk, def,
     xp, goldRange: gold,
     tags: [...tags],
@@ -411,6 +452,9 @@ function spawnMonster(key){
     personality,
     damageTaken: 0,  // track total damage for rock golem 'still' trait
     bondPartner: null,  // for pair-bonded wolves
+    // Vision profile
+    visionType: 'radius',
+    coneAngle: 360,
     // Mushroom swarm phase tracking
     swarmPhase: 'passive',    // passive | coalescing | mobbing
     coalesceTick: 0,          // counter for slow drift during coalescing
@@ -457,6 +501,12 @@ function spawnMonster(key){
       m.avoidLeash = 4;
     }
   }
+  // Apply vision profile from lookup
+  const vp = VISION_PROFILES[key];
+  if (vp) {
+    m.visionType = vp.visionType;
+    if (vp.coneAngle != null) m.coneAngle = vp.coneAngle;
+  }
   m.hpMax = monHP(m);
   m.hp = m.hpMax;
   return m;
@@ -490,5 +540,5 @@ const SPAWN_BLACKLIST = new Set([
 ]);
 
 // Re-export everything that other modules need
-export { MON, DREAD_KING, MON_SPEED, PERSONALITY_POOL, SPAWN_BLACKLIST };
+export { MON, DREAD_KING, MON_SPEED, PERSONALITY_POOL, SPAWN_BLACKLIST, VISION_PROFILES };
 export { rollPersonality, monHP, monDodge, monAcc, monCritChance, monCritMult, monDamage, spawnMonster, getSpawnRules };
