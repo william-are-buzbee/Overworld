@@ -188,16 +188,16 @@ function perceptionCheck(p){
 
 // Vision radius — PER driven base, modified by time of day and layer.
 //
-// Base (day): PER 1 = 4 tiles, PER 5 = 6 tiles, PER 10 = 8 tiles.
+// Base (day): PER 1 = 3 tiles, PER 5 = 5 tiles, PER 10 = 7 tiles.
 // Dawn/Dusk:  base - 2, minimum 3.
-// Night:      roughly halved. PER 1 = 2, PER 10 = 4. Minimum 2.
-// Underground: always uses night radius (caves are dark).
+// Night:      roughly half daytime base, minimum 2. PER still helps at night.
+// Underground: same as night (half base, min 2).
 //
 // lightBonus: additive tiles from future light sources (torches, perks, etc.).
 //             Applied AFTER phase reduction, before the per-phase minimum.
 //             Defaults to 0.
 function baseViewRadius(p){
-  return Math.round(4 + (p.per - 1) * (4 / 9));
+  return Math.round(3 + (p.per - 1) * (4 / 9));
 }
 
 // Awareness radius — the small omnidirectional bubble around the player
@@ -209,43 +209,56 @@ function awarenessRadius(p){
   return 1;
 }
 
-function playerViewRadius(p, lightBonus){
-  const bonus = lightBonus || 0;
-  const base  = baseViewRadius(p);
+// Shared vision radius for any creature (player or enemy).
+// Both playerViewRadius and monsterViewRadius delegate here so the
+// PER-to-depth formula lives in exactly one place.
+//
+// @param {number} per         — creature's PER stat
+// @param {number} layer       — current map layer
+// @param {object} [opts]
+// @param {number} [opts.lightBonus=0]    — additive tiles from light sources
+// @param {boolean} [opts.nightVision=false] — immune to darkness reduction
+// @returns {number} effective vision depth in tiles
+function creatureViewRadius(per, layer, opts) {
+  const { lightBonus = 0, nightVision = false } = opts || {};
+  const base = Math.round(3 + (per - 1) * (4 / 9));
 
-  // Determine if the player's current layer is "dark" (underground, lava, etc.)
+  // Night-vision creatures ignore darkness entirely
+  if (nightVision) return Math.max(2, base + lightBonus);
+
+  // Determine if the current layer is "dark" (underground, lava, etc.)
   // Surface and town/shop interiors use time-based lighting; everything else is dark.
-  const meta = LAYER_META[p.layer];
-  const layerType = meta ? meta.type : (p.layer === LAYER_SURFACE ? 'surface' : 'underground');
+  const meta = LAYER_META[layer];
+  const layerType = meta ? meta.type : (layer === LAYER_SURFACE ? 'surface' : 'underground');
   const isDark = layerType !== 'surface' && layerType !== 'town' && layerType !== 'shop';
 
-  if (isDark){
-    // Underground / caves — always night-equivalent radius.
-    // PER 1 → 2, PER 10 → 4.  Linear interpolation.
-    const nightBase = Math.round(2 + (p.per - 1) * (2 / 9));
-    return Math.max(2, nightBase + bonus);
+  if (isDark) {
+    // Underground / caves — half the daytime base, minimum 2.
+    return Math.max(2, Math.round(base / 2) + lightBonus);
   }
 
   // Surface / town — apply time-of-day scaling.
   const { phase } = getTimePhase(state.worldTick);
 
-  switch (phase){
+  switch (phase) {
     case 'day':
-      return Math.max(3, base + bonus);
+      return Math.max(3, base + lightBonus);
 
     case 'dawn':
     case 'dusk':
-      return Math.max(3, base - 2 + bonus);
+      return Math.max(3, base - 2 + lightBonus);
 
-    case 'night': {
-      // Same formula as underground darkness.
-      const nightBase = Math.round(2 + (p.per - 1) * (2 / 9));
-      return Math.max(2, nightBase + bonus);
-    }
+    case 'night':
+      // Night surface — half the daytime base, minimum 2.
+      return Math.max(2, Math.round(base / 2) + lightBonus);
 
     default:
-      return Math.max(3, base + bonus);
+      return Math.max(3, base + lightBonus);
   }
+}
+
+function playerViewRadius(p, lightBonus){
+  return creatureViewRadius(p.per, p.layer, { lightBonus: lightBonus || 0 });
 }
 
 // No level cap — INT drives XP gain naturally, so high-INT characters
@@ -405,5 +418,5 @@ export {
   playerCritChance, playerCritMult, xpMult, xpFromKill, buyPriceMul, innPriceMul, sellValueMul,
   foodFedMul, stealthBonus, levelCap, cursedBaneMul,
   passiveRegenInterval, poisonResistance, restHealAmount,
-  describeAttributePerks, addItem, defaultWeight, perceptionCheck, baseViewRadius, playerViewRadius, awarenessRadius,
+  describeAttributePerks, addItem, defaultWeight, perceptionCheck, baseViewRadius, playerViewRadius, awarenessRadius, creatureViewRadius,
 };

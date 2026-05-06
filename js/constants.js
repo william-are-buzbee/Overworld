@@ -1,6 +1,6 @@
 // ==================== CONSTANTS ====================
-export const TILE = 64, PIX = 2, SPR = 16;
-export const VIEW_W = 20, VIEW_H = 11;
+export const TILE = 48, PIX = 2, SPR = 16;
+export const VIEW_W = 19, VIEW_H = 15;
 
 export const W_SURF = 224, H_SURF = 224;
 

@@ -1,21 +1,21 @@
 // ==================== DAY / NIGHT CYCLE ====================
 // Pure functions for time-of-day phase calculation and visual tinting.
 //
-// Cycle length: 200 ticks (one full day).
-//   Dawn  :   0 – 29   (30 ticks, 15%)
-//   Day   :  30 – 119  (90 ticks, 45%)
-//   Dusk  : 120 – 149  (30 ticks, 15%)
-//   Night : 150 – 199  (50 ticks, 25%)
+// Cycle length: 600 ticks (one full day).
+//   Dawn  :   0 – 89   (90 ticks, 15%)
+//   Day   :  90 – 359  (270 ticks, 45%)
+//   Dusk  : 360 – 449  (90 ticks, 15%)
+//   Night : 450 – 599  (150 ticks, 25%)
 
 import { state } from './state.js';
 
-export const CYCLE_LENGTH = 200;
+export const CYCLE_LENGTH = 600;
 
 const PHASES = [
-  { name: 'dawn',  start: 0,   len: 30  },
-  { name: 'day',   start: 30,  len: 90  },
-  { name: 'dusk',  start: 120, len: 30  },
-  { name: 'night', start: 150, len: 50  },
+  { name: 'dawn',  start: 0,   len: 90  },
+  { name: 'day',   start: 90,  len: 270 },
+  { name: 'dusk',  start: 360, len: 90  },
+  { name: 'night', start: 450, len: 150 },
 ];
 
 /**

@@ -5,7 +5,7 @@ import { state, worlds, covers, monsters } from './state.js';
 import { DMG, LAYER_META, LAYER_SURFACE } from './constants.js';
 import { T, isWalkable } from './terrain.js';
 import { rand, randi, roll100 } from './rng.js';
-import { playerDef, playerDodge, poisonResistance, passiveRegenInterval, restHealAmount } from './player.js';
+import { playerDef, playerDodge, poisonResistance, passiveRegenInterval, restHealAmount, creatureViewRadius } from './player.js';
 import { monAcc, monDodge, monDamage, monCritChance, monCritMult } from './monsters.js';
 import { inBounds, monsterAt, chebyshev, isTownCell, getCover } from './world-state.js';
 import { log } from './log.js';
@@ -283,38 +283,16 @@ function monInOwnTerritory(mon){
 }
 
 // ==================== ENEMY VISION ====================
-// Monster vision radius — mirrors player's baseViewRadius formula.
-// PER 1 = 4 tiles, PER 10 = 8 tiles.  Night / underground reduces vision
-// the same way as the player, unless the creature has nightVision or blindsight.
+// Monster vision radius — delegates to the shared creatureViewRadius in player.js
+// so that PER-to-depth scaling is defined in exactly one place.
+// PER 1 = 3 tiles (day), PER 10 = 7 tiles (day).
+// Night / underground ≈ half daytime base (min 2), unless nightVision.
 function monsterViewRadius(mon){
   // Blindsight creatures don't use vision at all (handled separately)
   if (mon.mods && mon.mods.blindsight != null) return 0;
 
-  const base = Math.round(4 + (mon.per - 1) * (4 / 9));
-
-  // Night vision — no reduction from darkness or underground
-  if (mon.mods && mon.mods.nightVision) return base;
-
-  // Determine if current layer is dark (underground, lava, etc.)
-  const layer = state.player.layer;
-  const meta = LAYER_META[layer];
-  const layerType = meta ? meta.type : (layer === LAYER_SURFACE ? 'surface' : 'underground');
-  const isDark = layerType !== 'surface' && layerType !== 'town' && layerType !== 'shop';
-
-  if (isDark){
-    // Underground darkness — same formula as player night vision
-    return Math.round(2 + (mon.per - 1) * (2 / 9));
-  }
-
-  // Surface — apply time-of-day scaling
-  const { phase } = getTimePhase(state.worldTick);
-  switch (phase){
-    case 'day':   return base;
-    case 'dawn':
-    case 'dusk':  return Math.max(2, base - 2);
-    case 'night': return Math.round(2 + (mon.per - 1) * (2 / 9));
-    default:      return base;
-  }
+  const nightVision = !!(mon.mods && mon.mods.nightVision);
+  return creatureViewRadius(mon.per, state.player.layer, { nightVision });
 }
 
 // Can the monster see the player's tile?  (vision range + LOS, no stealth check)
