@@ -190,12 +190,13 @@ function perceptionCheck(p){
 //
 // Base (day): PER 1 = 3 tiles, PER 5 = 5 tiles, PER 10 = 7 tiles.
 // Dawn/Dusk:  base - 2, minimum 3.
-// Night:      roughly half daytime base, minimum 2. PER still helps at night.
-// Underground: same as night (half base, min 2).
+// Night:      hard 1 tile cone depth. PER does not help at night.
+// Underground: hard 1 tile cone depth (same as night).
+// nightVision: ignores darkness — uses full daytime base at all times.
 //
 // lightBonus: additive tiles from future light sources (torches, perks, etc.).
 //             Applied AFTER phase reduction, before the per-phase minimum.
-//             Defaults to 0.
+//             Defaults to 0. NOT applied at night/underground (cone is hard-1).
 function baseViewRadius(p){
   return Math.round(3 + (p.per - 1) * (4 / 9));
 }
@@ -233,8 +234,8 @@ function creatureViewRadius(per, layer, opts) {
   const isDark = layerType !== 'surface' && layerType !== 'town' && layerType !== 'shop';
 
   if (isDark) {
-    // Underground / caves — half the daytime base, minimum 2.
-    return Math.max(2, Math.round(base / 2) + lightBonus);
+    // Underground / caves — hard limit: cone depth 1 tile.
+    return 1;
   }
 
   // Surface / town — apply time-of-day scaling.
@@ -249,8 +250,8 @@ function creatureViewRadius(per, layer, opts) {
       return Math.max(3, base - 2 + lightBonus);
 
     case 'night':
-      // Night surface — half the daytime base, minimum 2.
-      return Math.max(2, Math.round(base / 2) + lightBonus);
+      // Night surface — hard limit: cone depth 1 tile.
+      return 1;
 
     default:
       return Math.max(3, base + lightBonus);

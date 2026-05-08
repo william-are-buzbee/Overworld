@@ -286,7 +286,8 @@ function monInOwnTerritory(mon){
 // Monster vision radius — delegates to the shared creatureViewRadius in player.js
 // so that PER-to-depth scaling is defined in exactly one place.
 // PER 1 = 3 tiles (day), PER 10 = 7 tiles (day).
-// Night / underground ≈ half daytime base (min 2), unless nightVision.
+// Night / underground = hard 1 tile cone depth, unless nightVision (full daytime base).
+// Blindsight creatures bypass vision entirely (proximity-only detection).
 function monsterViewRadius(mon){
   // Blindsight creatures don't use vision at all (handled separately)
   if (mon.mods && mon.mods.blindsight != null) return 0;
