@@ -28,8 +28,11 @@ Prompt queue and task tracker. Check things off as they're done.
 - [ ] Implement "blend" variable for each biome on the target map to allow for more control 
 
 ## Near-Term Plans
-- [ ] Create ability to generate dozens of underground levels (that are properly connected by entrances) 
-- [ ] Update biomes to be more visually coherent (redrawing map over and over until I like it)
+- [ ] Create ability to generate dozens of underground levels (that are properly connected by entrances)
+- [ ] Update biomes (new groundcover options, ground tile options and ground palette)  
+- [ ] Update world map until it looks good
+- [ ] Make "homes" for enemies (forest village with buildings for forest goblin, routes for pack hunters, dense area of fungal forest for mushrooms, rock golem "village" underground, treent "home" area in deep woods, frost troll "cave" it returns too at night, etc)
+- [ ] Add a corpse/item drop system (enemies drop a corpse upon death which can be looted, objects can be seen and picked up on the ground)  
 
 ## Long-Term Plans
 - [ ] Ecological overhaul (create environments, then creatures, then a dynamic ecology based on in-universe "evolution" through mutation)
