@@ -298,6 +298,7 @@ function monsterViewRadius(mon){
 
 // Can the monster see the player's tile?  (vision range + LOS, no stealth check)
 // Used by idle-state aggro logic which handles stealth separately.
+// Trees are probabilistically transparent based on the monster's PER.
 function canSeePlayerTile(mon){
   const d = chebyshev(mon.x, mon.y, state.player.x, state.player.y);
 
@@ -310,8 +311,10 @@ function canSeePlayerTile(mon){
   const vr = monsterViewRadius(mon);
   if (d > vr) return false;
 
-  // LOS raycast — cheap Bresenham check, only runs for enemies within range
-  return hasLOS(state.player.layer, mon.x, mon.y, state.player.x, state.player.y);
+  // LOS raycast with probabilistic tree transparency.
+  // Each tree tile in the line independently rolls against the monster's
+  // PER-based chance. A failed roll blocks the sightline.
+  return hasLOS(state.player.layer, mon.x, mon.y, state.player.x, state.player.y, mon.per);
 }
 
 // Full detection check: can the monster see the player's tile AND detect them

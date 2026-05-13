@@ -3,12 +3,13 @@ import { covers } from './state.js';
 import {
   W_SURF, H_SURF, LAYER_SURFACE, LAYER_UNDER,
   ATMOSPHERE, BIOME_TARGET, BIOME_PROFILES, BLEND_WIDTH,
-  BIOME_GRID_W, BIOME_GRID_H,
+  BIOME_GRID_W, BIOME_GRID_H, LANDMARKS,
 } from './constants.js';
 import { T, isWalkable, isCoverAllowedOnGround } from './terrain.js';
 import { srand, rand, randi } from './rng.js';
 import { setFeature } from './world-state.js';
 import { ensureCoverGrid, populateMonsters } from './gen-utils.js';
+import { LANDMARK_GENERATORS } from './village-gen.js';
 
 // ==================== NOISE ====================
 // Seeded 2D Perlin noise generator
@@ -398,7 +399,7 @@ export function makeSurface(seed) {
   // Beach probability scales with the amount of water within a small radius.
   // Isolated puddles (1–2 water tiles nearby) almost never produce beach;
   // real shorelines (5+ water tiles) reliably do; large bodies (10+) always do.
-  const BEACH_ELIGIBLE = new Set([T.GRASS, T.SAND, T.DIRT, T.DIRT_ROAD]);
+  const BEACH_ELIGIBLE = new Set([T.GRASS, T.SAND, T.DIRT]);
   const BEACH_SCAN_RADIUS = 4;
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
@@ -497,6 +498,41 @@ export function makeSurface(seed) {
   ATMOSPHERE.w         = W_SURF;
   ATMOSPHERE.h         = H_SURF;
 
+  // ---- LANDMARK PLACEMENT ----
+  // Iterate the landmarks list, compute the world-tile bounding box from
+  // each landmark's target-map cells, clear existing cover in that
+  // footprint, and call the structure's generator to stamp its tiles.
+  {
+    const cellW = Math.floor(W_SURF / BIOME_GRID_W);
+    const cellH = Math.floor(H_SURF / BIOME_GRID_H);
+    for (const landmark of LANDMARKS) {
+      const gen = LANDMARK_GENERATORS[landmark.type];
+      if (!gen) continue;
+
+      let minCX = Infinity, minCY = Infinity, maxCX = -Infinity, maxCY = -Infinity;
+      for (const cell of landmark.cells) {
+        if (cell.x < minCX) minCX = cell.x;
+        if (cell.y < minCY) minCY = cell.y;
+        if (cell.x > maxCX) maxCX = cell.x;
+        if (cell.y > maxCY) maxCY = cell.y;
+      }
+
+      const worldX  = minCX * cellW;
+      const worldY  = minCY * cellH;
+      const width   = (maxCX - minCX + 1) * cellW;
+      const height  = (maxCY - minCY + 1) * cellH;
+
+      // Clear cover in the footprint before the generator runs
+      for (let ly = worldY; ly < worldY + height && ly < H_SURF; ly++) {
+        for (let lx = worldX; lx < worldX + width && lx < W_SURF; lx++) {
+          if (lx >= 0 && ly >= 0) coverGrid[ly][lx] = 0;
+        }
+      }
+
+      gen(grid, coverGrid, worldX, worldY, width, height);
+    }
+  }
+
   // ---- SURFACE STAIRCASES ----
   // SE staircase (mushroom zone)
   {
@@ -569,7 +605,7 @@ function dirtPathBetween(grid, x1, y1, x2, y2) {
       const t = grid[y][x];
       const c = coverGrid ? coverGrid[y][x] : 0;
       if ((t === T.GRASS || t === T.SAND || t === T.BEACH) && !c) {
-        if (rand() < 0.72) grid[y][x] = T.DIRT_ROAD;
+        if (rand() < 0.72) grid[y][x] = T.DIRT;
       }
     }
     if (rand() < 0.25) {
@@ -599,7 +635,7 @@ function dirtRing(grid, cx, cy, radius) {
       const t = grid[y][x];
       const c = coverGrid ? coverGrid[y][x] : 0;
       if ((t === T.GRASS || t === T.SAND || t === T.BEACH) && !c && rand() < 0.6) {
-        grid[y][x] = T.DIRT_ROAD;
+        grid[y][x] = T.DIRT;
       }
     }
   }

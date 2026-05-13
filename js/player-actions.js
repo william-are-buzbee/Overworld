@@ -17,7 +17,20 @@ function fedDrainFor(action){
   if (action === 'move') return 0.5625;
   if (action === 'attack') return 5.4;
   if (action === 'miss') return 5.4;
+  if (action === 'turn') return 0.5625;
   return 1;
+}
+
+function dirName(dx, dy){
+  if (dx === 0 && dy === -1) return 'north';
+  if (dx === 1 && dy === -1) return 'northeast';
+  if (dx === 1 && dy === 0)  return 'east';
+  if (dx === 1 && dy === 1)  return 'southeast';
+  if (dx === 0 && dy === 1)  return 'south';
+  if (dx === -1 && dy === 1) return 'southwest';
+  if (dx === -1 && dy === 0) return 'west';
+  if (dx === -1 && dy === -1) return 'northwest';
+  return '';
 }
 
 function attemptMove(dx, dy){
@@ -25,17 +38,18 @@ function attemptMove(dx, dy){
   const nx = state.player.x + dx, ny = state.player.y + dy;
   if (!inBounds(state.player.layer, nx, ny)){ log('The world ends here.', 'muted'); return; }
   if (isImpassable(state.player.layer, nx, ny)) return;
+
+  // Update facing to match movement direction
+  state.facing.dx = dx;
+  state.facing.dy = dy;
+
   const mon = monsterAt(nx, ny, state.player.layer);
   if (mon){
-    // Face the enemy when attacking
-    state.facing.dx = dx; state.facing.dy = dy;
     const didHit = playerAttack(mon); endPlayerTurn(didHit ? 'attack' : 'miss'); return;
   }
   const ground = worlds[state.player.layer][ny][nx];
   const cover = getCover(state.player.layer, nx, ny);
   if (!isWalkable(ground, cover)){ log(`Blocked by ${terrainName(ground, cover)}.`, 'muted'); return; }
-  // Face movement direction
-  state.facing.dx = dx; state.facing.dy = dy;
   state.player.x = nx; state.player.y = ny;
   const f = getFeature(state.player.layer, nx, ny);
   if (f){
@@ -172,4 +186,12 @@ function equipArmorFromInv(idx) {
   updateUI();
 }
 
-export { attemptMove, restAction, eatBest, eatItem, usePotion, dropItem, equipWeaponFromInv, equipArmorFromInv, fedDrainFor };
+function turnInPlace(dx, dy){
+  if (state.facing.dx === dx && state.facing.dy === dy) return;
+  state.facing.dx = dx;
+  state.facing.dy = dy;
+  log(`You turn ${dirName(dx, dy)}.`, 'muted');
+  endPlayerTurn('turn');
+}
+
+export { attemptMove, restAction, eatBest, eatItem, usePotion, dropItem, equipWeaponFromInv, equipArmorFromInv, fedDrainFor, dirName, turnInPlace };

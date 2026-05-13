@@ -10,7 +10,7 @@ export const T = {
   THRONE:35,
 
   // --- Extended types ---
-  DIRT_ROAD:36,        // loose dirt paths between/around settlements
+  // (id 36 retired — formerly DIRT_ROAD, now use DIRT)
   RUIN_WALL:37,        // crumbled stone wall (non-walkable)
   RUIN_FLOOR:38,       // broken stone floor (walkable)
   WELL_TL:39,          // 2x2 well — top-left quadrant
@@ -34,6 +34,10 @@ export const T = {
   MUD:55,              // swamp/wetland ground
   FUNGAL_GRASS:56,     // organic ground for the mushroom biome
   DIRT:57,             // dry, bare earth
+
+  // --- Village / landmark structure types ---
+  HUT_WALL:58,         // wooden hut wall (cover, impassable, blocks vision)
+  CAMPFIRE:59,         // campfire marker (cover, walkable)
 };
 
 // ==================== TERRAIN LAYER CLASSIFICATION ====================
@@ -69,8 +73,6 @@ export const TERRAIN_INFO = {
                   allowedCover:[]},
   [T.WALL]:      {name:'wall',          sprite:'CAVE_WALL',  palette:'stone',      walk:false, cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
-  [T.DIRT_ROAD]: {name:'dirt path',     sprite:'DIRT_ROAD',  palette:'dirt_road',  walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.FOREST,T.MUSHFOREST,T.WHEAT,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
   [T.RUIN_FLOOR]:{name:'ancient floor', sprite:'RUIN_FLOOR', palette:'ruin',       walk:true,  cover:10,  terrainLayer:'ground',
                   allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
   [T.SHOP_INSIDE]:{name:'shop floor',   sprite:'SHOP_FLOOR', palette:'wood_floor', walk:true,  cover:0,   terrainLayer:'ground',
@@ -87,8 +89,8 @@ export const TERRAIN_INFO = {
                   allowedCover:[T.FOREST,T.MUSHFOREST,T.WHEAT,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
 
   // ---- COVER types ----
-  [T.FOREST]:    {name:'forest',        sprite:'FOREST',   palette:'forest',   walk:true,  cover:45,  terrainLayer:'cover', overlay:true, blocksVision:true},
-  [T.MUSHFOREST]:{name:'mushroom forest',sprite:'MUSHFOREST',palette:'mushforest',walk:true,cover:45, terrainLayer:'cover', overlay:true, noRotate:true, blocksVision:true},
+  [T.FOREST]:    {name:'forest',        sprite:'FOREST',   palette:'forest',   walk:true,  cover:45,  terrainLayer:'cover', overlay:true, visionPenalty:true},
+  [T.MUSHFOREST]:{name:'mushroom forest',sprite:'MUSHFOREST',palette:'mushforest',walk:true,cover:45, terrainLayer:'cover', overlay:true, noRotate:true, visionPenalty:true},
   [T.WHEAT]:     {name:'wheat',         sprite:'WHEAT',    palette:'wheat',    walk:true,  cover:20,  terrainLayer:'cover', overlay:true},
   [T.TOWN]:      {name:'town',          sprite:'TOWN',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.CASTLE]:    {name:'castle',        sprite:'CASTLE',   palette:'castle',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
@@ -120,6 +122,8 @@ export const TERRAIN_INFO = {
   [T.RUIN_PILLAR]:{name:'ruined pillar',sprite:'RUIN_PILLAR',palette:'ruin', walk:false, cover:20,  terrainLayer:'cover', overlay:true},
   [T.BOULDER]:   {name:'boulder',      sprite:'BOULDER',  palette:'stone',  walk:false, cover:40,  terrainLayer:'cover', overlay:true},
   [T.ROCK_OUTCROP]:{name:'rock outcrop',sprite:'ROCK_OUTCROP',palette:'stone',walk:false,cover:25, terrainLayer:'cover', overlay:true},
+  [T.HUT_WALL]:  {name:'wall',        sprite:'HUT_WALL', palette:'hut_wall',walk:false, cover:0,   terrainLayer:'cover', overlay:true, blocksVision:true},
+  [T.CAMPFIRE]:  {name:'campfire',     sprite:'CAMPFIRE', palette:'town',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
 };
 
 // ==================== SINGLE-TYPE QUERIES ====================
@@ -217,6 +221,8 @@ const DEFAULT_GROUND_FOR_COVER = {
   [T.RUIN_PILLAR]: T.GRASS,
   [T.BOULDER]:     T.ROCK,
   [T.ROCK_OUTCROP]:T.ROCK,
+  [T.HUT_WALL]:    T.WOOD_FLOOR,
+  [T.CAMPFIRE]:    T.DIRT,
 };
 
 export function defaultGroundFor(coverType){
@@ -224,16 +230,20 @@ export function defaultGroundFor(coverType){
 }
 
 // ==================== VISION BLOCKING ====================
-// Used by FOV calculation. A tile blocks vision if:
-//   • The cover has explicit blocksVision:true (walkable but opaque, e.g. trees)
+// Used by FOV calculation. A tile blocks vision (hard block) if:
 //   • The cover is non-walkable (walls, boulders, barrels, etc.)
 //   • The ground is non-walkable (cave walls, void, etc.)
 //   • The terrain has transparent:false set explicitly
+// Vision-penalty tiles (trees/mushroom forest with visionPenalty:true)
+// do NOT hard-block — they reduce effective vision depth instead.
+// See fov.js treePenaltyCost() for the PER-scaled depth cost.
 // Ground-only tiles that are walkable (grass, sand, water, rock) never block.
 export function tileBlocksVision(ground, coverType){
   if (coverType) {
     const ci = terrainInfo(coverType);
-    if (ci.blocksVision) return true;
+    // Vision-penalty tiles (trees) reduce range instead of blocking — skip them here.
+    if (ci.visionPenalty) { /* handled by FOV post-filter, not a hard blocker */ }
+    else if (ci.blocksVision) return true;
     if (ci.transparent === false) return true;
     if (!ci.walk) return true;
   }
@@ -241,4 +251,11 @@ export function tileBlocksVision(ground, coverType){
   if (gi.transparent === false) return true;
   if (gi.transparent === true) return false;   // explicitly see-through (water, etc.)
   return !gi.walk;
+}
+
+/** True if the cover type at this tile imposes a vision-depth penalty (trees).
+ *  Used by FOV to compute effective distance through foliage. */
+export function tileHasVisionPenalty(ground, coverType){
+  if (!coverType) return false;
+  return !!terrainInfo(coverType).visionPenalty;
 }

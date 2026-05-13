@@ -69,7 +69,6 @@ export const BIOME = {
 
   // --- New / updated palettes ---
   beach:     {bg:'#3a3422', fg:'#e8d8a0', mid:'#b0a068', tint:'#d0c078'},
-  dirt_road: {bg:'#2a2218', fg:'#a08860', mid:'#6e5a3a', tint:null},
   ruin:      {bg:'#1a1818', fg:'#706860', mid:'#484440', tint:'#585050'},
   void:      {bg:'#000000', fg:'#000000', mid:'#000000', tint:null},
   cave_wall: {bg:'#0c0a08', fg:'#1e1a16', mid:'#141210', tint:null},
@@ -77,6 +76,7 @@ export const BIOME = {
   mud:       {bg:'#1a1c12', fg:'#5a6038', mid:'#3a4020', tint:'#4a5028'},
   fungal_grass:{bg:'#181420', fg:'#7a6898', mid:'#504060', tint:'#685880'},
   dirt:      {bg:'#28200e', fg:'#a08050', mid:'#6a5430', tint:null},
+  hut_wall:  {bg:'#1a1408', fg:'#8a6840', mid:'#584028', tint:null},
 };
 
 // ==================== PRICE CATEGORIES ====================
@@ -158,24 +158,23 @@ function B(biome, density) { return { biome, density }; }
 // "fungal", "mud" → "wetland".
 
 export const BIOME_TARGET = [
-  [B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('ocean',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('shallows',1.0), B('forest',0.5), B('forest',0.5), B('forest',0.5), B('forest',0.5), B('forest',0.5), B('forest',0.5), B('forest',0.5), B('forest',0.5), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('forest',0.5), B('forest',0.5), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',0.5), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('forest',0.5), B('forest',0.8), B('forest',0.8), B('forest',0.8), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',0.8), B('forest',0.8), B('forest',0.8), B('forest',0.5), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('forest',0.5), B('forest',0.8), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',1.0), B('forest',0.8), B('forest',0.5), B('forest',0.5), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.8), B('plains',0.8), B('plains',0.8), B('plains',0.8), B('plains',0.8), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('plains',0.6), B('plains',0.8), B('plains',0.8), B('plains',0.8), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',0.8), B('plains',0.8), B('plains',0.6), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('plains',0.8), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',1.0), B('plains',0.8), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('plains',0.6), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('wetland',0.5), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.7), B('wetland',0.5), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('shallows',1.0), B('shallows',1.0), B('wetland',0.5), B('wetland',0.9), B('wetland',1.0), B('wetland',1.0), B('wetland',1.0), B('wetland',1.0), B('wetland',1.0), B('wetland',1.0), B('wetland',0.9), B('wetland',0.5), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('ocean',1.0), B('shallows',1.0), B('wetland',0.5), B('wetland',0.5), B('wetland',0.9), B('wetland',1.0), B('wetland',1.0), B('wetland',0.9), B('wetland',0.9), B('wetland',0.5), B('wetland',0.5), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('ocean',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('wetland',0.5), B('wetland',0.5), B('wetland',0.5), B('wetland',0.5), B('wetland',0.5), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0)],
-  [B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0), B('ocean',1.0)]
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('shallows',1.0), B('wetland',0.8),  B('wetland',0.6),  B('plains',0.4),   B('plains',0.7),   B('plains',1.0),   B('plains',1.0),   B('plains',0.7),   B('desert',0.5),   B('desert',1.0),   B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('shallows',1.0), B('wetland',1.0),  B('plains',0.6),   B('forest',0.8),   B('forest',1.0),   B('forest',0.9),   B('plains',0.8),   B('rock',0.6),     B('desert',0.8),   B('desert',1.0),   B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('shallows',1.0), B('wetland',0.5),  B('plains',0.5),   B('forest',0.9),   B('forest',1.0),   B('forest',1.0),   B('forest',0.8),   B('rock',0.8),     B('rock',1.0),     B('desert',0.6),   B('desert',0.8),   B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('shallows',1.0), B('plains',0.5),   B('plains',0.8),   B('forest',0.7),   B('forest',0.9),   B('plains',1.0),   B('plains',0.8),   B('rock',1.0),     B('rock',0.8),     B('desert',0.5),   B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('shallows',1.0), B('plains',0.6),   B('plains',1.0),   B('plains',1.0),   B('plains',0.8),   B('plains',1.0),   B('plains',0.6),   B('rock',0.6),     B('plains',0.5),   B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('shallows',1.0), B('plains',0.5),   B('plains',0.8),   B('plains',0.6),   B('fungal',0.7),   B('fungal',1.0),   B('fungal',0.8),   B('plains',0.5),   B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('shallows',1.0), B('plains',0.5),   B('fungal',0.5),   B('fungal',0.9),   B('fungal',1.0),   B('fungal',0.7),   B('wetland',0.6),  B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('shallows',1.0), B('shallows',1.0), B('wetland',0.6),  B('wetland',0.8),  B('wetland',0.5),  B('shallows',1.0), B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('shallows',1.0), B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)],
+  [B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0),    B('ocean',1.0)]
 ];
-
 
 
 
@@ -383,3 +382,20 @@ export const ENEMY_HP_MUL    = 0.75;
 export const ENEMY_ATK_MUL   = 0.70;
 export const GOLD_DROP_MUL   = 1.30;
 export const FOOD_DROP_MUL   = 1.30;
+
+// ==================== LANDMARKS ====================
+// Structures placed at biome-target-map scale.  Each entry defines:
+//   type  — identifier string matching a generator in LANDMARK_GENERATORS
+//   cells — array of target map coordinates this landmark occupies
+// During surface generation the landmark system calculates a world-tile
+// bounding box from the cells, clears cover in that footprint, and calls
+// the generator to stamp its tiles.
+export const LANDMARKS = [
+  {
+    type: 'village',
+    cells: [
+      { x: 4, y: 4 }, { x: 5, y: 4 },
+      { x: 4, y: 5 }, { x: 5, y: 5 },
+    ],
+  },
+];

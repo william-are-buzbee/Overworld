@@ -8,7 +8,7 @@ import { modalEl, closeModal, setUpdateUICallback } from './modal.js';
 import { updateUI } from './ui.js';
 import { canvas, ctx } from './rendering.js';
 
-import { attemptMove, restAction, eatBest, eatItem, usePotion, dropItem, equipWeaponFromInv, equipArmorFromInv } from './player-actions.js';
+import { attemptMove, restAction, eatBest, eatItem, usePotion, dropItem, equipWeaponFromInv, equipArmorFromInv, turnInPlace } from './player-actions.js';
 import { setOnPlayerDeathCallback } from './enemy-ai.js';
 import { setOnVictoryCallback, toggleStealth } from './combat.js';
 import { useAction, showHelp, examineTile, readBook } from './interactions.js';
@@ -102,12 +102,41 @@ const KEY_MAP = {
   'arrowleft': () => attemptMove(-1, 0),
   'd': () => attemptMove(1, 0),
   'arrowright': () => attemptMove(1, 0),
+  // Numpad diagonals (NumLock ON = digit, NumLock OFF = nav key)
+  '7': () => attemptMove(-1, -1),
+  'home': () => attemptMove(-1, -1),
+  '9': () => attemptMove(1, -1),
+  'pageup': () => attemptMove(1, -1),
+  '1': () => attemptMove(-1, 1),
+  'end': () => attemptMove(-1, 1),
+  '3': () => attemptMove(1, 1),
+  'pagedown': () => attemptMove(1, 1),
+  // Numpad cardinals (digits; arrow keys already handled above)
+  '8': () => attemptMove(0, -1),
+  '4': () => attemptMove(-1, 0),
+  '6': () => attemptMove(1, 0),
+  '2': () => attemptMove(0, 1),
+  // Numpad 5 (Clear) = rest/wait
+  '5': restAction,
+  'clear': restAction,
   ' ': restAction,
   'e': eatBest,
   'f': toggleStealth,
   'r': useAction,
   '?': showHelp,
   '/': showHelp,
+};
+
+// ==================== DIRECTION MAP (for shift+turn) ====================
+const DIR_MAP = {
+  'w': [0, -1], 'arrowup': [0, -1], '8': [0, -1],
+  's': [0, 1],  'arrowdown': [0, 1], '2': [0, 1],
+  'a': [-1, 0], 'arrowleft': [-1, 0], '4': [-1, 0],
+  'd': [1, 0],  'arrowright': [1, 0], '6': [1, 0],
+  '7': [-1, -1], 'home': [-1, -1],
+  '9': [1, -1],  'pageup': [1, -1],
+  '1': [-1, 1],  'end': [-1, 1],
+  '3': [1, 1],   'pagedown': [1, 1],
 };
 
 document.addEventListener('keydown', (ev) => {
@@ -133,6 +162,16 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     showRestartConfirm();
     return;
+  }
+
+  // Shift+direction: turn in place without moving
+  if (ev.shiftKey) {
+    const dir = DIR_MAP[ev.key.toLowerCase()];
+    if (dir) {
+      ev.preventDefault();
+      safeDispatch(turnInPlace, dir[0], dir[1]);
+      return;
+    }
   }
 
   const action = KEY_MAP[ev.key.toLowerCase()];

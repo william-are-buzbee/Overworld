@@ -3,19 +3,36 @@
 // Computes which tiles are visible from a given origin within a radius.
 // A tile with vision-blocking cover is itself visible, but tiles behind it are not.
 //
+// PROBABILISTIC TREE TRANSPARENCY:
+//   Trees (FOREST, MUSHFOREST) don't hard-block vision. Instead, each tree
+//   tile is checked against a deterministic spatial hash seeded by both the
+//   tree's position and the viewer's position. If the hash value falls
+//   below the PER-based transparency threshold, the tree is see-through;
+//   otherwise it blocks that angular slice like a wall.
+//
+//   Because the hash is deterministic, standing still always shows the same
+//   pattern — no accumulation from re-checking. Moving to a new vantage
+//   point produces a different pattern (different viewing angles).
+//
+//   PER 1 → 5% chance per tree (forests are effectively opaque walls).
+//   PER 10 → 60% chance per tree (can generally see 2-4 tiles into dense forest).
+//   Walls, boulders, and other non-walkable cover still block LOS completely.
+//
 // The player uses a CONE + AWARENESS BUBBLE model:
 //   1. Awareness bubble: full-circle FOV within 1 tile (the 8 adjacent squares).
-//      Always visible regardless of facing. Not affected by PER, night, or layer.
+//      Always visible regardless of facing. Not affected by PER, night, layer,
+//      or tree transparency rolls.
 //   2. Forward cone: beyond the awareness radius, only tiles within the
 //      player's facing-direction cone (coneAngle/2 each side) are visible.
+//      Tree transparency rolls apply to the cone portion.
 //   3. Final visible set = union of awareness bubble ∩ LOS  +  cone ∩ LOS.
 //
-// Enemies have vision profiles too (cone or radius) but enemy AI doesn't
-// read them yet — that's a future prompt.
+// Enemies use the same system: hasLOS rolls tree transparency per-tile
+// using the monster's PER.
 
 import { worlds, covers, state } from './state.js';
 import { inBounds, getCover } from './world-state.js';
-import { tileBlocksVision } from './terrain.js';
+import { tileBlocksVision, tileHasVisionPenalty } from './terrain.js';
 
 // Import player stat functions here to avoid circular dependency issues.
 // player.js has no dependency on fov.js, so this is safe.
@@ -34,24 +51,75 @@ const OCTANTS = [
   [ 1,  0,  0, -1],
 ];
 
+// ==================== TREE TRANSPARENCY ====================
+// Trees (and mushroom trees) are probabilistically transparent.
+// Each tree's transparency is determined by a deterministic spatial hash
+// of (tree position, viewer position). This means:
+//   • Standing still: the same trees are always transparent/opaque.
+//     No accumulation from re-rolling.
+//   • Moving one tile: a new vantage point produces a new pattern.
+//     Scouting from different positions reveals different parts of the forest.
+//   • Returning to the same spot: same pattern as before (deterministic).
+//
+//   PER 1  →  5%  (almost never see through a tree)
+//   PER 5  → ~30% (occasionally peek through one layer)
+//   PER 7  → ~42% (meaningful but unreliable penetration)
+//   PER 10 → 60%  (generally 2-4 tiles into dense forest)
+
+/**
+ * Probability that a creature with the given PER can see through a single
+ * tree tile. Compared against the spatial hash for each tree.
+ * @param {number} per — creature's PER (1–10)
+ * @returns {number} probability 0–1
+ */
+export function treeTransparencyChance(per) {
+  // Linear: 5% at PER 1, 60% at PER 10
+  return 0.05 + (per - 1) * (0.55 / 9);
+}
+
+/**
+ * Deterministic spatial hash for tree transparency.
+ * Same (tree, viewer) pair always produces the same value in [0, 1).
+ * @param {number} tx, ty — tree tile position
+ * @param {number} vx, vy — viewer position
+ * @returns {number} pseudo-random value in [0, 1)
+ */
+function treeHash(tx, ty, vx, vy) {
+  let h = Math.imul(tx, 374761393) + Math.imul(ty, 668265263);
+  h = h + Math.imul(vx, 1274126177) + Math.imul(vy, 1572735817) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1103515245);
+  h = h ^ (h >>> 16);
+  return (h >>> 0) / 4294967296;
+}
+
 /**
  * Compute the set of tiles visible from (ox, oy) on the given layer.
  * Full circular FOV — no directional filtering.
  * Used by enemies and as the base computation for cone FOV.
+ *
+ * When `per` is provided, tree-cover tiles are probabilistically transparent:
+ * each tree independently rolls against the PER-based chance during the
+ * shadowcast. A failed roll makes the tree cast a shadow like a wall.
+ *
  * @param {number} layer   — layer index
  * @param {number} ox      — origin x
  * @param {number} oy      — origin y
  * @param {number} radius  — vision radius in tiles
+ * @param {number} [per]   — viewer's PER stat (omit to skip tree rolls)
  * @returns {Set<string>}  — set of "x,y" keys for all visible tiles
  */
-export function computeFOV(layer, ox, oy, radius) {
+export function computeFOV(layer, ox, oy, radius, per) {
   const visible = new Set();
   // Origin is always visible
   visible.add(`${ox},${oy}`);
 
+  // Precompute the transparency chance once (null if no PER → trees never block)
+  const treeChance = per != null ? treeTransparencyChance(per) : null;
+
   for (const oct of OCTANTS) {
-    castOctant(layer, ox, oy, radius, 1, 1.0, 0.0, oct, visible);
+    castOctant(layer, ox, oy, radius, 1, 1.0, 0.0, oct, visible, treeChance);
   }
+
   return visible;
 }
 
@@ -65,8 +133,10 @@ export function computeFOV(layer, ox, oy, radius) {
  * @param {number} endSlope   — bottom slope of the unblocked arc (0.0 initially)
  * @param {number[]} oct      — octant multipliers [xx, xy, yx, yy]
  * @param {Set<string>} visible — accumulator
+ * @param {number|null} treeChance — probability (0–1) of seeing through a tree
+ *                                    tile, or null to skip tree rolls entirely
  */
-function castOctant(layer, ox, oy, radius, row, startSlope, endSlope, oct, visible) {
+function castOctant(layer, ox, oy, radius, row, startSlope, endSlope, oct, visible, treeChance) {
   if (startSlope < endSlope) return;
 
   const [xx, xy, yx, yy] = oct;
@@ -93,13 +163,21 @@ function castOctant(layer, ox, oy, radius, row, startSlope, endSlope, oct, visib
 
       if (!inBounds(layer, wx, wy)) continue;
 
-      // This tile is visible
+      // This tile is visible (the tile itself is always revealed, even if it blocks)
       visible.add(`${wx},${wy}`);
 
       // Check if this tile blocks vision
       const ground = worlds[layer][wy][wx];
       const cover  = getCover(layer, wx, wy);
-      const isBlocking = tileBlocksVision(ground, cover);
+      let isBlocking = tileBlocksVision(ground, cover);
+
+      // Probabilistic tree transparency: if this tile has a vision penalty
+      // (trees/mushroom forest), check the deterministic spatial hash to
+      // decide if it blocks this sightline. Same viewer position always
+      // produces the same pattern — no accumulation from standing still.
+      if (!isBlocking && treeChance != null && tileHasVisionPenalty(ground, cover)) {
+        isBlocking = treeHash(wx, wy, ox, oy) >= treeChance;
+      }
 
       if (blocked) {
         // Previous tile was blocking
@@ -116,7 +194,7 @@ function castOctant(layer, ox, oy, radius, row, startSlope, endSlope, oct, visib
           // Hit a wall — recurse with the remaining open arc above this wall,
           // then mark this wall as the new shadow boundary.
           blocked = true;
-          castOctant(layer, ox, oy, radius, r + 1, startSlope, (col + 0.5) / (r - 0.5), oct, visible);
+          castOctant(layer, ox, oy, radius, r + 1, startSlope, (col + 0.5) / (r - 0.5), oct, visible, treeChance);
           newStart = rightSlope;
         }
       }
@@ -137,10 +215,9 @@ let _cachedCosHalf = 0;
 /**
  * Compute cone+awareness FOV for a creature with directional vision.
  *
- * 1. Run full circular shadowcast at max(coneDepth, awareR).
- * 2. Filter the result: keep tiles that are either
- *    (a) within the awareness radius (omnidirectional), or
- *    (b) within the forward cone angle of the facing direction AND within coneDepth.
+ * 1. Run awareness-radius shadowcast (no tree rolls — adjacent tiles always visible).
+ * 2. Run cone-depth shadowcast with probabilistic tree transparency.
+ * 3. Keep awareness tiles (omnidirectional) + cone tiles (facing-direction only).
  *
  * @param {number} layer
  * @param {number} ox, oy  — creature position
@@ -148,15 +225,20 @@ let _cachedCosHalf = 0;
  * @param {number} awareR — awareness radius (always 1 — adjacent tiles only)
  * @param {number} fdx, fdy — facing direction (need not be normalized)
  * @param {number} coneAngle — cone width in degrees
+ * @param {number} [per]    — viewer's PER stat (omit to skip tree rolls)
  * @returns {Set<string>}
  */
-export function computeConeFOV(layer, ox, oy, coneDepth, awareR, fdx, fdy, coneAngle) {
-  // Full circular shadowcast at the maximum range (covers both bubble and cone)
-  const maxR = Math.max(coneDepth, awareR);
-  const fullFOV = computeFOV(layer, ox, oy, maxR);
+export function computeConeFOV(layer, ox, oy, coneDepth, awareR, fdx, fdy, coneAngle, per) {
+  // Awareness bubble: no tree rolls (always see adjacent tiles).
+  // Cone: probabilistic tree transparency via PER-based rolls.
+  const awareFOV = computeFOV(layer, ox, oy, awareR);           // no tree rolls
+  const coneFOV  = computeFOV(layer, ox, oy, coneDepth, per);   // tree rolls applied
 
-  // If the cone is effectively 360° or more, return the full circular result
-  if (coneAngle >= 360) return fullFOV;
+  // If the cone is effectively 360° or more, merge both sets and return
+  if (coneAngle >= 360) {
+    for (const key of awareFOV) coneFOV.add(key);
+    return coneFOV;
+  }
 
   // Precompute cosine of the half-angle for the cone check
   if (coneAngle !== _cachedConeAngle) {
@@ -170,14 +252,18 @@ export function computeConeFOV(layer, ox, oy, coneDepth, awareR, fdx, fdy, coneA
   const nfx = fLen > 0 ? fdx / fLen : 0;
   const nfy = fLen > 0 ? fdy / fLen : 1;  // default: face south
 
-  // Squared radii with half-tile buffer (matching shadowcast distance check)
-  const awareR2 = (awareR + 0.5) * (awareR + 0.5);
-  const coneDepth2 = (coneDepth + 0.5) * (coneDepth + 0.5);
-
   const result = new Set();
 
-  for (const key of fullFOV) {
-    // Parse tile coordinates from the "x,y" key
+  // (a) All awareness-bubble tiles are always visible (omnidirectional, no tree penalty)
+  for (const key of awareFOV) {
+    result.add(key);
+  }
+
+  // (b) Cone tiles: must be within the facing-direction cone.
+  //     Tree rolls already applied during shadowcast (opaque trees cast shadows).
+  for (const key of coneFOV) {
+    if (result.has(key)) continue; // already added from awareness
+
     const comma = key.indexOf(',');
     const wx = +key.substring(0, comma);
     const wy = +key.substring(comma + 1);
@@ -185,21 +271,7 @@ export function computeConeFOV(layer, ox, oy, coneDepth, awareR, fdx, fdy, coneA
     const dx = wx - ox;
     const dy = wy - oy;
     const dist2 = dx * dx + dy * dy;
-
-    // Origin tile — always visible
-    if (dist2 === 0) {
-      result.add(key);
-      continue;
-    }
-
-    // (a) Within awareness radius — always visible (omnidirectional)
-    if (dist2 <= awareR2) {
-      result.add(key);
-      continue;
-    }
-
-    // (b) Beyond awareness radius — must be within cone depth AND cone angle
-    if (dist2 > coneDepth2) continue;
+    if (dist2 === 0) { result.add(key); continue; }
 
     // Dot product between normalized facing direction and tile direction
     const tLen = Math.sqrt(dist2);
@@ -219,10 +291,16 @@ export function computeConeFOV(layer, ox, oy, coneDepth, awareR, fdx, fdy, coneA
 // vision-blocking tile interrupts the path.  The origin tile is never
 // checked (a creature can always "see out" of its own tile); the
 // destination tile is always reachable if nothing blocks the way to it.
+//
+// When `per` is provided, tree tiles are probabilistically transparent
+// using the same deterministic spatial hash as the shadowcasting FOV.
 
-export function hasLOS(layer, x0, y0, x1, y1) {
+export function hasLOS(layer, x0, y0, x1, y1, per) {
   // Same tile — trivially visible
   if (x0 === x1 && y0 === y1) return true;
+
+  // Precompute tree transparency chance (null → trees never block)
+  const treeChance = per != null ? treeTransparencyChance(per) : null;
 
   let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
   let sx = x0 < x1 ? 1 : -1,  sy = y0 < y1 ? 1 : -1;
@@ -242,13 +320,19 @@ export function hasLOS(layer, x0, y0, x1, y1) {
     const ground = worlds[layer][cy][cx];
     const cover  = getCover(layer, cx, cy);
     if (tileBlocksVision(ground, cover)) return false;
+
+    // Deterministic tree transparency — same (tree, viewer) pair always
+    // produces the same result. No accumulation from repeated checks.
+    if (treeChance != null && tileHasVisionPenalty(ground, cover)) {
+      if (treeHash(cx, cy, x0, y0) >= treeChance) return false;
+    }
   }
 }
 
 // ==================== FOV STATE MANAGEMENT ====================
 
 // Player cone angle — matches the humanoid default from VISION_PROFILES.
-const PLAYER_CONE_ANGLE = 120;
+const PLAYER_CONE_ANGLE = 150;
 
 /**
  * Recompute the player's FOV and update state.fovSet + state.explored.
@@ -269,7 +353,8 @@ export function updatePlayerFOV() {
     layer, p.x, p.y,
     coneDepth, awareR,
     fdx, fdy,
-    PLAYER_CONE_ANGLE
+    PLAYER_CONE_ANGLE,
+    p.per
   );
 
   // Store current visible set

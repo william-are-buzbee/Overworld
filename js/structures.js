@@ -127,6 +127,7 @@ const PROTECTED_COVERS = new Set([
   T.SIGN, T.CHEST, T.BOOK, T.THRONE, T.WELL,
   T.WELL_TL, T.WELL_TR, T.WELL_BL, T.WELL_BR,
   T.SHOPKEEPER, T.FOUNTAIN, T.FARM,
+  T.HUT_WALL, T.CAMPFIRE,
 ]);
 
 // ==================== VALIDATION ====================
@@ -362,7 +363,7 @@ export const STRUCTURE_REGISTRY = [
     key:       'ruin_pocket',
     frequency: 12,
     layer:     'surface',
-    ground:    [T.PLAINS, T.DESERT, T.BEACH, T.DIRT_ROAD],
+    ground:    [T.PLAINS, T.DESERT, T.BEACH, T.DIRT],
     groundAll: true,
     clearCover: true,
     bounds: {
@@ -381,7 +382,7 @@ export const STRUCTURE_REGISTRY = [
     key:       'ruin_cluster',
     frequency: 8,
     layer:     'surface',
-    ground:    [T.PLAINS, T.DESERT, T.BEACH, T.DIRT_ROAD],
+    ground:    [T.PLAINS, T.DESERT, T.BEACH, T.DIRT],
     groundAll: true,
     clearCover: true,
     bounds: {
@@ -633,9 +634,9 @@ export const STRUCTURE_REGISTRY = [
     clearCover: true,
     biome:     { elevation: [0.05, 0.55], moisture: [0.20, 0.60] },
     tiles: [
-      { dx: 0, dy: 0, ground: T.DIRT_ROAD },
-      { dx: 1, dy: 0, ground: T.DIRT_ROAD, cover: T.CRATE },
-      { dx: 0, dy: 1, ground: T.DIRT_ROAD },
+      { dx: 0, dy: 0, ground: T.DIRT },
+      { dx: 1, dy: 0, ground: T.DIRT, cover: T.CRATE },
+      { dx: 0, dy: 1, ground: T.DIRT },
       { dx: 1, dy: 1, ground: T.PLAINS },
     ],
     loot: [{
