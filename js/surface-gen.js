@@ -275,6 +275,7 @@ export function makeSurface(seed) {
   // ---- Noise generators ----
   const borderNoiseX = createNoise2D(seed + 100);
   const borderNoiseY = createNoise2D(seed + 101);
+  const ownershipNoise = createNoise2D(seed + 150);
   const variationNoise = createNoise2D(seed + 200);
   const lakeNoise = createNoise2D(seed + 300);
 
@@ -310,34 +311,58 @@ export function makeSurface(seed) {
       const winner = dominantBiome(perturbedWeights);
       const profile = BIOME_PROFILES[winner];
 
-      // --- 2. Ground type via multi-channel palette blending ---
-      // Interpolate ground palettes from all contributing biomes weighted
-      // by the perturbed biome weights.  Each ground type accumulates a
-      // blended probability across all biomes.
-      const blendedPalette = {};
+      // --- 2. Two-stage ground type selection ---
+      //
+      // Stage 1 — BIOME OWNERSHIP: decide which biome "owns" this tile.
+      // A coherent noise field is sampled and mapped to [0, 1].  The biome
+      // weights define a CDF; whichever range the noise falls into wins.
+      // This guarantees that in a 60/40 blend zone, ~40% of tiles go to the
+      // minority biome, forming organic patches whose size scales with the
+      // blend-derived noise wavelength.
+      //
+      // Stage 2 — GROUND TYPE: the winning biome's palette alone determines
+      // the ground type, using per-type noise channels for intra-biome texture.
+      // This prevents minority biome ground types from being diluted into the
+      // majority palette and never winning.
+
+      // Blend-scaled frequency for the ownership noise
+      const blendFreq = 0.04 + (1 - localBlend) * 0.20;
+      const ownerCfg = {
+        octaves: GROUND_PALETTE_CFG.octaves,
+        frequency: blendFreq,
+        lacunarity: GROUND_PALETTE_CFG.lacunarity,
+        gain: GROUND_PALETTE_CFG.gain,
+      };
+
+      // Sort biomes by weight descending for stable CDF ordering
+      const biomeEntries = [];
       for (const biome in perturbedWeights) {
-        const bp = BIOME_PROFILES[biome];
-        if (!bp || !bp.groundPalette) continue;
-        const w = perturbedWeights[biome];
-        for (const tType in bp.groundPalette) {
-          blendedPalette[tType] = (blendedPalette[tType] || 0) + bp.groundPalette[tType] * w;
+        biomeEntries.push({ biome, weight: perturbedWeights[biome] });
+      }
+      biomeEntries.sort((a, b) => b.weight - a.weight);
+
+      // Map ownership noise from [-1,1] to [0,1]
+      const ownerRaw = fbm(ownershipNoise, x, y, ownerCfg);
+      const ownerVal = (ownerRaw + 1) * 0.5;
+
+      // Walk the CDF to pick the owning biome
+      let ownerBiome = biomeEntries[0].biome;
+      let cumulative = 0;
+      for (const entry of biomeEntries) {
+        cumulative += entry.weight;
+        if (ownerVal < cumulative) {
+          ownerBiome = entry.biome;
+          break;
         }
       }
 
-      // Each ground type has its own noise channel.  Score = weight + amplitude * noise.
-      // Additive competition means the noise perturbs around the weight rather than
-      // scaling it — a 0.3-weight type can beat a 0.4-weight type whenever its noise
-      // is moderately higher, producing organic blob boundaries.
-      // noiseAmp and scatter are blended per-tile from biome profiles using the same
-      // perturbed weights that drive palette blending.
-      //
-      // Noise frequency scales inversely with local blend:
-      //   blend 1.0 → freq 0.04 → wavelength ~25 tiles (large smooth patches)
-      //   blend 0.5 → freq 0.14 → wavelength ~7 tiles  (moderate features)
-      //   blend 0.0 → freq 0.24 → wavelength ~4 tiles  (small sharp patches)
-      const blendedNoiseAmp = blendValue(perturbedWeights, p => p.noiseAmp);
-      const blendedScatter  = blendValue(perturbedWeights, p => p.scatter);
-      const blendFreq = 0.04 + (1 - localBlend) * 0.20;
+      const ownerProfile = BIOME_PROFILES[ownerBiome];
+      if (!ownerProfile) { grid[y][x] = profile.ground; continue; }
+
+      // Stage 2: pick ground type from the owning biome's palette only
+      const ownerPalette = ownerProfile.groundPalette;
+      const blendedNoiseAmp = ownerProfile.noiseAmp || blendValue(perturbedWeights, p => p.noiseAmp);
+      const blendedScatter  = ownerProfile.scatter  || blendValue(perturbedWeights, p => p.scatter);
       const localPaletteCfg = {
         octaves: GROUND_PALETTE_CFG.octaves,
         frequency: blendFreq,
@@ -345,32 +370,32 @@ export function makeSurface(seed) {
         gain: GROUND_PALETTE_CFG.gain,
       };
 
-      let groundType = profile.ground; // fallback
-      let bestScore = -Infinity;
-      for (const tTypeStr in blendedPalette) {
-        const tId = Number(tTypeStr);
-        const weight = blendedPalette[tTypeStr];
-        if (weight <= 0) continue;
-        const noiseFn = groundNoiseChannels[tId];
-        if (!noiseFn) continue;
-        const n = fbm(noiseFn, x, y, localPaletteCfg); // ≈ [-1, 1]
-        const score = weight + blendedNoiseAmp * n;
-        if (score > bestScore) {
-          bestScore = score;
-          groundType = tId;
+      let groundType = ownerProfile.ground; // fallback
+      if (ownerPalette) {
+        let bestScore = -Infinity;
+        for (const tTypeStr in ownerPalette) {
+          const tId = Number(tTypeStr);
+          const weight = ownerPalette[tTypeStr];
+          if (weight <= 0) continue;
+          const noiseFn = groundNoiseChannels[tId];
+          if (!noiseFn) continue;
+          const n = fbm(noiseFn, x, y, localPaletteCfg);
+          const score = weight + blendedNoiseAmp * n;
+          if (score > bestScore) {
+            bestScore = score;
+            groundType = tId;
+          }
         }
       }
 
       // --- 2b. Scatter pass: seed individual minority-type tiles ---
-      // The blob competition above can only produce blob-sized features.
-      // Minority palette types (e.g. water at 0.3 in wetlands) may never win
-      // a full blob.  The scatter pass gives a fraction of tiles a fresh roll
-      // against the raw palette weights, producing individual tiles of
-      // minority types dotted into the dominant blob regions.
-      if (rand() < blendedScatter) {
+      // Within the owning biome's palette, occasionally re-roll against the
+      // raw weights to dot in minority ground types that the blob competition
+      // above couldn't produce (e.g. scattered sand patches in a grass biome).
+      if (ownerPalette && rand() < blendedScatter) {
         let r = rand();
-        for (const tTypeStr in blendedPalette) {
-          r -= blendedPalette[tTypeStr];
+        for (const tTypeStr in ownerPalette) {
+          r -= ownerPalette[tTypeStr];
           if (r <= 0) {
             groundType = Number(tTypeStr);
             break;
@@ -478,10 +503,16 @@ export function makeSurface(seed) {
 
   // ---- Isolated tile cleanup pass ----
   // A tile whose 4 cardinal neighbors are ALL a different ground type is
-  // never correct — snap it to the most common neighbor.  This removes
-  // single-pixel noise artefacts without flattening larger features.
+  // snapped to the most common neighbor — but only in low-blend zones.
+  // In transition zones (blend > 0.3) isolated tiles from the minority
+  // biome are expected and correct; cleaning them would undo the ownership
+  // system's proportional allocation.
   for (let y = 1; y < H_SURF - 1; y++) {
     for (let x = 1; x < W_SURF - 1; x++) {
+      // Skip cleanup in blend zones
+      const lb = sampleBlend(x, y, W_SURF, H_SURF);
+      if (lb > 0.3) continue;
+
       const t = grid[y][x];
       const n0 = grid[y - 1][x];
       const n1 = grid[y + 1][x];
