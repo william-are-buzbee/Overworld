@@ -23,12 +23,13 @@ Prompt queue and task tracker. Check things off as they're done.
 - [x] Re-establish biome layout functionality (can use target map to generate any biome combinations in a 16 x 16 grid with natural blending)
 - [x] Make world size fully configurable (audit all hardcoded positions/distances)
 - [x] Structure/landmark system using coordinates
+- [x] Implement "blend" variable for each biome on the target map to allow for more control
+- [x] Added minimap system (press M key)
 
 ## Up Next
-- [ ] Implement "blend" variable for each biome on the target map to allow for more control 
+- [ ] Create ability to generate dozens of underground levels (that are properly connected by entrances)
 
 ## Near-Term Plans
-- [ ] Create ability to generate dozens of underground levels (that are properly connected by entrances)
 - [ ] Update biomes (new groundcover options, ground tile options and ground palette)  
 - [ ] Update world map until it looks good
 - [ ] Make "homes" for enemies (forest village with buildings for forest goblin, routes for pack hunters, dense area of fungal forest for mushrooms, rock golem "village" underground, treent "home" area in deep woods, frost troll "cave" it returns too at night, etc)
