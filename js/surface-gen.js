@@ -2,8 +2,9 @@
 import { covers } from './state.js';
 import {
   W_SURF, H_SURF, LAYER_SURFACE, LAYER_UNDER,
-  ATMOSPHERE, BIOME_TARGET, BIOME_PROFILES, BLEND_WIDTH,
+  ATMOSPHERE, BIOME_TARGET, BIOME_PROFILES,
   BIOME_GRID_W, BIOME_GRID_H, LANDMARKS,
+  CELL_TILE_W, CELL_TILE_H,
 } from './constants.js';
 import { T, isWalkable, isCoverAllowedOnGround } from './terrain.js';
 import { srand, rand, randi } from './rng.js';
@@ -84,13 +85,15 @@ const DEEP_WATER_THRESHOLD = Math.max(2, Math.round(Math.min(W_SURF, H_SURF) * 0
 
 // ==================== BIOME TARGET MAP SAMPLING ====================
 // Returns { biomeName: weight } for the biomes influencing world-tile (x, y).
-// Weights are bilinear interpolation coefficients from the target map;
-// identical biomes in adjacent cells merge their weights.
+// Each corner's influence is shaped by its blend value:
+//   low blend  → weight drops off sharply (hard edge on that cell's side)
+//   high blend → weight persists further (soft gradient on that cell's side)
+// This produces asymmetric transitions when neighboring cells have different
+// blend values — each cell controls its own side of the boundary.
 function sampleBiomeWeights(x, y, w, h) {
   const targetW = BIOME_GRID_W;
   const targetH = BIOME_GRID_H;
 
-  // Map full-res coords to target-map space (center of each target cell)
   const tx = (x / w) * targetW - 0.5;
   const ty = (y / h) * targetH - 0.5;
 
@@ -101,15 +104,59 @@ function sampleBiomeWeights(x, y, w, h) {
   const fx = Math.max(0, Math.min(1, tx - x0));
   const fy = Math.max(0, Math.min(1, ty - y0));
 
+  // Raw bilinear weights for the 4 corners
+  const corners = [
+    { cell: BIOME_TARGET[y0][x0], rawW: (1 - fx) * (1 - fy) },
+    { cell: BIOME_TARGET[y0][x1], rawW: fx       * (1 - fy) },
+    { cell: BIOME_TARGET[y1][x0], rawW: (1 - fx) * fy       },
+    { cell: BIOME_TARGET[y1][x1], rawW: fx       * fy       },
+  ];
+
+  // Apply blend-dependent sharpening per corner.
+  // Exponent curve: blend 0 → exp 3.0 (sharp), blend 1 → exp 0.5 (soft).
+  let totalW = 0;
+  for (const c of corners) {
+    const b = c.cell.blend !== undefined ? c.cell.blend : 0.5;
+    const exp = 0.5 + (1 - b) * 2.5;
+    c.adjW = Math.pow(Math.max(c.rawW, 1e-6), exp);
+    totalW += c.adjW;
+  }
+
+  // Normalise and accumulate by biome name
   const weights = {};
-  const add = (biome, wt) => { weights[biome] = (weights[biome] || 0) + wt; };
-
-  add(BIOME_TARGET[y0][x0].biome, (1 - fx) * (1 - fy));
-  add(BIOME_TARGET[y0][x1].biome, fx * (1 - fy));
-  add(BIOME_TARGET[y1][x0].biome, (1 - fx) * fy);
-  add(BIOME_TARGET[y1][x1].biome, fx * fy);
-
+  if (totalW > 0) {
+    for (const c of corners) {
+      const biome = c.cell.biome;
+      weights[biome] = (weights[biome] || 0) + c.adjW / totalW;
+    }
+  } else {
+    // Degenerate case — fall back to nearest cell
+    weights[corners[0].cell.biome] = 1;
+  }
   return weights;
+}
+
+// Bilinearly interpolate the blend scalar from the target map.
+// Returns a value in [0, 1] representing the local transition aggressiveness.
+function sampleBlend(x, y, w, h) {
+  const targetW = BIOME_GRID_W;
+  const targetH = BIOME_GRID_H;
+  const tx = (x / w) * targetW - 0.5;
+  const ty = (y / h) * targetH - 0.5;
+  const x0 = Math.max(0, Math.min(targetW - 1, Math.floor(tx)));
+  const y0 = Math.max(0, Math.min(targetH - 1, Math.floor(ty)));
+  const x1 = Math.min(targetW - 1, x0 + 1);
+  const y1 = Math.min(targetH - 1, y0 + 1);
+  const fx = Math.max(0, Math.min(1, tx - x0));
+  const fy = Math.max(0, Math.min(1, ty - y0));
+  const b00 = BIOME_TARGET[y0][x0].blend !== undefined ? BIOME_TARGET[y0][x0].blend : 0.5;
+  const b10 = BIOME_TARGET[y0][x1].blend !== undefined ? BIOME_TARGET[y0][x1].blend : 0.5;
+  const b01 = BIOME_TARGET[y1][x0].blend !== undefined ? BIOME_TARGET[y1][x0].blend : 0.5;
+  const b11 = BIOME_TARGET[y1][x1].blend !== undefined ? BIOME_TARGET[y1][x1].blend : 0.5;
+  return b00 * (1 - fx) * (1 - fy)
+       + b10 * fx * (1 - fy)
+       + b01 * (1 - fx) * fy
+       + b11 * fx * fy;
 }
 
 // Pick the biome with the highest weight from a weights map.
@@ -229,9 +276,15 @@ export function makeSurface(seed) {
   for (let y = 0; y < H_SURF; y++) {
     for (let x = 0; x < W_SURF; x++) {
 
-      // --- 1. Noise-perturbed biome sampling (wavy borders) ---
-      const bnx = fbm(borderNoiseX, x, y, BORDER_NOISE_CFG) * BLEND_WIDTH * 0.45;
-      const bny = fbm(borderNoiseY, x, y, BORDER_NOISE_CFG) * BLEND_WIDTH * 0.45;
+      // --- 1. Blend-scaled border perturbation (wavy borders) ---
+      // Border noise amplitude scales with local blend: high blend → wide waviness,
+      // low blend → nearly straight border.  Uses the average of the cell tile
+      // dimensions so it works on non-square maps.
+      const localBlend = sampleBlend(x, y, W_SURF, H_SURF);
+      const cellSize = (CELL_TILE_W + CELL_TILE_H) * 0.5;
+      const borderAmp = localBlend * cellSize * 0.5;
+      const bnx = fbm(borderNoiseX, x, y, BORDER_NOISE_CFG) * borderAmp;
+      const bny = fbm(borderNoiseY, x, y, BORDER_NOISE_CFG) * borderAmp;
       const perturbedWeights = sampleBiomeWeights(x + bnx, y + bny, W_SURF, H_SURF);
 
       // The dominant biome after perturbation (for cover scaling, lake pockets).
@@ -258,8 +311,20 @@ export function makeSurface(seed) {
       // is moderately higher, producing organic blob boundaries.
       // noiseAmp and scatter are blended per-tile from biome profiles using the same
       // perturbed weights that drive palette blending.
+      //
+      // Noise frequency scales inversely with local blend:
+      //   blend 1.0 → freq 0.04 → wavelength ~25 tiles (large smooth patches)
+      //   blend 0.5 → freq 0.14 → wavelength ~7 tiles  (moderate features)
+      //   blend 0.0 → freq 0.24 → wavelength ~4 tiles  (small sharp patches)
       const blendedNoiseAmp = blendValue(perturbedWeights, p => p.noiseAmp);
       const blendedScatter  = blendValue(perturbedWeights, p => p.scatter);
+      const blendFreq = 0.04 + (1 - localBlend) * 0.20;
+      const localPaletteCfg = {
+        octaves: GROUND_PALETTE_CFG.octaves,
+        frequency: blendFreq,
+        lacunarity: GROUND_PALETTE_CFG.lacunarity,
+        gain: GROUND_PALETTE_CFG.gain,
+      };
 
       let groundType = profile.ground; // fallback
       let bestScore = -Infinity;
@@ -269,7 +334,7 @@ export function makeSurface(seed) {
         if (weight <= 0) continue;
         const noiseFn = groundNoiseChannels[tId];
         if (!noiseFn) continue;
-        const n = fbm(noiseFn, x, y, GROUND_PALETTE_CFG); // ≈ [-1, 1]
+        const n = fbm(noiseFn, x, y, localPaletteCfg); // ≈ [-1, 1]
         const score = weight + blendedNoiseAmp * n;
         if (score > bestScore) {
           bestScore = score;
@@ -389,6 +454,33 @@ export function makeSurface(seed) {
       moisture[idx]  = blendValue(smoothWeights, p => p.derived.moisture);
       elevation[idx] = blendValue(smoothWeights, p => p.derived.elevation);
       fungal[idx]    = blendValue(smoothWeights, p => p.derived.fungal);
+    }
+  }
+
+  // ---- Isolated tile cleanup pass ----
+  // A tile whose 4 cardinal neighbors are ALL a different ground type is
+  // never correct — snap it to the most common neighbor.  This removes
+  // single-pixel noise artefacts without flattening larger features.
+  for (let y = 1; y < H_SURF - 1; y++) {
+    for (let x = 1; x < W_SURF - 1; x++) {
+      const t = grid[y][x];
+      const n0 = grid[y - 1][x];
+      const n1 = grid[y + 1][x];
+      const n2 = grid[y][x - 1];
+      const n3 = grid[y][x + 1];
+      // Skip if at least one neighbor matches
+      if (n0 === t || n1 === t || n2 === t || n3 === t) continue;
+      // Find the most common neighbor type
+      const counts = {};
+      counts[n0] = (counts[n0] || 0) + 1;
+      counts[n1] = (counts[n1] || 0) + 1;
+      counts[n2] = (counts[n2] || 0) + 1;
+      counts[n3] = (counts[n3] || 0) + 1;
+      let best = n0, bestC = 0;
+      for (const k in counts) {
+        if (counts[k] > bestC) { best = Number(k); bestC = counts[k]; }
+      }
+      grid[y][x] = best;
     }
   }
 
