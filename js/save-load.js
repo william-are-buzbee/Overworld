@@ -210,6 +210,9 @@ export function saveGame() {
 
       // FOV explored tiles per layer — Set<"x,y"> → array of strings
       explored: serializeExplored(state.explored),
+
+      // World-map explored cells — Set<"cx,cy"> → array of strings
+      exploredCells: state.exploredCells ? [...state.exploredCells] : [],
     };
 
     const json = JSON.stringify(saveData);
@@ -329,6 +332,9 @@ export function loadGame() {
     // --- Restore FOV explored tiles ---
     state.explored = deserializeExplored(data.explored);
     // fovSet is recomputed on the first action (or by tryResume before render)
+
+    // --- Restore world-map explored cells ---
+    state.exploredCells = new Set(data.exploredCells || []);
 
     return true;
   } catch (err) {

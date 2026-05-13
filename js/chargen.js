@@ -160,6 +160,7 @@ function randomizeAttrs(){
 }
 
 function beginGame(){
+  state.exploredCells = new Set();
   state.player = freshPlayer(state.cgAttrs);
   initWorld(Math.floor(Math.random()*999999));
   document.getElementById('chargen-screen').style.display = 'none';
