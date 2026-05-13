@@ -85,53 +85,72 @@ const DEEP_WATER_THRESHOLD = Math.max(2, Math.round(Math.min(W_SURF, H_SURF) * 0
 
 // ==================== BIOME TARGET MAP SAMPLING ====================
 // Returns { biomeName: weight } for the biomes influencing world-tile (x, y).
-// Each corner's influence is shaped by its blend value:
-//   low blend  → weight drops off sharply (hard edge on that cell's side)
-//   high blend → weight persists further (soft gradient on that cell's side)
-// This produces asymmetric transitions when neighboring cells have different
-// blend values — each cell controls its own side of the boundary.
+//
+// Instead of bilinear interpolation (which confines transitions to exactly
+// 1 cell width regardless of blend), each cell projects influence outward
+// using a smooth radial falloff whose radius is controlled by that cell's
+// blend value:
+//   blend 0.0 → radius 0.55 cells (barely covers own Voronoi region)
+//   blend 0.5 → radius 1.2  cells (≈ old bilinear transition width)
+//   blend 1.0 → radius 1.9  cells (wide gradient, ~2.8 cell overlap)
+//
+// This produces genuinely asymmetric transitions: a forest at blend 0.7
+// reaches further into the boundary than an ocean at blend 0.2 beside it.
 function sampleBiomeWeights(x, y, w, h) {
   const targetW = BIOME_GRID_W;
   const targetH = BIOME_GRID_H;
 
+  // Position in target-map space (cell centers at integer coords)
   const tx = (x / w) * targetW - 0.5;
   const ty = (y / h) * targetH - 0.5;
 
-  const x0 = Math.max(0, Math.min(targetW - 1, Math.floor(tx)));
-  const y0 = Math.max(0, Math.min(targetH - 1, Math.floor(ty)));
-  const x1 = Math.min(targetW - 1, x0 + 1);
-  const y1 = Math.min(targetH - 1, y0 + 1);
-  const fx = Math.max(0, Math.min(1, tx - x0));
-  const fy = Math.max(0, Math.min(1, ty - y0));
+  // Scan a ±3 neighborhood — covers the widest influence radius (~1.9 cells)
+  const cx = Math.floor(tx);
+  const cy = Math.floor(ty);
 
-  // Raw bilinear weights for the 4 corners
-  const corners = [
-    { cell: BIOME_TARGET[y0][x0], rawW: (1 - fx) * (1 - fy) },
-    { cell: BIOME_TARGET[y0][x1], rawW: fx       * (1 - fy) },
-    { cell: BIOME_TARGET[y1][x0], rawW: (1 - fx) * fy       },
-    { cell: BIOME_TARGET[y1][x1], rawW: fx       * fy       },
-  ];
-
-  // Apply blend-dependent sharpening per corner.
-  // Exponent curve: blend 0 → exp 3.0 (sharp), blend 1 → exp 0.5 (soft).
+  const weights = {};
   let totalW = 0;
-  for (const c of corners) {
-    const b = c.cell.blend !== undefined ? c.cell.blend : 0.5;
-    const exp = 0.5 + (1 - b) * 2.5;
-    c.adjW = Math.pow(Math.max(c.rawW, 1e-6), exp);
-    totalW += c.adjW;
+
+  const yLo = Math.max(0, cy - 2);
+  const yHi = Math.min(targetH - 1, cy + 3);
+  const xLo = Math.max(0, cx - 2);
+  const xHi = Math.min(targetW - 1, cx + 3);
+
+  for (let gy = yLo; gy <= yHi; gy++) {
+    const row = BIOME_TARGET[gy];
+    const dy = ty - gy;
+    const dy2 = dy * dy;
+    for (let gx = xLo; gx <= xHi; gx++) {
+      const cell = row[gx];
+      const b = cell.blend !== undefined ? cell.blend : 0.5;
+
+      // Influence radius scales with blend
+      const radius = 0.55 + b * 1.35;
+      const r2 = radius * radius;
+
+      // Squared distance — skip sqrt when possible
+      const dx = tx - gx;
+      const dist2 = dx * dx + dy2;
+      if (dist2 >= r2) continue;
+
+      // Smooth quartic bell: (1 - (d/r)²)²
+      // 1 at center, 0 at edge, C1 continuous
+      const t2 = dist2 / r2;
+      const wt = (1 - t2) * (1 - t2);
+
+      weights[cell.biome] = (weights[cell.biome] || 0) + wt;
+      totalW += wt;
+    }
   }
 
-  // Normalise and accumulate by biome name
-  const weights = {};
+  // Normalise
   if (totalW > 0) {
-    for (const c of corners) {
-      const biome = c.cell.biome;
-      weights[biome] = (weights[biome] || 0) + c.adjW / totalW;
-    }
+    for (const biome in weights) weights[biome] /= totalW;
   } else {
-    // Degenerate case — fall back to nearest cell
-    weights[corners[0].cell.biome] = 1;
+    // Fallback: nearest cell
+    const nearGx = Math.max(0, Math.min(targetW - 1, Math.round(tx)));
+    const nearGy = Math.max(0, Math.min(targetH - 1, Math.round(ty)));
+    weights[BIOME_TARGET[nearGy][nearGx].biome] = 1;
   }
   return weights;
 }
