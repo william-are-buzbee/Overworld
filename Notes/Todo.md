@@ -26,6 +26,7 @@ Prompt queue and task tracker. Check things off as they're done.
 - [x] Implement "blend" variable for each biome on the target map to allow for more control
 - [x] Added minimap system (press M key)
 - [x] Removed visual grain effect and grass tile added noise (was not part of the ground tile sprite)
+- [x] Added beach biome (removed beach logic when next to water tile)
 
 ## Up Next
 - [ ] Create ability to generate dozens of underground levels (that are properly connected by entrances)
