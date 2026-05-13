@@ -127,17 +127,7 @@ function render(){
         ctx.translate(px, py);
         ctx.scale(S, S);
 
-        if (ground === T.GRASS && decor < 20){
-          ctx.fillStyle = decor < 10 ? '#3a3828' : '#2a3820';
-          const dx2 = (decor*3)%24+4, dy2 = (decor*7)%24+4;
-          ctx.fillRect(dx2, dy2, 3, 2);
-        }
-        if (ground === T.GRASS && decor >= 20 && decor < 35){
-          ctx.fillStyle = '#3a4828';
-          const dx2 = (decor*5)%20+6;
-          ctx.fillRect(dx2, 10, 1, 6);
-          ctx.fillRect(dx2+3, 12, 1, 5);
-        }
+        
         if (ground === T.SAND && decor < 12){
           if (decor < 6){
             ctx.fillStyle = '#4a3a20';
