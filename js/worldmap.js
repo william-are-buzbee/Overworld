@@ -20,8 +20,8 @@ const BIOME_COLORS = {
   fungal:   '#7744aa',
   wetland:  '#6b4c2a',
 };
-const UNEXPLORED_COLOR = '#1a1a1a';
-const GRID_COLOR       = '#0e0e0e';
+const UNEXPLORED_COLOR = '#111111';
+const GRID_COLOR       = '#2a2a2a';
 const MARKER_COLOR     = '#ffffff';
 
 // ---- Sizing ----
@@ -79,6 +79,7 @@ export function openMap() {
   if (state.gameState !== 'play') return;
   ensureMounted();
   mapOpen = true;
+  markCurrentCell();          // ← ensure current cell is revealed (covers spawn)
   drawMap();
   overlay.style.display = 'block';
 }
