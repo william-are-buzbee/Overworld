@@ -14,6 +14,7 @@ import { setOnVictoryCallback, toggleStealth } from './combat.js';
 import { useAction, showHelp, examineTile, readBook } from './interactions.js';
 import { openCharGen, renderCharGen, randomizeAttrs, beginGame, onPlayerDeath, onVictory } from './chargen.js';
 import { hasSave, tryResume, deleteSave } from './save-load.js';
+import { isMapOpen, toggleMap, closeMap, markCurrentCell } from './worldmap.js';
 
 // ==================== WIRE CALLBACKS ====================
 setUpdateUICallback(updateUI);
@@ -25,9 +26,11 @@ setOnVictoryCallback(() => { deleteSave(); onVictory(); });
 function safeDispatch(fn, ...args) {
   if (state.gameState !== 'play') return;
   if (modalEl.classList.contains('show')) return;
+  if (isMapOpen()) return;                 // ← world map blocks input
   if (state.inputLocked) return;          // ← prevents double-fire
   try {
     fn(...args);
+    markCurrentCell();                     // ← track exploration
   } catch (err) {
     console.error('[OverWorld Zero] Action failed:', err);
     // Unlock input so the player isn't softlocked
@@ -54,6 +57,7 @@ function canvasToWorld(ev) {
 canvas.addEventListener('click', (ev) => {
   if (state.gameState !== 'play' || modalEl.classList.contains('show')) return;
   if (state.inputLocked) return;
+  if (isMapOpen()) return;
   if (restartConfirmEl.style.display === 'flex') return;
 
   const { wx, wy } = canvasToWorld(ev);
@@ -156,6 +160,17 @@ document.addEventListener('keydown', (ev) => {
   }
 
   if (state.gameState !== 'play') return;
+
+  // World map overlay: M toggles, Escape closes, all else blocked while open
+  if (ev.key.toLowerCase() === 'm') {
+    ev.preventDefault();
+    toggleMap();
+    return;
+  }
+  if (isMapOpen()) {
+    if (ev.key === 'Escape') { closeMap(); ev.preventDefault(); }
+    return;   // block everything else while map is showing
+  }
 
   // N key: open restart confirmation
   if (ev.key.toLowerCase() === 'n') {

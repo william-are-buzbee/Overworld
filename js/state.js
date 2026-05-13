@@ -21,6 +21,11 @@ export const state = {
   // Default: facing south (down the screen).
   facing: { dx: 0, dy: 1 },
 
+  // ---- World map exploration (biome-grid scale) ----
+  // Set of "cx,cy" strings for target-map cells the player has visited.
+  // Persisted in the save system alongside other state.
+  exploredCells: new Set(),
+
   // ---- Field of Vision ----
   // fovSet: Set of "x,y" strings for tiles currently visible this turn.
   // Recomputed each player action; read by the renderer.
