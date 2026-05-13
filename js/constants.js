@@ -346,6 +346,23 @@ export const BIOME_PROFILES = {
     palette: 'fungal_grass',
     derived: { moisture: 0.45, elevation: 0.35, fungal: 0.65 },
   },
+  beach: {
+    groundPalette: { 7: 0.80, 2: 0.12, 57: 0.08 }, // beach 80%, sand 12%, dirt 8%
+    ground: 7,
+    scatter: 0.10,                             // occasional sand/dirt patches
+    noiseAmp: 0.25,
+    covers: [
+      { type: 53, chance: 0.03 },              // sparse boulders
+      { type: 54, chance: 0.04 },              // occasional rock outcrops
+    ],
+    coverScale: (coverType, density) => {
+      if (coverType === 1) return 0;           // no forest from cover blending
+      return null;
+    },
+    lakeChance: 0,
+    palette: 'beach',
+    derived: { moisture: 0.75, elevation: 0.12, fungal: 0 },
+  },
 };
 
 // ==================== BLEND TUNING ====================

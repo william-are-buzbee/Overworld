@@ -534,62 +534,6 @@ export function makeSurface(seed) {
     }
   }
 
-  // ---- Beach adjacency pass (land tiles next to water → beach) ----
-  // Only certain ground types convert to beach.  Mud, fungal grass, and rock
-  // naturally border water in their biomes and should stay as-is.
-  //
-  // Beach probability scales with the amount of water within a small radius.
-  // Isolated puddles (1–2 water tiles nearby) almost never produce beach;
-  // real shorelines (5+ water tiles) reliably do; large bodies (10+) always do.
-  const BEACH_ELIGIBLE = new Set([T.GRASS, T.SAND, T.DIRT]);
-  const BEACH_SCAN_RADIUS = 4;
-  for (let y = 0; y < H_SURF; y++) {
-    for (let x = 0; x < W_SURF; x++) {
-      const gt = grid[y][x];
-      if (!BEACH_ELIGIBLE.has(gt)) continue;
-      if (coverGrid[y][x]) continue;
-
-      // Must still be directly adjacent to at least one water tile
-      let adjacent = false;
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= W_SURF || ny >= H_SURF) continue;
-        if (grid[ny][nx] === T.WATER || grid[ny][nx] === T.DEEP_WATER) {
-          adjacent = true;
-          break;
-        }
-      }
-      if (!adjacent) continue;
-
-      // Count water tiles within the scan radius
-      let waterCount = 0;
-      for (let dy = -BEACH_SCAN_RADIUS; dy <= BEACH_SCAN_RADIUS; dy++) {
-        for (let dx = -BEACH_SCAN_RADIUS; dx <= BEACH_SCAN_RADIUS; dx++) {
-          if (dx * dx + dy * dy > BEACH_SCAN_RADIUS * BEACH_SCAN_RADIUS) continue;
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= W_SURF || ny >= H_SURF) continue;
-          const t = grid[ny][nx];
-          if (t === T.WATER || t === T.DEEP_WATER) waterCount++;
-        }
-      }
-
-      // Scale beach probability with nearby water density:
-      //   0–2  water tiles → 0%  (isolated puddle, no beach)
-      //   3–4  water tiles → ~15–30%  (small pond, rare beach)
-      //   5–9  water tiles → ~50–90%  (lake edge, likely beach)
-      //   10+  water tiles → 100% (real shoreline, guaranteed beach)
-      let beachProb;
-      if (waterCount <= 2)       beachProb = 0;
-      else if (waterCount >= 10) beachProb = 1;
-      else                       beachProb = (waterCount - 2) / 8; // linear 0→1 over 3–10
-
-      if (rand() < beachProb) {
-        grid[y][x] = T.BEACH;
-        coverGrid[y][x] = 0;
-      }
-    }
-  }
-
   // ---- Deep water pass: distance-from-shore via multi-source BFS ----
   // Initialise distance grid: 0 for every land tile, Infinity for water/deep water.
   const dist = new Int32Array(W_SURF * H_SURF);

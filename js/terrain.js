@@ -60,7 +60,7 @@ export const TERRAIN_INFO = {
   [T.ROAD]:      {name:'road',          sprite:'ROAD',       palette:'road',       walk:true,  cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
   [T.BEACH]:     {name:'beach',         sprite:'BEACH',      palette:'beach',      walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.FOREST,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
   [T.CAVE_WALL]: {name:'cave wall',     sprite:'CAVE_WALL',  palette:'cave_wall',  walk:false, cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
   [T.CAVE_FLOOR]:{name:'cave floor',    sprite:'CAVE_FLOOR', palette:'cave',       walk:true,  cover:0,   terrainLayer:'ground',
