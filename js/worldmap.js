@@ -41,12 +41,12 @@ overlay.width  = CANVAS_W;
 overlay.height = CANVAS_H;
 Object.assign(overlay.style, {
   position:        'absolute',
-  left:            '50%',
-  top:             '50%',
-  transform:       'translate(-50%, -50%)',
+  inset:           '0',
+  margin:          'auto',
+  width:           CANVAS_W + 'px',
+  height:          CANVAS_H + 'px',
   zIndex:          '15',           // above sidebar (5) & modal (10), below centered-screen (20)
   display:         'none',
-  imageRendering:  'pixelated',
   pointerEvents:   'none',         // clicks pass through — we block input via state flag
   border:          '3px solid #4a4a5a',
   outline:         '2px solid #000',
