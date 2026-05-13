@@ -105,6 +105,15 @@ export function markCurrentCell() {
 }
 
 // ---- Rendering ----
+// Grid-first approach: fill the entire grid rect with the border color,
+// then stamp each cell as an identically-sized inset rect.  Every cell
+// ends up with exactly (CELL_PX - 1) × (CELL_PX - 1) colored pixels
+// and a uniform 1px border on the right and bottom that comes from the
+// background showing through.  No per-cell border math, no separate
+// top/left pass, no rounding — just a flat uniform grid.
+
+const CELL_FILL = CELL_PX - 1;              // colored area per cell
+
 function drawMap() {
   const w = CANVAS_W, h = CANVAS_H;
 
@@ -122,53 +131,48 @@ function drawMap() {
   const ox = PAD;                   // grid origin x
   const oy = PAD + TITLE_H;        // grid origin y
 
-  // Cells
+  // 1) Fill entire grid area with border color (creates all grid lines)
+  octx.fillStyle = GRID_COLOR;
+  octx.fillRect(ox, oy, MAP_W, MAP_H);
+
+  // 2) Stamp each cell as an identically-sized inset rect
   for (let gy = 0; gy < BIOME_GRID_H; gy++) {
     for (let gx = 0; gx < BIOME_GRID_W; gx++) {
       const px = ox + gx * CELL_PX;
       const py = oy + gy * CELL_PX;
-      const key = `${gx},${gy}`;
-      const explored = state.exploredCells.has(key);
 
-      if (explored) {
+      if (state.exploredCells.has(`${gx},${gy}`)) {
         const biome = BIOME_TARGET[gy][gx].biome;
         octx.fillStyle = BIOME_COLORS[biome] || '#444444';
       } else {
         octx.fillStyle = UNEXPLORED_COLOR;
       }
-      octx.fillRect(px, py, CELL_PX, CELL_PX);
-
-      // 1px dark border (draw right and bottom edges)
-      octx.fillStyle = GRID_COLOR;
-      octx.fillRect(px + CELL_PX - 1, py, 1, CELL_PX);  // right
-      octx.fillRect(px, py + CELL_PX - 1, CELL_PX, 1);   // bottom
+      // Every cell gets exactly CELL_FILL × CELL_FILL pixels of color.
+      // The 1px gap on the right and bottom is the GRID_COLOR background.
+      octx.fillRect(px, py, CELL_FILL, CELL_FILL);
     }
   }
 
-  // Top and left grid borders
-  octx.fillStyle = GRID_COLOR;
-  octx.fillRect(ox, oy, MAP_W, 1);           // top
-  octx.fillRect(ox, oy, 1, MAP_H);           // left
-
-  // Player marker
+  // 3) Player marker — purely grid-based, no world-coordinate math
   const p = state.player;
   if (p && p.layer === LAYER_SURFACE) {
     const pcx = Math.floor(p.x / CELL_TILE_W);
     const pcy = Math.floor(p.y / CELL_TILE_H);
     if (pcx >= 0 && pcx < BIOME_GRID_W && pcy >= 0 && pcy < BIOME_GRID_H) {
-      const mx = ox + pcx * CELL_PX + CELL_PX / 2;
-      const my = oy + pcy * CELL_PX + CELL_PX / 2;
-      // Bright pulsing dot
+      // Center of the cell in canvas pixels (integer — CELL_PX is even)
+      const cx = ox + pcx * CELL_PX + (CELL_FILL >> 1);
+      const cy = oy + pcy * CELL_PX + (CELL_FILL >> 1);
+      // 7×7 outer ring → 5×5 inner ring → 3×3 bright core
       octx.fillStyle = MARKER_COLOR;
-      octx.fillRect(Math.floor(mx - 3), Math.floor(my - 3), 7, 7);
+      octx.fillRect(cx - 3, cy - 3, 7, 7);
       octx.fillStyle = '#000';
-      octx.fillRect(Math.floor(mx - 2), Math.floor(my - 2), 5, 5);
+      octx.fillRect(cx - 2, cy - 2, 5, 5);
       octx.fillStyle = MARKER_COLOR;
-      octx.fillRect(Math.floor(mx - 1), Math.floor(my - 1), 3, 3);
+      octx.fillRect(cx - 1, cy - 1, 3, 3);
     }
   }
 
-  // Hint text
+  // 4) Hint text
   octx.fillStyle = '#666666';
   octx.font = '8px "Press Start 2P", monospace';
   octx.textAlign = 'center';
