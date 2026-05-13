@@ -25,6 +25,7 @@ Prompt queue and task tracker. Check things off as they're done.
 - [x] Structure/landmark system using coordinates
 - [x] Implement "blend" variable for each biome on the target map to allow for more control
 - [x] Added minimap system (press M key)
+- [x] Removed visual grain effect and grass tile added noise (was not part of the ground tile sprite)
 
 ## Up Next
 - [ ] Create ability to generate dozens of underground levels (that are properly connected by entrances)
