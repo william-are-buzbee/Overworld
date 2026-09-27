@@ -6,7 +6,6 @@ import { rand, randi, randomRound } from './rng.js';
 import { FOOD, POTIONS, BOOKS, findWeapon, findArmor } from './items.js';
 import { restHealAmount, foodFedMul, INV_SLOTS, defaultWeight, deriveHP, addItem, bagFull, overWeight } from './player.js';
 import { getItems, removeItem, placeItem, generateItemId } from './ground-items.js';
-import { NPCS, TOWNS } from './npcs.js';
 import { inBounds, monsterAt, getFeature, isImpassable, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { updateUI } from './ui.js';
@@ -73,19 +72,7 @@ function attemptMove(dx, dy){
   state.player.x = nx; state.player.y = ny;
   state.player.movedThisTurn = true;  // Prompt L-A
   const f = getFeature(state.player.layer, nx, ny);
-  if (f){
-    if (f.type === 'sign') log('A signpost. Press R to read.', LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'npc'){ const n=NPCS[f.npcKey]; log(`${n.name} stands here. Press R.`, LOG_CATEGORIES.INTERACTION); }
-    else if (f.type === 'town') log(`Gates of ${TOWNS[f.townKey].name}. Press R to enter.`, LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'stairs') log(`Stairs ${f.dir}. Press R.`, LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'chest') log('A chest. Press R.', LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'book') log('A book. Press R to pick up.', LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'gate') log('Town gate. Press R to leave.', LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'shop_building') log(`${f.name}. Press R to enter.`, LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'well') log('A well. Press R.', LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'home') log('A home. Press R to knock.', LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'throne') log('A throne of bone and crowns.', LOG_CATEGORIES.INTERACTION);
-  }
+  if (f && f.type === 'stairs') log(`Stairs ${f.dir}.`, LOG_CATEGORIES.INTERACTION);  // only feature type still generated (underground, currently unreachable)
   endPlayerTurn('move');
 }
 

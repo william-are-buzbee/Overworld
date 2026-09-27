@@ -314,21 +314,4 @@ export function getAtmosphere(x, y) {
   };
 }
 
-// ==================== LANDMARKS ====================
-// Structures placed at biome-target-map scale.  Each entry defines:
-//   type  — identifier string matching a generator in LANDMARK_GENERATORS
-//   cells — array of target map coordinates this landmark occupies
-// During surface generation the landmark system calculates a world-tile
-// bounding box from the cells, clears cover in that footprint, and calls
-// the generator to stamp its tiles.
-export const LANDMARKS = [
-  // DISABLED — legacy content
-  // {
-  //   type: 'village',
-  //   cells: [
-  //     { x: 4, y: 4 }, { x: 5, y: 4 },
-  //     { x: 4, y: 5 }, { x: 5, y: 5 },
-  //   ],
-  // },
-];
 
