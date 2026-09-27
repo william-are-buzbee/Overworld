@@ -7,7 +7,7 @@
 import { state, worlds, monsters } from './state.js';
 import { getBodyMap, getNeuralArchitecture,
          BASE_AP_COST, MAX_ACTIONS_PER_INPUT, REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
-         HEAL_BASE_RATE, HEAL_REST_MULTIPLIER, REGEN_FRACTION,
+         HEAL_BASE_RATE, HEAL_REST_MULTIPLIER,
          SUBSTRATE_DEPLETION_MOD, SUBSTRATE_DEPLETION_HIGH, SUBSTRATE_REGEN_BASE,
          CIRC_REGEN_EFF_CLOSED, CIRC_REGEN_EFF_OPEN, CIRC_REGEN_EFF_HYBRID,
          VASCULARITY_MIN, REGEN_UPREGULATION, FAST_TWITCH_RECRUIT_THRESHOLD,
@@ -94,7 +94,11 @@ function updateCreatureActivity(creature, player) {
 /**
  * Advance a dormant creature's state to be plausible when it wakes up.
  * Uses the same rates as the real simulation — no separate hardcoded values.
- * Never kills the creature — death events only happen during full simulation.
+ * Blood is NOT touched here: processBleed runs every turn for dormant
+ * creatures too (see the classification loop in endPlayerTurn), so seep,
+ * clotting, regeneration and blood-loss death happen at the real rate while
+ * the creature is out of range. A creature that bled out 60 tiles away is
+ * dead, not healthy when you walk back.
  */
 function catchUpCreature(creature) {
   const turns = creature._dormantTurns;
@@ -136,28 +140,17 @@ function catchUpCreature(creature) {
     }
   }
 
-  // 3. Regenerate blood (same rate as processBleed regen)
-  if (creature.blood != null && creature.bloodMax != null && creature.bloodMax > 0) {
-    if (creature.blood < creature.bloodMax) {
-      const regenPerTurn = creature.bloodMax * REGEN_FRACTION;
-      creature.blood = Math.min(creature.bloodMax, creature.blood + regenPerTurn * turns);
-    }
-  }
+  // 3. Blood and clotting: handled per turn by processBleed while dormant.
 
-  // 4. Clot wounds — after enough turns, all wounds are fully clotted
-  if (turns > 20) {
-    const bodyMap = getBodyMap(creature);
-    if (bodyMap) {
-      for (const zone of bodyMap) {
-        if (zone.clotting !== undefined) {
-          zone.clotting = 1.0;
-        }
-      }
-    }
-  }
+  // 4. Stress chemistry cleared for the time away (same rate as clearance
+  //    per input; a dormant creature ran no clearance while out of range).
+  _clearStressChemistry(creature, turns);
 
   // 5. Drift position — dormant creatures weren't actually frozen, they were wandering
   driftPosition(creature, turns);
+
+  // 5b. No banked action points: it should not burst on waking.
+  creature._accumulatedAP = 0;
 
   // 6. Reset rest drive — if dormant long enough, the creature rested fully
   if (creature.drives && turns > 10) {
@@ -500,6 +493,11 @@ function endPlayerTurn(action){
       if (m.hp <= 0) continue;
       if (updateCreatureActivity(m, player)) {
         activeCreatures.push(m);
+      } else if (processBleed(m, false)) {
+        // Dormant creatures still bleed (and clot, and regenerate) at the
+        // real rate; a zone loop per creature is cheap. Only AI, detection
+        // and movement are skipped while out of range.
+        m.hp = 0;  // blood loss death
       }
     }
 
