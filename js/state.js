@@ -53,7 +53,40 @@ export const state = {
   // A creature detecting airborne scent knows the source is toward windDirection.
   windDirection: 4,   // default: wind from the west
   windSpeed: 1,       // 0=still, 1=light, 2=moderate, 3=strong
+
+  // ---- Layer-transition tracking (dormancy catch-up, turn-loop.js) ----
+  // prevLayer: the layer the player was on last turn. layerLeftTurn: layer →
+  // turnCount when the player left it. Saved, so catch-up survives a reload.
+  prevLayer: null,
+  layerLeftTurn: {},
+
+  // ---- World seed (chargen.js sets it; logged so a run can be replayed) ----
+  worldSeed: null,
 };
+
+/**
+ * Reset every per-run field on state to its new-game value. Called by
+ * beginGame before the world is generated, so a NEW GAME after a death does
+ * not inherit the last run's explored tiles, clock, wind, facing or layer
+ * tracking. Does not touch player (beginGame builds a fresh one) or the
+ * world stores below (initWorld clears those).
+ */
+export function resetRunState() {
+  state.turnCount = 0;
+  state.worldTick = 0;
+  state.lookMode = false;
+  state.facing = { dx: 0, dy: 1 };
+  state.exploredCells = new Set();
+  state.fovSet = null;
+  state.monocularSet = null;
+  state.explored = {};
+  state.activeLayer = null;
+  state.windDirection = 4;
+  state.windSpeed = 1;
+  state.prevLayer = null;
+  state.layerLeftTurn = {};
+  state.worldSeed = null;
+}
 
 // ==================== SPARSE WORLD STORAGE ====================
 // worlds is now an Object keyed by layerIndex (number → 2-D grid).

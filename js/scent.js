@@ -69,6 +69,14 @@ const _airborneScent = {};
 const _selfGroundScent = {};
 const _selfAirborneScent = {};
 
+/** Empty every scent map. Called on new game and on load, so a plume from a
+ *  previous run (or a stale in-page state) never leaks into the next one. */
+export function resetScent() {
+  for (const m of [_groundScent, _airborneScent, _selfGroundScent, _selfAirborneScent]) {
+    for (const k of Object.keys(m)) delete m[k];
+  }
+}
+
 function _getGroundMap(layer) {
   if (!_groundScent[layer]) _groundScent[layer] = new Map();
   return _groundScent[layer];
