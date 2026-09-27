@@ -33,8 +33,12 @@ is a test page.
 
 Modules don't load from `file://`, so serve the folder: `npx serve .` or `python3 -m http.server`, then open `index.html`.
 Add `?seed=<n>` to the URL for a reproducible world (the seed is logged at the start of a
-run). There are no automated tests; the check is playing it. From a cloud session the page can be opened in the pre-installed
-Chromium (Playwright) and screenshotted; the person's own check is the pull request's preview link (below).
+run). Two automated checks run on every pull request (`.github/workflows/check.yml`): `node tools/check-modules.mjs` (every
+module parses, every import resolves; no dependencies) and `node tools/smoke.mjs` (boots the game headless, plays, saves,
+reloads, checks seed determinism; needs Playwright, which the job installs and which a cloud session already has at
+`/opt/node22/lib/node_modules/playwright`, passed as `PLAYWRIGHT_MODULE`). They catch breakage, not design: the real check is
+playing it. From a cloud session the page can be opened in the pre-installed Chromium (Playwright) and screenshotted; the
+person's own check is the pull request's preview link (below).
 
 ## Delivering a change
 
