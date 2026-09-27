@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // smoke.mjs — boots the game in headless Chromium and plays a few turns.
 // Serves the repo root on a local port with node's http module (no dependency),
-// drives the title → species → play flow by keyboard (waiting for play state AND a
-// restored world grid, since loadGame sets gameState before the grids), checks that the world
+// drives the title → species → play flow by keyboard, checks that the world
 // generated, the player can move, autosave survives a reload, and the same
 // ?seed= gives the same world. Any page error or console error fails the run.
 //
@@ -32,6 +31,18 @@ await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 const problems = [];
+// Poll from here rather than page.waitForFunction: the predicate needs a dynamic
+// import (a promise), and on the resume path loadGame sets gameState before it
+// restores the grids, so wait for play state AND a player AND the surface grid.
+async function waitForPlay(page, timeoutMs = 30000) {
+  const t0 = Date.now();
+  for (;;) {
+    const ok = await page.evaluate(async () => { const m = await import('./js/state.js'); return m.state.gameState === 'play' && !!m.state.player && Array.isArray(m.worlds[0]); });
+    if (ok) return;
+    if (Date.now() - t0 > timeoutMs) throw new Error('game did not reach play state with a world within ' + timeoutMs + ' ms');
+    await page.waitForTimeout(100);
+  }
+}
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
 async function newGame(seed) {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
@@ -44,7 +55,7 @@ async function newGame(seed) {
   await page.keyboard.press('ArrowDown');  // select first species
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');      // begin
-  await page.waitForFunction(async () => (async () => { const m = await import('./js/state.js'); return m.state.gameState === 'play' && !!m.state.player && Array.isArray(m.worlds[0]); })(), null, { timeout: 30000 });
+  await waitForPlay(page);
   await page.waitForTimeout(300);
   return page;
 }
@@ -71,7 +82,7 @@ try {
   await a.waitForTimeout(1200);                         // let the autosave land
   await a.reload({ waitUntil: 'load' }); await a.waitForTimeout(800);
   await a.keyboard.press('Enter');                      // CONTINUE
-  await a.waitForFunction(async () => (async () => { const m = await import('./js/state.js'); return m.state.gameState === 'play' && !!m.state.player && Array.isArray(m.worlds[0]); })(), null, { timeout: 30000 });
+  await waitForPlay(a);
   const s2 = await snap(a);
   check(s2.turn === s1.turn && s2.x === s1.x && s2.y === s1.y, `resume did not restore the run (turn ${s1.turn}→${s2.turn}, pos ${s1.x},${s1.y}→${s2.x},${s2.y})`);
   const b = await newGame(7);
