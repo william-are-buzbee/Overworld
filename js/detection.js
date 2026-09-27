@@ -24,10 +24,10 @@ import { getBodyMap,
          MOTION_SIGNAL_MOVING, MOTION_SIGNAL_STILL,
          CONTRAST_FLOOR, BRIGHTNESS_CONTRAST_WEIGHT, HUE_MISMATCH_PENALTY,
          BLEED_CONTRAST_BONUS, BLEED_VISUAL_SATURATION,
-         getIntegument,
+         getIntegument, getVisualAcuity, getVisualConfig,
        } from './constants.js';
 import { currentTimePhase } from './time-cycle.js';
-import { hasLOS } from './fov.js';
+import { hasLOS, EYE_OFFSETS, isInEyeField } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { stealthDetectChance, rollHit } from './combat.js';
 import { roll100 } from './rng.js';
@@ -190,7 +190,7 @@ function getDominantSenseChannel(creature) {
       if ((vib.air || 0) > bestVibA) bestVibA = vib.air;
     }
     // Visual
-    const visVal = (zone.transducers && zone.transducers.visual) || 0;
+    const visVal = getVisualAcuity(zone);
     if (visVal > bestVis) bestVis = visVal;
   }
 
@@ -283,24 +283,45 @@ function facingToAngle(facing) {
 }
 
 function isInVisionCone(detector, target) {
-  const coneWidth = detector.visionConeWidth || 120;
-  // 360° or wider = omnidirectional, always in cone
-  if (coneWidth >= 360) return true;
   // No facing data = omnidirectional
   if (!detector.facing) return true;
+  const facingAngleDeg = facingToAngle(detector.facing);
 
-  const halfCone = coneWidth / 2;
+  // Visual field from the body map (Per-Eye-Visual-Field-Design): every
+  // surviving zone with a visual transducer is a pair of eyes at
+  // ±EYE_OFFSETS[placement] from facing, each covering fieldAngle. The target
+  // is in view if any eye's arc contains it. This is the same geometry the
+  // player's FOV uses in fov.js, so a hare's lateral 170° eyes give it a ~330°
+  // field and a prowler's forward 120° eyes give it ~160°. Destroy the zone
+  // carrying the eyes and that part of the field is gone.
+  const bodyMap = getBodyMap(detector);
+  let hasEyeZone = false;   // any zone with eyes, destroyed or not
+  if (bodyMap) {
+    for (const zone of bodyMap) {
+      const cfg = getVisualConfig(zone);
+      if (!cfg || cfg.acuity <= 0) continue;
+      hasEyeZone = true;
+      if (zone.destroyed) continue;   // eyes gone with the zone
+      if (cfg.fieldAngle >= 360) return true;
+      const offset = EYE_OFFSETS[cfg.placement] ?? EYE_OFFSETS.forward;
+      const half = cfg.fieldAngle / 2;
+      if (isInEyeField(detector.x, detector.y, target.x, target.y, facingAngleDeg + offset, half)) return true;
+      if (isInEyeField(detector.x, detector.y, target.x, target.y, facingAngleDeg - offset, half)) return true;
+    }
+  }
+  if (hasEyeZone) return false;   // had eyes; none surviving covers the target
 
+  // No body-map eyes at all (legacy creature): single forward cone from the species
+  // table, as before. (The old code read detector.visionConeWidth, which was
+  // never assigned, so every creature got 120°.)
+  const coneWidth = detector.coneAngle || 120;
+  if (coneWidth >= 360) return true;
   const dx = target.x - detector.x;
   const dy = target.y - detector.y;
   const angleToTarget = Math.atan2(dy, dx) * (180 / Math.PI);
-
-  const facingAngleDeg = facingToAngle(detector.facing);
-
-  let diff = Math.abs(angleToTarget - facingAngleDeg);
+  let diff = Math.abs(angleToTarget - facingAngleDeg) % 360;
   if (diff > 180) diff = 360 - diff;
-
-  return diff <= halfCone;
+  return diff <= coneWidth / 2;
 }
 
 /**
@@ -348,10 +369,8 @@ function computeEffectiveConcealment(target) {
   let concealment = coverData.concealment * coverRatio;
 
   // Motion reduces concealment: grass rustling, branches moving, etc.
-  // Check if the creature moved this turn by comparing current vs previous position.
-  const isMoving = (target.prevX != null && target.prevY != null &&
-                    (target.prevX !== target.x || target.prevY !== target.y));
-  if (isMoving) {
+  // (Was a prevX/prevY comparison; nothing ever set those, so it never fired.)
+  if (_isTargetMoving(target)) {
     concealment *= MOTION_CONCEALMENT_REDUCTION;
   }
 
@@ -443,7 +462,7 @@ function getDetectionRange(creature) {
       if ((vib.ground || 0) > bestVibG) bestVibG = vib.ground;
       if ((vib.air || 0) > bestVibA) bestVibA = vib.air;
     }
-    const visVal = (zone.transducers && zone.transducers.visual) || 0;
+    const visVal = getVisualAcuity(zone);
     if (visVal > bestVis) bestVis = visVal;
   }
   // Rough estimate using typical emission values — for debug display only
@@ -1140,12 +1159,13 @@ function computePlayerPerception() {
           }
         }
       }
-      // Visual detection failed — creature blends into background on this FOV tile.
-      // Don't add to _visuallyDetected; renderer will skip it.
-      continue;
+      // Visual detection failed — creature blends into background on this FOV
+      // tile. Not added to _visuallyDetected (the renderer will not draw it),
+      // but it can still be felt: fall through to the non-visual senses exactly
+      // as a creature outside the field of view would be.
     }
 
-    // ── Non-visual detection for creatures outside FOV (unchanged) ──
+    // ── Non-visual detection (creatures outside FOV, or unseen inside it) ──
     const detections = detectTargetPerZone(player, creature);
     if (!detections) continue;
 

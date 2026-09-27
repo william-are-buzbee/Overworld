@@ -330,6 +330,8 @@ Fully replaced. The `VISION_PROFILES` constant becomes unnecessary — all visua
 
 NPC vision computations that currently read from `VISION_PROFILES` (for cone angle, vision type) need to be updated to read from the creature's body map visual transducers instead.
 
+*Status (Sep 2026):* done for the cone test. `isInVisionCone` in `detection.js` builds the field from every surviving zone's visual transducer (two eyes at `±EYE_OFFSETS[placement]`, each `fieldAngle` wide, the same geometry as the player's FOV). `VISION_PROFILES.coneAngle` is only a fallback for creatures with no body map; `visionType` is still used to decide whether a creature has a facing at all.
+
 ---
 
 ## What This Document Does NOT Cover
@@ -352,7 +354,7 @@ NPC vision computations that currently read from `VISION_PROFILES` (for cone ang
 3. Per-eye field computation replacing single creature-level cone
 4. Three-tier rendering (binocular → monocular → ambient → black)
 5. Removal of `VISION_PROFILES` dependency from player FOV
-6. NPC vision updated to read from body map
+6. NPC vision updated to read from body map — done (cone test; NPC visual *range* still uses the best acuity across zones, see Code-Audit-2026-09 §3)
 
 **Deferred:**
 - Binocular SNR multiplier for entity detection (requires coordination with Sensory-Design.md's detection refactor)

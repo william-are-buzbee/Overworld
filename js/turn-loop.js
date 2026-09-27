@@ -43,7 +43,8 @@ export function setUseActionCallback(fn){ _useActionCallback = fn; }
 
 function monstersHere(){ return monsters[state.player.layer] || []; }
 
-let turnCount = 0;
+// The turn counter lives on state.turnCount (saved, and read by log.js and
+// scent.js). It used to be shadowed by a module-local that nothing else saw.
 
 // ── Layer-transition tracking for dormancy catch-up (Prompt S) ──
 // When the player leaves a layer, we record the turn count.  When they return,
@@ -262,7 +263,7 @@ function endPlayerTurn(action){
   player.integrationCapacity = computeIntegrationCapacity(player);
   player.tier = getTier(player.integrationCapacity);
 
-  turnCount++;
+  state.turnCount++;
 
   // ── Player acceleration tracking (mass-dependent startup) ──
   // Must run BEFORE AP calculation so first turn of movement isn't at 0.
@@ -459,9 +460,11 @@ function endPlayerTurn(action){
     state.player._sprintWarnedLow = false;
   }
 
-  // Reset player per-turn flags AFTER signals are computed (Prompt L-A).
-  // They'll be set again during the player's next action.
-  state.player.movedThisTurn = false;
+  // Reset the player's combat flag AFTER signals are computed (Prompt L-A).
+  // movedThisTurn is NOT reset here: the creature loop below reads it (a
+  // moving player is what their eyes pick up) and so does the player's scent
+  // deposit. It is reset at the very end of the turn and set again by the next
+  // move action.
   state.player.inCombatThisTurn = false;
 
   // ── Prompt S: layer-transition catch-up ──
@@ -470,10 +473,10 @@ function endPlayerTurn(action){
   const currentLayer = state.player.layer;
   if (_prevLayer != null && _prevLayer !== currentLayer) {
     // Record when we left the previous layer
-    _layerLeftTurn[_prevLayer] = turnCount;
+    _layerLeftTurn[_prevLayer] = state.turnCount;
     // If returning to a layer we've visited before, catch up its creatures
     if (_layerLeftTurn[currentLayer] != null) {
-      const turnsAway = turnCount - _layerLeftTurn[currentLayer];
+      const turnsAway = state.turnCount - _layerLeftTurn[currentLayer];
       if (turnsAway > 0) {
         const layerMons = monsters[currentLayer] || [];
         for (const m of layerMons) {
@@ -592,6 +595,7 @@ function endPlayerTurn(action){
   updateScentSystem(state.activeLayer);  // scent emission, transport, and player detection (log after vision)
   computePlayerPerception();  // Prompt N: detect creatures through non-visual senses
   render();
+  state.player.movedThisTurn = false;  // set again by the next move action
   saveGame().catch(err => console.error('[Save] Auto-save failed:', err));  // Async fire-and-forget
 }
 
