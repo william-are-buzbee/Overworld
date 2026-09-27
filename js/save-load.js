@@ -18,6 +18,7 @@ function log(text, category) {
   _rawLog(text, category);
 }
 import { updatePlayerFOV } from './fov.js';
+import { rand, getRngState, setRngState } from './rng.js';
 
 const SAVE_KEY = 'overworld_zero_save';
 const SAVE_VERSION = 4;
@@ -591,9 +592,9 @@ function deserializeMonsters(allLayers) {
         // Prompt I-A: ensure drive/wander state exists (backward compat for old saves)
         if (!mon.drives) {
           mon.drives = {
-            hunger: 0.15 + Math.random() * 0.30,
+            hunger: 0.15 + rand() * 0.30,
             safety: 0.0,
-            rest: Math.random() * 0.15,
+            rest: rand() * 0.15,
           };
         }
         if (!mon.wanderProfile) {
@@ -608,8 +609,8 @@ function deserializeMonsters(allLayers) {
           const wp = mon.wanderProfile || DEFAULT_WANDER_PROFILE;
           const [minP, maxP] = wp.persistenceRange;
           mon.wander = {
-            direction: Math.floor(Math.random() * 8),
-            persistence: minP + Math.floor(Math.random() * (maxP - minP + 1)),
+            direction: Math.floor(rand() * 8),
+            persistence: minP + Math.floor(rand() * (maxP - minP + 1)),
             pauseTimer: 0,
           };
         }
@@ -695,6 +696,7 @@ export async function saveGame() {
         gameState: state.gameState,
         worldSeed: state.worldSeed,
         cgAttrs: state.cgAttrs,
+        rngState: getRngState(),
       },
 
       // World grids — Object keyed by layerIndex, values are 2D arrays
@@ -827,6 +829,7 @@ export async function loadGame() {
     state.gameState   = 'play';
     state.inputLocked = false;
     if (savedState.worldSeed != null) state.worldSeed = savedState.worldSeed;
+    if (savedState.rngState != null) setRngState(savedState.rngState);
     if (savedState.cgAttrs) {
       state.cgAttrs = needsStatMigration ? migrateCgAttrs(savedState.cgAttrs) : savedState.cgAttrs;
     }

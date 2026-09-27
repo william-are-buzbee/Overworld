@@ -6,6 +6,7 @@
 //   { id, type, name, sprite, quantity }
 
 import { groundItems } from './state.js';
+import { rand } from './rng.js';
 
 // ==================== ID GENERATION ====================
 
@@ -18,8 +19,8 @@ let _idCounter = 0;
  */
 export function generateItemId() {
   _idCounter++;
-  const rand = ((Math.random() * 0xffff) | 0).toString(16);
-  return `gi_${_idCounter}_${rand}`;
+  const suffix = ((rand() * 0xffff) | 0).toString(16);
+  return `gi_${_idCounter}_${suffix}`;
 }
 
 // ==================== CORE API ====================

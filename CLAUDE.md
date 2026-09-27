@@ -32,7 +32,8 @@ is a test page.
 ## Run and look
 
 Modules don't load from `file://`, so serve the folder: `npx serve .` or `python3 -m http.server`, then open `index.html`.
-There are no automated tests; the check is playing it. From a cloud session the page can be opened in the pre-installed
+Add `?seed=<n>` to the URL for a reproducible world (the seed is logged at the start of a
+run). There are no automated tests; the check is playing it. From a cloud session the page can be opened in the pre-installed
 Chromium (Playwright) and screenshotted; the person's own check is the pull request's preview link (below).
 
 ## Delivering a change

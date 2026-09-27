@@ -18,6 +18,7 @@ import { inBounds, getCover } from './world-state.js';
 import { T, terrainInfo, tileBlocksVision, isWaterGround } from './terrain.js';
 import { getBodyMap, SCENT_PROFILES } from './constants.js';
 import { log, LOG_CATEGORIES } from './log.js';
+import { rand } from './rng.js';
 import {
   GROUND_EMISSION_BASE, AIRBORNE_EMISSION_BASE, BLOOD_EMISSION_MULT,
   AIRBORNE_DECAY_RATE, ADVECTION_RATE, SPREAD_RATE, SCENT_FLOOR,
@@ -132,12 +133,12 @@ const COMPASS_NAMES = ['east','southeast','south','southwest','west','northwest'
  */
 function _updateWind() {
   // Small chance of direction shift each turn
-  if (Math.random() < 0.03) {
-    state.windDirection = (state.windDirection + (Math.random() < 0.5 ? 1 : 7)) % 8;
+  if (rand() < 0.03) {
+    state.windDirection = (state.windDirection + (rand() < 0.5 ? 1 : 7)) % 8;
   }
   // Small chance of speed change
-  if (Math.random() < 0.05) {
-    const delta = Math.random() < 0.5 ? 1 : -1;
+  if (rand() < 0.05) {
+    const delta = rand() < 0.5 ? 1 : -1;
     state.windSpeed = Math.max(0, Math.min(3, state.windSpeed + delta));
   }
 }

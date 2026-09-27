@@ -21,7 +21,7 @@ import { getBodyMap, getAvailableAttacks, computeStrikeDamage,
          THREAT_CONF_SIZE_LARGER, THREAT_CONF_SIZE_AMBIGUOUS,
          STRESS_NEURAL_SENSITIVITY, STRESS_MAX } from './constants.js';
 import { chebyshev } from './world-state.js';
-import { randi } from './rng.js';
+import { rand, randi } from './rng.js';
 import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward } from './ai-utils.js';
 import { getDominantSenseChannel, getAdjacentPrey } from './detection.js';
@@ -731,7 +731,7 @@ function canOverrideReactive(creature, reactiveMagnitude) {
   const ratio = overrideCapacity / threshold;
   if (ratio >= 1.0) return true;
   if (ratio <= 0) return false;
-  return Math.random() < ratio;
+  return rand() < ratio;
 }
 
 /** Run deliberative evaluation when override succeeds. */
