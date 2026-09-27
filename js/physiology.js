@@ -31,7 +31,9 @@ import { log } from './log.js';
  * @param {number} [intensity] — movement intensity (0-1). Controls fast-twitch recruitment.
  *   Below FAST_TWITCH_RECRUIT_THRESHOLD: fast-twitch not recruited (walking — slow-twitch only).
  *   At or above threshold: fast-twitch contributes proportional to substrate.
- *   null/undefined (NPC path): uses existing behavior (full substrate contribution).
+ *   null/undefined: treated as below threshold (at rest / walking — slow-twitch only).
+ *   NPC callers pass getMovementIntensity(creature) so the same body under NPC
+ *   and player control produces the same force-to-weight at the same intensity.
  */
 function getBodyPTW(entity, intensity) {
   const bodyMap = getBodyMap(entity);
@@ -63,13 +65,11 @@ function getBodyPTW(entity, intensity) {
           const substrateFraction = (zone.substrateMax > 0)
             ? (zone.substrate || 0) / zone.substrateMax : 0;
           fastForce = fastMass * substrateFraction;
-        } else if (intensity == null) {
-          // NPC path — use existing logic (substrate always contributes)
-          const substrateFraction = (zone.substrateMax > 0)
-            ? (zone.substrate || 0) / zone.substrateMax : 0;
-          fastForce = fastMass * substrateFraction;
         }
-        // intensity < threshold → fast-twitch not recruited → fastForce stays 0
+        // intensity < threshold (or not given) → fast-twitch not recruited →
+        // fastForce stays 0. (An old NPC-only branch counted fast-twitch force
+        // whenever intensity was omitted, making NPCs ~1.5× faster than the
+        // same body walking under player control.)
 
         totalLocoForce += fastForce + slowForce;
       } else {
@@ -127,26 +127,29 @@ function _getCirculatoryRegenEfficiency(entity) {
  * Moderate intensity (wander, forage, maintain_distance): partial recruitment.
  * No depletion for hold, rest, orient, or if creature didn't move.
  */
+/**
+ * Movement intensity (0-1) of a creature's last action. Ganglion creatures
+ * report it directly. Reactive-rule creatures are read from their behaviour
+ * label — a PLACEHOLDER for the motor layer (Motor-System-Design steps 3-5),
+ * which will carry intensity on the pathway itself. One reading, used by
+ * force-to-weight, substrate depletion and substrate regeneration alike.
+ */
+function getMovementIntensity(creature) {
+  if (creature._lastGanglionIntensity != null) return creature._lastGanglionIntensity;
+  const behavior = creature.currentBehavior;
+  if (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt') return 1.0;
+  if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance') return 0.25;
+  return 0;
+}
+
 function _depleteLocomotionSubstrate(creature) {
   if (!creature.movedThisTurn) return;
 
   const bodyMap = getBodyMap(creature);
   if (!bodyMap) return;
 
-  // Use ganglion intensity if available, otherwise fall back to behavior label
-  let intensityFactor;
-  if (creature._lastGanglionIntensity != null) {
-    intensityFactor = creature._lastGanglionIntensity;
-  } else {
-    const behavior = creature.currentBehavior;
-    if (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt') {
-      intensityFactor = 1.0;
-    } else if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance') {
-      intensityFactor = 0.25;
-    } else {
-      return;
-    }
-  }
+  const intensityFactor = getMovementIntensity(creature);
+  if (intensityFactor <= 0) return;
 
   // Fast-twitch fibers only recruit above a minimum intensity.
   // Below this threshold, locomotion is fully aerobic — slow-twitch only, zero substrate cost.
@@ -208,15 +211,7 @@ function _regenerateSubstrate(creature, ticks) {
     // to recruit fast-twitch fibers. Below the threshold the system is fully
     // aerobic — regen proceeds as if the zone were at rest.
     if (zone.locomotion && creature.movedThisTurn) {
-      let intensity;
-      if (creature._lastGanglionIntensity != null) {
-        intensity = creature._lastGanglionIntensity;
-      } else {
-        const behavior = creature.currentBehavior;
-        intensity = (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt')
-          ? 1.0 : 0.25;
-      }
-      if (intensity >= FAST_TWITCH_RECRUIT_THRESHOLD) continue;
+      if (getMovementIntensity(creature) >= FAST_TWITCH_RECRUIT_THRESHOLD) continue;
     }
 
     // Vascularity: oxidative fibers correlate with capillary density.
@@ -436,11 +431,13 @@ function applyTurningCost(creature, facingStepsChanged) {
   // 1 facing step (45°) = minor correction, 4 steps (180°) = full reversal
   const massScalar = Math.max(0, 1.0 - (totalMass / 200)); // 0 at 200kg, 1 at 0kg
   const retained = Math.max(0, 1.0 - (facingStepsChanged / 4) * (1 - massScalar));
-  creature._consecutiveMoveTurns = Math.floor(creature._consecutiveMoveTurns * retained);
+  // Keep the fraction. Flooring turned a 3% momentum cost at 1 consecutive
+  // move into a full reset, so any turn cost a whole acceleration turn.
+  creature._consecutiveMoveTurns = creature._consecutiveMoveTurns * retained;
 }
 
 // ==================== EXPORTS ====================
-export { getBodyPTW, _getCirculatoryEfficiency, _getCirculatoryRegenEfficiency,
+export { getBodyPTW, getMovementIntensity, _getCirculatoryEfficiency, _getCirculatoryRegenEfficiency,
          _depleteLocomotionSubstrate, _regenerateSubstrate,
          processBleed, getHealingRate, applyHealing,
          _releaseStressChemistry, _clearStressChemistry,

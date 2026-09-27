@@ -886,21 +886,26 @@ function monsterMelee(mon){
     log(`${mon.name} misses.`, LOG_CATEGORIES.COMBAT);
     return;
   }
-  let base = monDamage(mon) + randi(3);
+  // Pick the attack first so damage comes from the zone that actually strikes.
+  // (monDamage(mon) with no zone used attacks[0], so a rear-leg kick was
+  // resolved with the front limb's shove damage and vice versa.)
+  const playerBodyMap = getBodyMap(player);
+  let contactedZones = null;
+  let usedAttack = null;
+  let attackingZone = null;
+  if (availableAttacks.length > 0) {
+    usedAttack = availableAttacks[randi(availableAttacks.length)];
+    attackingZone = monBodyMap.find(z => z.key === usedAttack.sourceZone);
+  }
+
+  let base = monDamage(mon, attackingZone) + randi(3);
   const crit = roll100() <= monCritChance(mon);
   if (crit) base = Math.floor(base * monCritMult(mon));
   const effDef = Math.max(0, playerDef(player));
   let dmg = Math.max(1, base - effDef);
 
   // ─── Footprint-based zone resolution on player ───
-  const playerBodyMap = getBodyMap(player);
-  let contactedZones = null;
-  let usedAttack = null;
-  let attackingZone = null;
-
-  if (playerBodyMap && availableAttacks.length > 0) {
-    usedAttack = availableAttacks[randi(availableAttacks.length)];
-    attackingZone = monBodyMap.find(z => z.key === usedAttack.sourceZone);
+  if (playerBodyMap && usedAttack) {
 
     const defFacing = state.facing || { dx: 0, dy: 1 };
     const attackDir = getAttackDirection(

@@ -30,7 +30,7 @@ import { updateScentSystem } from './scent.js';
 import { getBodyPTW, processBleed, applyHealing,
          _getCirculatoryRegenEfficiency, _regenerateSubstrate,
          _clearStressChemistry,
-         turnsToFullSpeed, getEntityTotalMass, applyTurningCost } from './physiology.js';
+         turnsToFullSpeed, getEntityTotalMass, applyTurningCost, getMovementIntensity } from './physiology.js';
 import { runCreatureAI, _updateInWater } from './ai.js';
 import { isWaterTile, isWaterLocked, wouldExceedTerritory, WATER_TILES,
          rebuildSpatialGrid, canMoveTo } from './ai-utils.js';
@@ -540,7 +540,7 @@ function endPlayerTurn(action){
       const creatureAccelScalar = rawConsecutive > 0
         ? Math.min(1.0, rawConsecutive / creatureTTFS)
         : 1.0;
-      const creaturePTW = getBodyPTW(m);
+      const creaturePTW = getBodyPTW(m, getMovementIntensity(m));  // same rule as the player
       const speedRatio = (creaturePTW * creatureAccelScalar) / effectivePlayerRate;
       m._accumulatedAP = (m._accumulatedAP || 0) + speedRatio * BASE_AP_COST;
 

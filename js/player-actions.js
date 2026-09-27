@@ -65,6 +65,11 @@ function attemptMove(dx, dy){
   const ground = worlds[state.player.layer][ny][nx];
   const cover = getCover(state.player.layer, nx, ny);
   if (!isWalkable(ground, cover)){ log(`Blocked by ${terrainName(ground, cover)}.`, LOG_CATEGORIES.MOVEMENT); return; }
+  // No surviving locomotion zone: the body cannot carry itself. Facing has
+  // already turned (the head still works) and bump-attacks above still
+  // resolve; only the step is refused. Set in combat resolution when the last
+  // locomotion zone is destroyed; the same flag NPCs obey in ai.js.
+  if (state.player.immobilized){ log('You strain, but nothing that could carry you remains.', LOG_CATEGORIES.MOVEMENT); return; }
   state.player.x = nx; state.player.y = ny;
   state.player.movedThisTurn = true;  // Prompt L-A
   const f = getFeature(state.player.layer, nx, ny);

@@ -7,7 +7,7 @@ import { getBodyMap, getNeuralArchitecture,
          VASCULARITY_MIN, REGEN_UPREGULATION, SUBSTRATE_REGEN_BASE } from './constants.js';
 import { getDominantSenseChannel, getBestChemicalAirborne,
          getEffectiveVisual, getDetectionRange } from './detection.js';
-import { getBodyPTW, _getCirculatoryRegenEfficiency } from './physiology.js';
+import { getBodyPTW, getMovementIntensity, _getCirculatoryRegenEfficiency } from './physiology.js';
 import { monstersHere } from './turn-loop.js';
 
 // ==================== DEBUG / TESTING HELPERS ====================
@@ -106,7 +106,7 @@ function debugCognition() {
       system: getNeuralArchitecture(m) ? 'GANGLION' : 'REACTIVE',
       IC: ic,
       domSense: dom.type,
-      apRate: getBodyPTW(m).toFixed(4),
+      apRate: getBodyPTW(m, getMovementIntensity(m)).toFixed(4),
       accAP: (m._accumulatedAP || 0).toFixed(0),
       actions: m._actionsThisTurn != null ? m._actionsThisTurn : '—',
       rule: t.reactiveRule || '—',
