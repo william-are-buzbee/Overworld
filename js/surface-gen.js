@@ -3,14 +3,13 @@ import { covers } from './state.js';
 import {
   W_SURF, H_SURF, LAYER_SURFACE, LAYER_UNDER,
   ATMOSPHERE, BIOME_TARGET, BIOME_PROFILES,
-  BIOME_GRID_W, BIOME_GRID_H, LANDMARKS,
+  BIOME_GRID_W, BIOME_GRID_H,
   CELL_TILE_W, CELL_TILE_H,
 } from './constants.js';
 import { T, isWalkable, isCoverAllowedOnGround } from './terrain.js';
 import { srand, rand, randi } from './rng.js';
 import { setFeature } from './world-state.js';
-import { ensureCoverGrid, populateMonsters } from './gen-utils.js';
-import { LANDMARK_GENERATORS } from './village-gen.js';
+import { ensureCoverGrid } from './gen-utils.js';
 
 // ==================== NOISE ====================
 // Seeded 2D Perlin noise generator
@@ -584,40 +583,6 @@ export function makeSurface(seed) {
   ATMOSPHERE.w         = W_SURF;
   ATMOSPHERE.h         = H_SURF;
 
-  // ---- LANDMARK PLACEMENT ----
-  // Iterate the landmarks list, compute the world-tile bounding box from
-  // each landmark's target-map cells, clear existing cover in that
-  // footprint, and call the structure's generator to stamp its tiles.
-  {
-    const cellW = Math.floor(W_SURF / BIOME_GRID_W);
-    const cellH = Math.floor(H_SURF / BIOME_GRID_H);
-    for (const landmark of LANDMARKS) {
-      const gen = LANDMARK_GENERATORS[landmark.type];
-      if (!gen) continue;
-
-      let minCX = Infinity, minCY = Infinity, maxCX = -Infinity, maxCY = -Infinity;
-      for (const cell of landmark.cells) {
-        if (cell.x < minCX) minCX = cell.x;
-        if (cell.y < minCY) minCY = cell.y;
-        if (cell.x > maxCX) maxCX = cell.x;
-        if (cell.y > maxCY) maxCY = cell.y;
-      }
-
-      const worldX  = minCX * cellW;
-      const worldY  = minCY * cellH;
-      const width   = (maxCX - minCX + 1) * cellW;
-      const height  = (maxCY - minCY + 1) * cellH;
-
-      // Clear cover in the footprint before the generator runs
-      for (let ly = worldY; ly < worldY + height && ly < H_SURF; ly++) {
-        for (let lx = worldX; lx < worldX + width && lx < W_SURF; lx++) {
-          if (lx >= 0 && ly >= 0) coverGrid[ly][lx] = 0;
-        }
-      }
-
-      gen(grid, coverGrid, worldX, worldY, width, height);
-    }
-  }
 
   // DORMANT: Underground layer transitions — reactivate when underground is reimplemented
   // // ---- SURFACE STAIRCASES ----
@@ -650,9 +615,9 @@ export function makeSurface(seed) {
   //   });
   // }
 
-  // ---- Spawn monsters ----
-  populateMonsters(grid, LAYER_SURFACE);
-
+  // Creatures are placed by spawnMonstersInWorld (world-logic.js) after both
+  // layers exist. (A per-tile populateMonsters pass used to run here; it read
+  // the wrong MON columns and never spawned anything, but consumed the rng.)
   return grid;
 }
 

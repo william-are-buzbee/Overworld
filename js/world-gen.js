@@ -13,14 +13,10 @@ import { makeSurface } from './surface-gen.js';
 import { makeUnderground, makeLavaLayer, playableRadius } from './underground-gen.js';
 
 // Re-export from gen-utils so existing consumers that import from world-gen still work
-export { validateMonsterSpawn, filterSpawnCandidates, populateMonsters } from './gen-utils.js';
 
 // Re-export from sub-modules so existing consumers can keep importing from world-gen
 export { makeSurface, placeDirtRoads } from './surface-gen.js';
 export { makeUnderground, makeLavaLayer, playableRadius, carveCorridors, carveBetween } from './underground-gen.js';
-// town-gen.js no longer exports interior-layer generators.
-// Surface town placement is handled by placeStartingTown in town-gen.js,
-// called from world-logic.js during initWorld.
 
 // ==================== LAYER BOOTSTRAPPING ====================
 export function addLayer(w, h) {

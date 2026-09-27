@@ -7,7 +7,7 @@ import {
 import { T, isCoverAllowedOnGround } from './terrain.js';
 import { srand, rand, randi } from './rng.js';
 import { setFeature } from './world-state.js';
-import { ensureCoverGrid, populateMonsters } from './gen-utils.js';
+import { ensureCoverGrid } from './gen-utils.js';
 
 // ==================== PLAYABLE RADIUS (kept for API compat) ====================
 // No longer constrains generation — the whole floor is playable.
@@ -497,7 +497,6 @@ export function makeUnderground(seed, layerIndex, pockets, sourceStairs) {
   }
 
   // --- Populate monsters ---
-  populateMonsters(grid, li);
 
   return grid;
 }
@@ -617,7 +616,6 @@ export function makeLavaLayer(seed, layerIndex, pockets, sourceStairs) {
   }
 
   // --- Populate monsters ---
-  populateMonsters(grid, layerIndex);
 
   return grid;
 }
