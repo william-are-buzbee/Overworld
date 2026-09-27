@@ -1,103 +1,874 @@
-/* style.css */
-body {
-  background-color: #0a0a0a; /* Deep black background */
-  color: #e0e0e0;
-  font-family: 'Courier New', Courier, monospace; /* Roguelike vibe */
-  display: flex;
-  justify-content: center;
-  margin: 0;
-  overflow: hidden;
+/* style.css — the game's only stylesheet (moved out of index.html; the old #sidebar rules here described a layout that no longer existed). */
+
+:root{
+  --ui-zoom:1;
+  --fg:#e8e8e8;
+  --fg-dim:#8a8a8a;
+  --fg-dark:#3a3a3a;
+  --fg-faint:#5a5a5a;
+  --bg:#0a0a0a;
+  --accent:#b8a870;
+  --empty:#555;
+  --pixel-font:'Press Start 2P', 'Courier New', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{
+  height:100%;
+  background:#050505;
+  color:var(--fg);
+  font-family:var(--pixel-font);
+  font-size:10px;
+  overflow:hidden;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-font-smoothing:none;
+  -moz-osx-font-smoothing:unset;
+  text-rendering:optimizeSpeed;
+}
+body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
 }
 
-#viewport {
-  border: 2px solid #333;
-  image-rendering: pixelated; /* Keeps tiles sharp */
+/* ─── Screen (full window) ─── */
+.screen{
+  position:fixed;
+  inset:0;
+  background:#000;
+  overflow:hidden;
 }
 
-/* ─── Sidebar (frosted-glass HUD) ─── */
-#sidebar {
-  position: absolute;
-  right: 0;
-  top: 0;
-  height: 100vh;
-  width: 300px;
-  background: rgba(6, 6, 10, 0.72); /* Frosted glass base */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-left: 1px solid rgba(255,255,255,0.06);
-  box-shadow: inset 0 0 30px rgba(0,0,0,0.4),
-              -4px 0 20px rgba(0,0,0,0.3);
-
-  /* Smooth slide transition */
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.3s ease;
-  padding: 20px;
-  box-sizing: border-box;
-  z-index: 10;
+/* ─── Canvas — fills the entire screen, world renders edge-to-edge ─── */
+#viewport{
+  display:block;
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%, -50%);
+  background:#000;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+  cursor:crosshair;
+}
+#viewport.stealth{
+  filter:brightness(0.75) contrast(1.15) saturate(0.7);
 }
 
-#sidebar.minimized {
-  transform: translateX(calc(100% - 28px));
-  opacity: 0.6;
-  pointer-events: none;  /* Clicks pass through to canvas */
+/* ─── RPG-style log box (bottom-left, floating over canvas) ─── */
+.log-wrapper{
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:min(420px, 45%);
+  height:130px;                    /* starting height — user can resize */
+  z-index:4;
+  display:flex;
+  flex-direction:column;
+  background:linear-gradient(to top, rgba(6,6,10,0.88) 0%, rgba(6,6,10,0.55) 65%, transparent 100%);
+  padding-top:18px;
+  pointer-events:none;
+  zoom:var(--ui-zoom);
 }
-#sidebar.minimized .hud-toggle {
-  pointer-events: auto;  /* Toggle stays clickable */
-  opacity: 1;
+.log-drag-top{
+  position:absolute;
+  top:-2px; left:0; right:10px;
+  height:6px;
+  cursor:ns-resize;
+  pointer-events:auto;
+  z-index:5;
 }
-
-/* ─── HUD Toggle Button ─── */
-.hud-toggle {
-  position: absolute;
-  top: 8px;
-  left: -28px;
-  width: 26px;
-  height: 34px;
-  background: rgba(6, 6, 10, 0.82);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-right: none;
-  border-radius: 4px 0 0 4px;
-  color: #8a8a8a;
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 11;
-  transition: background 0.15s, color 0.15s;
-  padding: 0;
-  line-height: 1;
+.log-drag-right{
+  position:absolute;
+  top:0; right:-2px; bottom:0;
+  width:6px;
+  cursor:ew-resize;
+  pointer-events:auto;
+  z-index:5;
 }
-.hud-toggle:hover {
-  background: rgba(20, 20, 28, 0.92);
-  color: #e0e0e0;
-}
-.hud-toggle .arrow {
-  display: inline-block;
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-#sidebar.minimized .hud-toggle .arrow {
-  transform: rotate(180deg);
+.log-wrapper.minimized{
+  display:none;
 }
 
-/* Status Bars */
-.bar-container {
-  width: 100%;
-  height: 12px;
-  background: #222;
-  border: 1px solid #444;
-  margin: 5px 0;
+.log{
+  flex:1;
+  padding:6px 12px 8px;
+  font-size:10px;
+  line-height:1.7;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:#333 transparent;
+  color:var(--fg);
+  white-space:pre-wrap;
+  pointer-events:auto;
+}
+.log::-webkit-scrollbar{width:3px;}
+.log::-webkit-scrollbar-track{background:transparent;}
+.log::-webkit-scrollbar-thumb{background:#222;}
+/* Per-category visual styling removed. All messages render uniformly.
+   Future prompt will add intentional category-based styling. */
+
+/* ─── Log toolbar (tabs + filter gear) ─── */
+.log-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 12px 2px;
+  pointer-events:auto;
+  flex-shrink:0;
+}
+.log-tabs{
+  display:flex;
+  gap:10px;
+}
+.log-tab{
+  font-family:var(--pixel-font);
+  font-size:7px;
+  color:#333;
+  cursor:pointer;
+  padding:2px 0;
+  letter-spacing:1px;
+  border-bottom:1px solid transparent;
+}
+.log-tab:hover{
+  color:var(--fg-dim);
+}
+.log-tab.active{
+  color:var(--fg-dim);
+  border-bottom-color:#555;
+}
+.log-filter-btn{
+  font-size:9px;
+  color:#333;
+  cursor:pointer;
+  padding:2px 4px;
+  pointer-events:auto;
+  line-height:1;
+}
+.log-filter-btn:hover{
+  color:var(--fg-dim);
 }
 
-#hp-bar { background: #b03030; height: 100%; transition: width 0.2s; }
-#xp-bar { background: #3080b0; height: 100%; transition: width 0.2s; }
-
-/* Item/Perk Lists */
-.list-item {
-  font-size: 0.9em;
-  padding: 4px 0;
-  border-bottom: 1px solid #222;
+/* ─── Log filter dropdown (per-category mute) ─── */
+.log-filter-dropdown{
+  position:absolute;
+  top:22px;
+  right:12px;
+  background:rgba(8,8,12,0.94);
+  padding:6px 10px;
+  z-index:10;
+  pointer-events:auto;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
 }
+.log-filter-dropdown label{
+  font-family:var(--pixel-font);
+  font-size:7px;
+  color:var(--fg-dim);
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  letter-spacing:0.5px;
+}
+.log-filter-dropdown label:hover{
+  color:var(--fg);
+}
+.log-filter-dropdown input[type="checkbox"]{
+  accent-color:var(--accent);
+  width:10px;
+  height:10px;
+  cursor:pointer;
+}
+
+/* ─── Log font size controls (+/−) ─── */
+.log-font-controls{
+  position:absolute;
+  bottom:4px;
+  right:12px;
+  display:flex;
+  gap:2px;
+  pointer-events:auto;
+  z-index:5;
+  opacity:0.35;
+  transition:opacity 0.2s;
+}
+.log-font-controls:hover{
+  opacity:1;
+}
+.log-font-btn{
+  font-family:var(--pixel-font);
+  font-size:9px;
+  color:var(--fg-dim);
+  cursor:pointer;
+  padding:1px 5px;
+  user-select:none;
+  line-height:1;
+}
+.log-font-btn:hover{
+  color:var(--fg);
+}
+
+/* ─── Minimal HUD (always-visible HP/food bars) ─── */
+.hud{
+  position:absolute;
+  top:8px;
+  right:8px;
+  z-index:4;
+  display:none;
+  flex-direction:column;
+  gap:4px;
+  pointer-events:none;
+  zoom:var(--ui-zoom);
+  /* No background, no border — just floating bars */
+}
+.hud.show{display:flex;}
+.hud-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.hud-bar{
+  width:180px;
+  height:8px;
+  background:rgba(20,20,20,0.6);
+  border:none;
+  overflow:hidden;
+  image-rendering:pixelated;
+}
+.hud-bar-fill{
+  height:100%;
+  transition:none;
+}
+.hud-bar-fill.hp{background:#b86a5a;}
+.hud-bar-fill.hp.ok{background:#9a9080;}
+.hud-bar-fill.food{background:#b89a50;}
+.hud-bar-fill.food.warn{background:#c86a5a;}
+.hud-num{
+  font-family:var(--pixel-font);
+  font-size:10px;
+  color:#666;
+  min-width:44px;
+  text-align:right;
+  letter-spacing:0;
+}
+.hud-zone-label{
+  font-family:var(--pixel-font);
+  font-size:10px;
+  color:#555;
+  min-width:56px;
+  text-align:left;
+  letter-spacing:0;
+}
+#hud-zones{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  margin-bottom:4px;
+}
+
+/* ─── Region label (top-left) ─── */
+.region-label{
+  position:absolute;
+  top:8px;
+  left:10px;
+  z-index:4;
+  font-family:var(--pixel-font);
+  font-size:8px;
+  color:#3a3a3a;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  pointer-events:none;
+  zoom:var(--ui-zoom);
+}
+
+/* ─── Zoom indicator (bottom-right) ─── */
+.zoom-label{
+  position:absolute;
+  bottom:8px;
+  right:10px;
+  z-index:4;
+  font-family:var(--pixel-font);
+  font-size:7px;
+  color:#2a2a2a;
+  letter-spacing:1px;
+  pointer-events:none;
+  transition:opacity 0.5s ease;
+  zoom:var(--ui-zoom);
+}
+.zoom-label.flash{
+  color:#555;
+}
+
+/* ─── Effects list ─── */
+.effline{
+  font-size:8px;
+  color:var(--fg-dim);
+  padding:2px 0;
+  padding-left:8px;
+  border-left:2px solid var(--fg-dark);
+}
+.effline b{color:var(--fg);}
+
+/* ─── Perks list ─── */
+.perkline{
+  font-size:7px;
+  color:var(--fg-dim);
+  padding:2px 0 2px 8px;
+  border-left:2px dotted #444;
+}
+.perkline b{color:var(--accent);}
+
+/* ─── Empty state ─── */
+.empty-state{
+  color:var(--empty);
+  font-size:7px;
+  font-style:italic;
+  padding:4px 0;
+  border:none !important;
+  border-left:none !important;
+}
+
+/* ─── Inventory items (kept for modal use) ─── */
+.item-row{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:6px;
+  align-items:center;
+  padding:4px 6px;
+  margin:2px 0;
+  font-size:8px;
+  border-bottom:1px dotted #1a1a1a;
+}
+.item-row:last-child{border-bottom:none;}
+.item-row .iname{color:var(--fg);}
+.item-row .icount{color:var(--fg-dim);font-size:7px;}
+.item-row .ifood{color:var(--accent);font-size:7px;}
+.item-row .ibook{color:#a8c8e0;font-size:7px;}
+.item-row .iwt{color:#666;font-size:7px;}
+.item-row .ieq{color:var(--accent);font-size:7px;font-weight:bold;}
+.item-row button{
+  background:#000;
+  border:2px solid var(--fg-dim);
+  color:var(--fg);
+  padding:3px 8px;
+  font-size:7px;
+  font-family:inherit;
+  cursor:pointer;
+  letter-spacing:1px;
+  transition:none;
+}
+.item-row button:hover{background:var(--fg);color:#000;}
+.item-row button:disabled{opacity:0.3;cursor:not-allowed;}
+
+.inv-header{
+  display:flex;
+  justify-content:space-between;
+  font-size:7px;
+  color:var(--fg-dim);
+  padding:4px 0 6px;
+  border-bottom:1px dashed var(--fg-dark);
+  margin-bottom:6px;
+  letter-spacing:1px;
+}
+.inv-header b{color:var(--fg);}
+.inv-header .over{color:#c88;}
+.inv-header .gold-val{color:var(--accent);font-weight:bold;}
+
+/* ─── LEGACY POPUP: game-overlay — migrate [inventory panel] to HUD-native pattern ─── */
+.game-overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0.75);
+  z-index:8;
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+.game-overlay.show{display:flex;}
+.game-overlay .ov-body{
+  background:#08080c;
+  border:2px solid #4a4a5a;
+  outline:2px solid #000;
+  width:320px;
+  max-height:70vh;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:#333 #08080c;
+  padding:16px 20px 20px;
+}
+.game-overlay .ov-body::-webkit-scrollbar{width:4px;}
+.game-overlay .ov-body::-webkit-scrollbar-thumb{background:#222;}
+.game-overlay .ov-title{
+  font-size:10px;
+  letter-spacing:4px;
+  text-align:center;
+  color:#fff;
+  text-transform:uppercase;
+  padding-bottom:10px;
+  border-bottom:2px solid #4a4a5a;
+  margin-bottom:12px;
+  font-weight:normal;
+}
+.game-overlay .ov-section{
+  font-size:7px;
+  color:var(--fg-dim);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  border-bottom:2px solid #3a3a4a;
+  padding:4px 0;
+  margin:14px 0 6px;
+}
+.game-overlay .ov-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:5px 0;
+  font-size:9px;
+  border-bottom:1px dashed #1e1e28;
+}
+.game-overlay .ov-row:last-child{border-bottom:none;}
+.game-overlay .ov-k{color:var(--fg-dim);}
+.game-overlay .ov-v{color:var(--fg);font-weight:bold;}
+.game-overlay .ov-v.accent{color:var(--accent);}
+.game-overlay .ov-v.dim{color:var(--fg-dim);font-weight:normal;font-style:italic;}
+.game-overlay .ov-v.warn{color:#d4a050;}
+.game-overlay .ov-bar{
+  height:4px;
+  background:#1a1a24;
+  margin:2px 0 4px;
+  border:1px solid #2a2a3a;
+}
+.game-overlay .ov-bar-fill{
+  height:100%;
+  transition:none;
+}
+.game-overlay .ov-block{
+  padding:4px 0;
+}
+.game-overlay .ov-hint{
+  text-align:center;
+  font-size:7px;
+  color:#555;
+  letter-spacing:2px;
+  padding:16px 0 4px;
+  text-transform:uppercase;
+}
+.game-overlay .ov-empty{
+  color:var(--empty);
+  font-size:8px;
+  font-style:italic;
+  padding:12px 0;
+  text-align:center;
+}
+.game-overlay .ov-inv-header{
+  display:flex;
+  justify-content:space-between;
+  font-size:7px;
+  color:var(--fg-dim);
+  padding:4px 0 8px;
+  border-bottom:2px solid #3a3a4a;
+  margin-bottom:8px;
+  letter-spacing:1px;
+}
+.game-overlay .ov-inv-header b{color:var(--fg);}
+.game-overlay .ov-inv-header .accent{color:var(--accent);}
+.game-overlay .ov-inv-header .warn{color:#c88;}
+.game-overlay .ov-item-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:5px 4px;
+  font-size:8px;
+  border-bottom:1px dashed #1e1e28;
+  gap:8px;
+}
+.game-overlay .ov-item-row:last-child{border-bottom:none;}
+.game-overlay .ov-iname{color:var(--fg);flex:1;min-width:0;}
+.game-overlay .ov-itag{font-size:7px;color:var(--fg-dim);}
+.game-overlay .ov-itag.accent{color:var(--accent);}
+.game-overlay .ov-itag.book{color:#a8c8e0;}
+.game-overlay .ov-itag.dim{color:#666;}
+.game-overlay .ov-iwt{font-size:7px;color:#555;}
+.game-overlay .ov-ieq{font-size:7px;color:var(--accent);font-weight:bold;}
+.game-overlay .ov-item-actions{
+  display:flex;
+  gap:4px;
+  flex-shrink:0;
+}
+.game-overlay .ov-item-actions button{
+  background:none;
+  border:none;
+  color:var(--fg-dim);
+  font-family:var(--pixel-font);
+  font-size:7px;
+  cursor:pointer;
+  padding:2px 4px;
+  letter-spacing:1px;
+  transition:none;
+}
+.game-overlay .ov-item-actions button:hover{color:#fff;}
+.game-overlay .ov-item-actions button:disabled{opacity:0.25;cursor:not-allowed;}
+
+/* ─── LEGACY POPUP: Modal — migrate [ground items, shops, NPC dialogue, books] to HUD-native pattern ─── */
+.modal{
+  position:absolute;
+  inset:0;
+  background:#000;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:10;
+}
+.modal.show{display:flex;}
+.modal-inner{
+  background:#08080c;
+  border:3px solid #4a4a5a;
+  outline:2px solid #000;
+  padding:18px 24px;
+  min-width:380px;
+  max-width:660px;
+  max-height:92%;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:#444 #08080c;
+}
+.modal-inner h2{
+  font-size:10px;
+  letter-spacing:3px;
+  text-align:center;
+  border-bottom:1px dashed var(--fg-dark);
+  padding-bottom:8px;
+  margin-bottom:12px;
+  text-transform:uppercase;
+  font-weight:normal;
+}
+.modal-inner .row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:5px 0;
+  font-size:9px;
+  gap:10px;
+  border-bottom:1px dotted #1f1f1f;
+}
+.modal-inner .row:last-child{border-bottom:none;}
+.modal-inner .row .lbl{flex:1;}
+.modal-inner .row .sub{color:var(--fg-dim);font-size:7px;letter-spacing:1px;}
+.modal-inner .row .cost{color:var(--accent);min-width:70px;text-align:right;font-size:8px;}
+.modal-inner .row button{
+  background:#000;
+  border:2px solid var(--fg);
+  color:var(--fg);
+  padding:4px 10px;
+  font-family:inherit;
+  font-size:8px;
+  cursor:pointer;
+  letter-spacing:1px;
+  transition:none;
+}
+.modal-inner .row button:hover{background:var(--fg);color:#000;}
+.modal-inner .row button:disabled{opacity:0.3;cursor:not-allowed;}
+.modal-inner .close-row{text-align:center;margin-top:14px;}
+.modal-inner .tip{color:var(--fg-dim);font-size:8px;text-align:center;padding:6px 0;}
+.modal-inner .shop-h{
+  color:var(--fg-dim);
+  font-size:7px;
+  letter-spacing:2px;
+  padding:10px 0 5px;
+  border-bottom:1px dashed var(--fg-dark);
+  margin-bottom:3px;
+  text-transform:uppercase;
+}
+.modal-inner .dialogue{
+  color:var(--fg);
+  font-size:9px;
+  line-height:1.8;
+  padding:10px 0;
+  font-style:italic;
+}
+.modal-inner .book-text{
+  color:var(--fg);
+  font-size:9px;
+  line-height:1.8;
+  padding:12px 18px;
+  font-style:italic;
+  background:#0c1218;
+  border-left:3px solid #4a6a8a;
+}
+.modal-inner .speaker{
+  color:#a8c8e0;
+  font-size:8px;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  margin-bottom:5px;
+}
+.modal-inner .simple{color:#d4a050;font-size:8px;text-align:center;padding:4px 0;}
+
+/* ─── Section headers (used in modals) ─── */
+.sect-h{
+  color:var(--fg-dim);
+  font-size:7px;
+  letter-spacing:2px;
+  border-bottom:1px dashed var(--fg-dark);
+  padding:4px 0 4px;
+  margin:8px 0 5px;
+  text-transform:uppercase;
+  font-weight:normal;
+}
+.sect-h:first-child{margin-top:0;}
+
+/* ─── Key-value rows (used in modals/chargen) ─── */
+.kv{
+  display:flex;
+  justify-content:space-between;
+  padding:3px 0;
+  font-size:8px;
+}
+.kv .k{color:var(--fg-dim);}
+.kv .v{color:var(--fg);font-weight:bold;}
+.kv .v.dim{color:var(--fg-dim);font-weight:normal;}
+.kv .v.warn{color:#d4a050;}
+
+/* ─── Buttons ─── */
+.btn{
+  background:#000;
+  border:2px solid var(--fg);
+  color:var(--fg);
+  font-family:inherit;
+  font-size:8px;
+  padding:7px 14px;
+  cursor:pointer;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  transition:none;
+}
+.btn:hover{background:var(--fg);color:#000;}
+.btn:disabled{opacity:0.3;cursor:not-allowed;}
+.btn.primary{background:var(--fg);color:#000;}
+.btn.primary:hover{background:#fff;}
+
+/* ─── Overlay screens ─── */
+.centered-screen{
+  position:absolute;inset:0;
+  background:#000;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:20px;
+  z-index:20;
+}
+.centered-screen h1{
+  font-size:24px;
+  letter-spacing:8px;
+  margin-bottom:6px;
+  font-weight:normal;
+}
+.centered-screen .sub{
+  color:var(--fg-dim);
+  font-size:8px;
+  letter-spacing:3px;
+  margin-bottom:20px;
+  text-transform:uppercase;
+}
+@keyframes flash{0%,50%{opacity:1}51%,100%{opacity:0.2}}
+
+/* ─── Species selection (Prompt F — restyled for game-menu feel) ─── */
+.species-select{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  width:96%;
+  max-width:620px;
+  padding:18px;
+  gap:12px;
+}
+.species-title{
+  font-size:9px;
+  letter-spacing:1px;
+  text-align:center;
+  margin-bottom:4px;
+  font-weight:normal;
+  color:#555;
+}
+.species-options{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  width:100%;
+  max-height:50vh;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:#333 #08080c;
+}
+.species-options::-webkit-scrollbar{width:4px;}
+.species-options::-webkit-scrollbar-thumb{background:#222;}
+.species-option{
+  padding:10px 14px;
+  border:1px solid transparent;
+  background:transparent;
+  cursor:pointer;
+  transition:none;
+}
+.species-option:hover{
+  background:transparent;
+}
+.species-option:hover .species-name{
+  color:var(--fg);
+}
+.species-option.selected{
+  border-color:transparent;
+  background:transparent;
+}
+.species-option.selected .species-name{
+  color:var(--accent);
+}
+.species-option.selected .species-stats{
+  color:var(--accent);
+}
+.species-option.selected .species-desc{
+  color:#999;
+}
+.species-name{
+  font-size:11px;
+  color:#4a4a4a;
+  font-weight:bold;
+  letter-spacing:2px;
+  margin-bottom:3px;
+}
+.species-stats{
+  font-size:7px;
+  color:#3a3a3a;
+  letter-spacing:1px;
+  margin-bottom:5px;
+}
+.species-desc{
+  font-size:7px;
+  color:#555;
+  line-height:1.7;
+  letter-spacing:0.3px;
+}
+.sp-color-row{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:8px;
+  margin:4px 0;
+}
+.species-actions{
+  display:flex;
+  gap:10px;
+  margin-top:6px;
+}
+/* Hide BEGIN button — Enter key is the confirm */
+#sp-begin{
+  display:none !important;
+}
+/* Keyboard hint shown below species list */
+.species-key-hint{
+  font-size:7px;
+  color:#333;
+  letter-spacing:1px;
+  margin-top:8px;
+  text-align:center;
+}
+
+/* ─── Zone HP bars (overlay body map) ─── */
+.zone-hp-list{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+.zone-hp-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 0;
+  font-size:8px;
+  border-bottom:1px dashed #1e1e28;
+}
+.zone-hp-row:last-child{border-bottom:none;}
+.zone-name{
+  color:var(--fg-dim);
+  min-width:64px;
+  letter-spacing:0.5px;
+}
+.zone-bar{
+  color:var(--fg-dim);
+  font-size:7px;
+  letter-spacing:-0.5px;
+}
+.zone-nums{
+  color:#666;
+  font-size:7px;
+  min-width:52px;
+  text-align:right;
+}
+.zone-flag{
+  font-size:7px;
+  letter-spacing:1px;
+  margin-left:4px;
+}
+.zone-flag-destroyed{color:#666;font-style:italic;}
+.zone-flag-bleeding{color:#c88;}
+
+.zone-hp-row.zone-wounded .zone-name{color:var(--fg);}
+.zone-hp-row.zone-wounded .zone-bar{color:#c88;}
+.zone-hp-row.zone-wounded .zone-nums{color:#c88;}
+.zone-hp-row.zone-critical .zone-name{color:var(--fg);}
+.zone-hp-row.zone-critical .zone-bar{color:#d4a050;}
+.zone-hp-row.zone-critical .zone-nums{color:#d4a050;}
+.zone-hp-row.zone-destroyed .zone-name{color:#666;font-style:italic;}
+.zone-hp-row.zone-destroyed .zone-bar{color:#444;}
+.zone-hp-row.zone-destroyed .zone-nums{color:#555;}
+
+/* ─── Blood status line (below body map) ─── */
+.zone-blood-line{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:8px;
+  color:var(--fg-dim);
+  padding:6px 0 2px;
+  margin-top:2px;
+  border-top:1px dashed #1e1e28;
+}
+.zone-blood-nums{
+  font-size:7px;
+  color:#666;
+}
+.zone-blood-line.zone-wounded{color:#c88;}
+.zone-blood-line.zone-wounded .zone-blood-nums{color:#c88;}
+.zone-blood-line.zone-critical{color:#d4a050;}
+.zone-blood-line.zone-critical .zone-blood-nums{color:#d4a050;}
+
+/* ─── Attack list (overlay) ─── */
+.attack-list{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+.attack-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 0;
+  font-size:8px;
+  border-bottom:1px dashed #1e1e28;
+}
+.attack-row:last-child{border-bottom:none;}
+.atk-name{color:var(--fg);min-width:60px;}
+.atk-zone{color:var(--fg-dim);font-size:7px;}
+.atk-type{color:#666;font-size:7px;}
+.atk-dmg{color:var(--accent);font-size:7px;margin-left:auto;}
+.attack-row.zone-destroyed .atk-name{color:#666;font-style:italic;}
+.attack-row.zone-destroyed .atk-zone{color:#555;}
+.attack-row.zone-destroyed .atk-type{color:#555;font-style:italic;}
+
+/* ─── Examine: zone status (enemies) ─── */
+.ov-v.zone-destroyed{color:#666;font-style:italic;}
+.ov-v.zone-wounded{color:#c88;}
