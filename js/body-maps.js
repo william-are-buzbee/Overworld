@@ -4,6 +4,7 @@
 // Split from constants.js.
 
 import { BLOOD_FRACTION } from './combat-constants.js';
+import { rand } from './rng.js';
 
 // Zone HP derived from zone mass. Each kg of zone tissue = this many HP.
 export const HP_PER_KG = 5;
@@ -1194,14 +1195,14 @@ export function getPathways(entity) {
 }
 
 // Weighted random zone selection.  Takes a body map (zone array),
-// returns the selected zone object.  Uses Math.random — called only
+// returns the selected zone object.  Rolls on the seeded rng — called only
 // after a hit is confirmed, so the roll is independent of the hit roll.
 // Destroyed zones are excluded and their weight redistributed.
 export function selectHitZone(bodyMap) {
   const alive = bodyMap.filter(z => !z.destroyed);
   if (alive.length === 0) return bodyMap[bodyMap.length - 1]; // safety fallback
   const totalWeight = alive.reduce((sum, z) => sum + z.targetWeight, 0);
-  let r = Math.random() * totalWeight;
+  let r = rand() * totalWeight;
   for (const zone of alive) {
     r -= zone.targetWeight;
     if (r <= 0) return zone;
@@ -1253,7 +1254,7 @@ export function getExposedZones(bodyMap, attackDirection) {
 // Returns the selected zone. Does not modify the input array.
 function weightedRandomSelect(zones) {
   const totalWeight = zones.reduce((sum, z) => sum + z.targetWeight, 0);
-  let r = Math.random() * totalWeight;
+  let r = rand() * totalWeight;
   for (const zone of zones) {
     r -= zone.targetWeight;
     if (r <= 0) return zone;

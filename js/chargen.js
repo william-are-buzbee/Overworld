@@ -98,13 +98,20 @@ function beginGame(){
   // ── Stress chemistry (Ganglion system) ──
   state.player.stressLevel = 0;
 
-  initWorld(Math.floor(Math.random()*999999));
+  // World seed: ?seed=<n> in the URL replays a world; otherwise one fresh
+  // draw of entropy. This is the only Math.random in the game — every other
+  // roll goes through the seeded rng so a seed reproduces a run.
+  const urlSeed = parseInt(new URLSearchParams(window.location.search).get('seed'), 10);
+  const seed = Number.isFinite(urlSeed) ? (urlSeed >>> 0) : Math.floor(Math.random() * 0xffffffff);
+  state.worldSeed = seed;
+  initWorld(seed);
   document.getElementById('species-screen').style.display = 'none';
   state.gameState = 'play';
   clearLog();
 
   const sp = SPECIES_TEMPLATES[state.selectedSpecies];
   log(`You awaken as a ${sp.displayName}.`, LOG_CATEGORIES.SYSTEM);
+  log(`World seed ${seed}. Add ?seed=${seed} to the URL to replay it.`, LOG_CATEGORIES.SYSTEM);
   updatePlayerFOV();
   render();
 }

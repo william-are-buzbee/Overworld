@@ -3,6 +3,10 @@ let rngState = 12345;
 
 export function srand(seed){ rngState = (seed>>>0) || 1; }
 
+// Save/load support: the generator's whole state is one 32-bit int.
+export function getRngState(){ return rngState >>> 0; }
+export function setRngState(s){ rngState = (s>>>0) || 1; }
+
 export function rand(){
   rngState |= 0; rngState = rngState + 0x6D2B79F5 | 0;
   let t = Math.imul(rngState ^ rngState >>> 15, 1 | rngState);

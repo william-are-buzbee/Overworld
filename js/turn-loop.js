@@ -23,6 +23,7 @@ import { render } from './rendering.js';
 import { fedDrainFor } from './player-actions.js';
 import { advanceTick } from './time-cycle.js';
 import { saveGame } from './save-load.js';
+import { rand } from './rng.js';
 import { updatePlayerFOV, updateAmbientSensing } from './fov.js';
 import { computeSignals } from './signals.js';
 import { updateScentSystem } from './scent.js';
@@ -190,8 +191,8 @@ function driftPosition(creature, dormantTurns) {
 
   // Try random offsets, accept the first valid position
   for (let attempt = 0; attempt < 10; attempt++) {
-    const dx = Math.floor(Math.random() * (maxDrift * 2 + 1)) - maxDrift;
-    const dy = Math.floor(Math.random() * (maxDrift * 2 + 1)) - maxDrift;
+    const dx = Math.floor(rand() * (maxDrift * 2 + 1)) - maxDrift;
+    const dy = Math.floor(rand() * (maxDrift * 2 + 1)) - maxDrift;
 
     const newX = creature.x + dx;
     const newY = creature.y + dy;
