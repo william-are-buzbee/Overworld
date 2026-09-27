@@ -142,6 +142,8 @@ In the CREATURE_NEURAL data structure, the endocrine tissue would appear as addi
 }
 ```
 
+*Status (Sep 2026):* the hormones object below does not exist yet; the code has one scalar `stressLevel` standing in for `alarm`. It is released only when the flee ganglion or the bolt reflex fires (`_releaseStressChemistry`, physiology.js); freeze and alert release nothing, per the trigger rule above. Cleared once per player input, scaled by circulatory efficiency.
+
 ## Hormonal State on Creatures
 
 Per-creature state (persists across turns, saved/loaded):

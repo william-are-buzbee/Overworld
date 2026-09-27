@@ -110,11 +110,12 @@ function _ganglionOutputToAction(output, creature) {
   if (output.intensity <= 0) {
     // No locomotion signal — hold still or check feeding
     if (output.type === 'alert') {
-      // Orient toward threat bearing (face it while holding still)
+      // Face the threat while holding still. output.direction already points
+      // at the source (it was reversed twice before, so the hare faced away).
       return {
         behavior: 'orient',
         magnitude: 0.4,
-        direction: output.direction != null ? (output.direction + 4) % 8 : null,
+        direction: output.direction,
       };
     }
     // At food tile — graze (mid-graze local ganglion contact-chemical reflex)

@@ -11,7 +11,7 @@ import { getBodyMap, computeBleedPenalty,
          FAST_TWITCH_RECRUIT_THRESHOLD,
          CIRC_EFFICIENCY_CLOSED, CIRC_EFFICIENCY_OPEN, CIRC_EFFICIENCY_HYBRID,
          SPECIES_TEMPLATES,
-         STRESS_RELEASE_AMOUNT, STRESS_RELEASE_MILD, STRESS_CLEARANCE_BASE, STRESS_MAX,
+         STRESS_RELEASE_AMOUNT, STRESS_CLEARANCE_BASE, STRESS_MAX,
          HEAL_BASE_RATE, HEAL_REST_MULTIPLIER } from './constants.js';
 import { log } from './log.js';
 
@@ -367,15 +367,14 @@ function applyHealing(creature) {
  * Release: triggered by ganglion threat detection (flagged during processing).
  */
 function _releaseStressChemistry(creature) {
+  // Released only when the threat ganglion fires (flee) or the bolt reflex
+  // fires. Freeze and alert release nothing (Endocrine-Design). A per-action
+  // "mild" release on alert used to ratchet stress to STRESS_MAX under any
+  // steady sub-threshold stimulus, since clearance runs once per input.
   if (creature._ganglionTriggeredStress === true) {
     creature.stressLevel = Math.min(
       STRESS_MAX,
       (creature.stressLevel || 0) + STRESS_RELEASE_AMOUNT
-    );
-  } else if (creature._ganglionTriggeredStress === 'mild') {
-    creature.stressLevel = Math.min(
-      STRESS_MAX,
-      (creature.stressLevel || 0) + STRESS_RELEASE_MILD
     );
   }
   // Clear the trigger flag
