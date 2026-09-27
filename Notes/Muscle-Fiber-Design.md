@@ -89,6 +89,8 @@ The motor system (see Motor-System-Design.md) sends activation signals through p
 
 ### Speed
 
+*Status (Sep 2026):* `getBodyPTW(entity, intensity)` in physiology.js is the one implementation, for NPCs and the player alike. Fast-contracting fibres contribute only when the movement intensity of the last action is at or above `FAST_TWITCH_RECRUIT_THRESHOLD`; NPC intensity comes from `getMovementIntensity` (ganglion output where it exists, otherwise the behaviour label as a marked placeholder for the motor layer).
+
 When locomotion zones are activated at high intensity, each zone produces force based on:
 
 ```

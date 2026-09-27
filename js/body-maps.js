@@ -11,7 +11,10 @@ export const HP_PER_KG = 5;
 
 // ==================== ZONE DESTRUCTION CONSTANTS ====================
 // If remaining neural mass fraction falls below this, the creature dies.
-export const NEURAL_DEATH_THRESHOLD = 0.35;  // die when surviving neural mass drops to 35% of original
+// 0.30 keeps "Clade A heads are NOT vital" (below) true with a margin: the
+// prowler's head carries 63.9% of its neural mass, so head loss leaves 36.1%,
+// which at the old 0.35 survived by 1.1 points and would flip on any retune.
+export const NEURAL_DEATH_THRESHOLD = 0.30;  // die when surviving neural mass drops to 30% of original
 
 // ==================== FOOTPRINT SYSTEM ====================
 // Armor derived from structural tissue mass per zone
@@ -174,7 +177,7 @@ export function getIntegument(entity) {
 //   neuralAllocation — fractional breakdown of neural tissue functions
 //   transducers      — sensory organ quality ratings per modality
 //   locomotion       — whether this zone contributes to movement
-//   vital            — zone destruction kills the creature (not enforced yet)
+//   vital            — zone destruction kills the creature (enforced in combat.js)
 //   attacks          — attack definitions housed in this zone
 //   bleedRate, bleedThreshold — bleed properties (tuning TBD)
 //   destroyed        — runtime state (always false at spawn)
