@@ -499,13 +499,9 @@ function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
         strongestSource = det.entity;
       }
     }
-    // Also check for sudden high-magnitude signals from any channel
-    // that the reflex structure monitors
-    if (det.bestSNR > strongestMagnitude * 1.5) {
-      // Exceptionally strong signal on any channel
-      strongestMagnitude = det.bestSNR;
-      strongestSource = det.entity;
-    }
+    // No other channel reaches this arc. The reflex structure is wired to
+    // vibration_magnitude_spike only (see CREATURE_NEURAL.hare); a large
+    // stationary object in view is a high visual SNR, not a bolt trigger.
   }
 
   if (strongestMagnitude < thresholds.bolt) return null;
@@ -676,8 +672,9 @@ function _resolveLocomotionOutput(creature, threatResult, foodResult, thresholds
     // Fires when confidence exceeds freeze threshold but is below flee.
     // Output: zero locomotion. Suppresses food-seeking, wandering, everything.
     // The hare is actively holding still, not passively idle.
+    // Freeze releases no stress chemistry: the inhibitory circuit fired, not
+    // the threat (flee) ganglion the endocrine tissue is wired to.
     if (threatResult.confidence >= thresholds.freeze) {
-      creature._ganglionTriggeredStress = 'mild';
       return {
         intensity: 0,
         direction: null,
@@ -689,11 +686,13 @@ function _resolveLocomotionOutput(creature, threatResult, foodResult, thresholds
     // Orient toward signal source. No motor suppression — the hare might
     // still graze if hungry. Alert is "something is there" without the
     // confidence to trigger freeze.
+    // Alert releases no stress chemistry either. direction is TOWARD the
+    // source (fleeBearing reversed); the action bridge faces it as given.
+    // Direction 0 (north) is a valid bearing, hence the null check.
     if (threatResult.confidence >= thresholds.alert) {
-      creature._ganglionTriggeredStress = 'mild';
       return {
         intensity: 0,
-        direction: threatResult.fleeBearing ? (threatResult.fleeBearing + 4) % 8 : null,
+        direction: threatResult.fleeBearing != null ? (threatResult.fleeBearing + 4) % 8 : null,
         type: 'alert',
       };
     }

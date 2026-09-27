@@ -569,6 +569,9 @@ function relativeMagnitude(observer, info) {
   if (upper < selfMass * 0.3) return 'much_smaller';
   if (upper < selfMass * 0.7) return 'smaller';
 
+  // Both bounds inside the similar band: about my size
+  if (lower >= selfMass * 0.7 && upper <= selfMass * 1.3) return 'similar';
+
   // Range spans "similar" — could be larger or smaller
   return 'ambiguous';
 }
@@ -865,6 +868,17 @@ function detectThreats(creature) {
   }
 
   creature.detectedThreats = threats;
+
+  // The threat source is whatever the transducers are delivering now. If the
+  // entity that set it is no longer among the detected threats and no pain
+  // signal arrived this action, it is gone. There is no persistence on neural
+  // tissue: any lingering jumpiness comes from the stress chemistry. (Before
+  // this, threatSource was never cleared, so the territory leash in
+  // ai-utils.canMoveTo stayed off for good after a creature's first scare.)
+  if (creature.threatSource && !creature.tookDamageThisTurn &&
+      !threats.some(t => t.source === creature.threatSource)) {
+    creature.threatSource = null;
+  }
   return threats;
 }
 

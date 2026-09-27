@@ -135,7 +135,6 @@ export const THREAT_CONF_SIZE_MUCH_LARGER  = 0.3;   // confidence bonus for much
 export const THREAT_CONF_SIZE_LARGER       = 0.2;   // confidence bonus for larger threat
 export const THREAT_CONF_SIZE_AMBIGUOUS    = 0.1;   // confidence bonus for ambiguous-size threat
 export const STRESS_RELEASE_AMOUNT     = 0.3;   // stress added per threat-ganglion trigger
-export const STRESS_RELEASE_MILD       = 0.08;  // stress added from alert (not flee)
 export const STRESS_CLEARANCE_BASE     = 0.04;  // stress cleared per turn before circ efficiency
 export const STRESS_MAX                = 1.5;   // ceiling on stress accumulation
 

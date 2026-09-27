@@ -157,6 +157,8 @@ seekRange = MIN_SEEK + integrationCapacity × SEEK_SCALE
 
 Goal persistence: if the target leaves all detection channels for more turns than integrationCapacity × PERSISTENCE_SCALE, the deliberative goal expires and the creature falls back to reactive. The apex predator sustains pursuits across the map. The meso-predator gives up sooner. The lurker barely sustains goals past its territory edge.
 
+*Status (Sep 2026):* the reactive layer's `threatSource` is whatever the transducers deliver on the current action. When the entity drops out of `detectedThreats` (and no damage arrived that action) it is cleared at once (`detectThreats`, detection.js); nothing persists on neural tissue. Lingering wariness is the stress chemistry's job (Endocrine-Design). Goal persistence above is the deliberative layer's business and is separate.
+
 ### Critical Override
 
 Some stimuli bypass deliberation regardless of integration. Ambush damage from an undetected source, blood crossing the critical threshold, massive torso trauma — these fire the reactive pathway before any deliberative signal can complete its round trip. Even the apex predator flinches from an ambush. The reactive circuitry is always running, and extreme stimuli produce signals too strong for the deliberative layer to override.
