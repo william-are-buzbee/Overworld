@@ -23,7 +23,7 @@ shared mutable state every module imports. Each file's first lines say what it o
 | senses and minds | detection.js, signals.js, scent.js, sensory-constants.js, fov.js, cognition.js, ai.js, ai-utils.js, behaviors.js, enemy-ai.js |
 | combat | combat.js, combat-constants.js |
 | the world | world-gen.js (coordination), surface-gen.js, underground-gen.js, town-gen.js, village-gen.js, structures.js, terrain.js, ecology-data.js, gen-utils.js, world-logic.js, world-state.js, time-cycle.js |
-| player, items, people | player.js, player-actions.js, chargen.js (species selection), items.js, ground-items.js, interactions.js, npcs.js, shops.js; dialogue.js and castle.js are imported by nothing (dead, see `Notes/Code-Audit-2026-09.md`) |
+| player, items, people | player.js, player-actions.js, chargen.js (species selection), items.js, ground-items.js, interactions.js, npcs.js, shops.js |
 | drawing and UI | rendering.js, display.js, sprites.js, sprites-32.js, texture-picker.js, overlay.js, modal.js, ui.js, log.js, worldmap.js, debug.js; sprite-select.js and palette-compute.js are standalone (CommonJS, not yet imported by the game) |
 
 `Utils/planet-viewer.html` is a standalone planet tool (the Planet-Viewer repo is its own project); `js/test-hare-bodymap.html`

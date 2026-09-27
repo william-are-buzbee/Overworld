@@ -4,7 +4,7 @@ export const T = {
   ROAD:6, BEACH:7, MUSHFOREST:8,
   CAVE_WALL:10, CAVE_FLOOR:11, LAVA:12, UWATER:13,
   WHEAT:14, WOOD_FLOOR:15, WALL:16,
-  TOWN:20, CASTLE:21, BLACKSPIRE:22,
+  TOWN:20,   // ids 21-22 retired (castle, blackspire keep — removed with castle.js)
   STAIRS_DOWN:23, STAIRS_UP:24, SIGN:25, CHEST:26, BOOK:27, GATE:28,
   NPC:29, HOUSE:30, SHOP:31, INN:32, WELL:33, FARM:34,
 
@@ -95,8 +95,6 @@ export const TERRAIN_INFO = {
   [T.WHEAT]:     {name:'wheat',         sprite:'WHEAT',    palette:'wheat',    walk:true,  cover:20,  terrainLayer:'cover', overlay:true,
                   sightlineOpacity:0.05, localConcealment:0.6, coverHeightClass:0.7},
   [T.TOWN]:      {name:'town',          sprite:'TOWN',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.CASTLE]:    {name:'castle',        sprite:'CASTLE',   palette:'castle',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.BLACKSPIRE]:{name:'Blackspire Keep',sprite:'BLACKSPIRE',palette:'castle', walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.STAIRS_DOWN]:{name:'stairs down',  sprite:'STAIRS_DOWN',palette:'stone',  walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.STAIRS_UP]: {name:'stairs up',     sprite:'STAIRS_UP',palette:'stone',    walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.SIGN]:      {name:'signpost',      sprite:'SIGN',     palette:'plains',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
@@ -193,8 +191,6 @@ const DEFAULT_GROUND_FOR_COVER = {
   [T.MUSHFOREST]:  T.FUNGAL_GRASS,
   [T.WHEAT]:       T.GRASS,
   [T.TOWN]:        T.GRASS,
-  [T.CASTLE]:      T.GRASS,
-  [T.BLACKSPIRE]:  T.GRASS,
   [T.STAIRS_DOWN]: T.CAVE_WALL,
   [T.STAIRS_UP]:   T.CAVE_WALL,
   [T.SIGN]:        T.GRASS,

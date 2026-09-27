@@ -123,7 +123,7 @@ function distToSameType(key, x, y, layer) {
 // Cover types that must never be overwritten by structure placement.
 const PROTECTED_COVERS = new Set([
   T.STAIRS_DOWN, T.STAIRS_UP, T.GATE, T.NPC, T.SHOP, T.INN,
-  T.HOUSE, T.HOUSE_LG, T.TOWN, T.CASTLE, T.BLACKSPIRE,
+  T.HOUSE, T.HOUSE_LG, T.TOWN,
   T.SIGN, T.CHEST, T.BOOK, T.THRONE, T.WELL,
   T.WELL_TL, T.WELL_TR, T.WELL_BL, T.WELL_BR,
   T.SHOPKEEPER, T.FOUNTAIN, T.FARM,
