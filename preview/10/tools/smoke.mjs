@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // smoke.mjs — boots the game in headless Chromium and plays a few turns.
 // Serves the repo root on a local port with node's http module (no dependency),
-// drives the title → species → play flow by keyboard, checks that the world
+// drives the title → species → play flow by keyboard (waiting for play state AND a
+// restored world grid, since loadGame sets gameState before the grids), checks that the world
 // generated, the player can move, autosave survives a reload, and the same
 // ?seed= gives the same world. Any page error or console error fails the run.
 //
@@ -43,7 +44,7 @@ async function newGame(seed) {
   await page.keyboard.press('ArrowDown');  // select first species
   await page.waitForTimeout(150);
   await page.keyboard.press('Enter');      // begin
-  await page.waitForFunction(async () => (await import('./js/state.js')).state.gameState === 'play', null, { timeout: 30000 });
+  await page.waitForFunction(async () => (async () => { const m = await import('./js/state.js'); return m.state.gameState === 'play' && !!m.state.player && Array.isArray(m.worlds[0]); })(), null, { timeout: 30000 });
   await page.waitForTimeout(300);
   return page;
 }
@@ -70,7 +71,7 @@ try {
   await a.waitForTimeout(1200);                         // let the autosave land
   await a.reload({ waitUntil: 'load' }); await a.waitForTimeout(800);
   await a.keyboard.press('Enter');                      // CONTINUE
-  await a.waitForFunction(async () => (await import('./js/state.js')).state.gameState === 'play', null, { timeout: 30000 });
+  await a.waitForFunction(async () => (async () => { const m = await import('./js/state.js'); return m.state.gameState === 'play' && !!m.state.player && Array.isArray(m.worlds[0]); })(), null, { timeout: 30000 });
   const s2 = await snap(a);
   check(s2.turn === s1.turn && s2.x === s1.x && s2.y === s1.y, `resume did not restore the run (turn ${s1.turn}→${s2.turn}, pos ${s1.x},${s1.y}→${s2.x},${s2.y})`);
   const b = await newGame(7);
