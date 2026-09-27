@@ -470,7 +470,7 @@ export function hasLOS(layer, x0, y0, x1, y1, per) {
 //   heavy binocular overlap ahead, narrow monocular wings, large rear blind spot.
 // These offsets are the tuning levers for binocular geometry; adding a new
 // placement is just adding a new offset value here.
-const EYE_OFFSETS = {
+export const EYE_OFFSETS = {
   lateral: 80,    // each eye center is ±80° from facing
   forward: 20,    // each eye center is ±20° from facing
 };
@@ -484,11 +484,14 @@ const EYE_OFFSETS = {
  * @param {number} halfFieldDeg — half of the eye's field angle
  * @returns {boolean}
  */
-function _isInEyeField(ox, oy, wx, wy, eyeCenterDeg, halfFieldDeg) {
+export function isInEyeField(ox, oy, wx, wy, eyeCenterDeg, halfFieldDeg) {
   const dx = wx - ox, dy = wy - oy;
   if (dx === 0 && dy === 0) return true; // origin always covered
   const tileAngle = Math.atan2(dy, dx) * (180 / Math.PI);
-  let diff = Math.abs(tileAngle - eyeCenterDeg);
+  // eyeCenterDeg is facing ± an offset and can lie outside ±180°; reduce the
+  // difference modulo 360 before folding, or a wide difference goes negative
+  // and always passes.
+  let diff = Math.abs(tileAngle - eyeCenterDeg) % 360;
   if (diff > 180) diff = 360 - diff;
   return diff <= halfFieldDeg;
 }
@@ -590,8 +593,8 @@ export function updatePlayerFOV() {
       const wx = +key.substring(0, comma);
       const wy = +key.substring(comma + 1);
 
-      const inLeft = _isInEyeField(p.x, p.y, wx, wy, leftEyeCenter, halfField);
-      const inRight = _isInEyeField(p.x, p.y, wx, wy, rightEyeCenter, halfField);
+      const inLeft = isInEyeField(p.x, p.y, wx, wy, leftEyeCenter, halfField);
+      const inRight = isInEyeField(p.x, p.y, wx, wy, rightEyeCenter, halfField);
 
       if (inLeft && inRight) {
         binocular.add(key);

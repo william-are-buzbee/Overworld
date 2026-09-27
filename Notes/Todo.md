@@ -156,7 +156,7 @@ Prompt queue and task tracker. Check things off as they're done.
 - [ ] Fourth-pass over cognition/ganglia (actual pattern libraries/memory)
 - [ ] NPC scent tracking AI (plume following, trail following, search patterns)
 - [ ] Vibration ambient grounding (substrate-aware propagation)
-- [ ] NPC vision update (per-eye body map computation)
+- [x] NPC vision update (per-eye body map computation) — cone test derives from body-map eyes; range still max-acuity
 - [ ] Creature 5 (colonial chemotroph) redesign
 - [ ] Legacy creature name cleanup (wolf→prowler, dire_wolf→ravager, cave_crab→shaleBack, etc.)
 - [ ] Legacy elemental damage and name cleanup

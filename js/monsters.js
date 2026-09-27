@@ -389,7 +389,10 @@ function monDamage(mon, attackingZone){
 // ==================== VISION PROFILES ====================
 // Per-species vision type and cone parameters.
 // visionType: 'cone' (directional) or 'radius' (omnidirectional).
-// coneAngle: forward vision arc in degrees (only used for cone type).
+// coneAngle: forward vision arc in degrees. No longer read by detection —
+// an NPC's visual field comes from its body map's visual transducers
+// (isInVisionCone in detection.js, per Per-Eye-Visual-Field-Design). Kept as
+// the fallback for creatures without a body map and for visionType.
 // awarenessRadius is computed from Visual at runtime, not stored here.
 // These properties are defined on monsters for future AI use but are
 // currently only read for the player's own FOV calculation.

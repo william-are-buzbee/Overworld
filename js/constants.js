@@ -14,6 +14,7 @@ export * from './ecology-data.js';
 
 // Import for validation (BIOME_TARGET moved to ecology-data.js)
 import { BIOME_TARGET } from './ecology-data.js';
+import { MAX_DETECTION_DISTANCE } from './sensory-constants.js';
 
 // ==================== WORLD DIMENSIONS ====================
 export const W_SURF = 224, H_SURF = 224;
@@ -179,7 +180,11 @@ export const SCENT_PROFILES = {
 
 // --- Spatial Hash Grid (Prompt R) ---
 export const SPATIAL_CELL_SIZE    = 16;   // tiles per cell side
-export const SPATIAL_QUERY_RADIUS = 1;    // cells beyond center to query (1 = 3×3 neighborhood)
+// Cells beyond the centre to query. Derived so the neighbourhood always reaches
+// MAX_DETECTION_DISTANCE: with 16-tile cells and a 40-tile ceiling that is 3
+// (a 7×7 neighbourhood). A fixed 1 only guaranteed 16 tiles of reach and made
+// detection depend on where in a cell the observer stood.
+export const SPATIAL_QUERY_RADIUS = Math.ceil(MAX_DETECTION_DISTANCE / SPATIAL_CELL_SIZE);
 
 // --- Active Simulation Radius (Prompt S) ---
 export const ACTIVE_RADIUS  = 40;   // tiles — full simulation within this range
