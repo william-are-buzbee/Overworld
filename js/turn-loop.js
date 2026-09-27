@@ -49,8 +49,7 @@ function monstersHere(){ return monsters[state.player.layer] || []; }
 // ── Layer-transition tracking for dormancy catch-up (Prompt S) ──
 // When the player leaves a layer, we record the turn count.  When they return,
 // every creature on that layer gets catch-up for the intervening turns.
-let _prevLayer = null;
-const _layerLeftTurn = {};   // layerIndex → turnCount when the player left
+// State lives on state.prevLayer / state.layerLeftTurn (reset per run, saved).
 
 // ==================== ACTIVE SIMULATION RADIUS (Prompt S) ====================
 // Creatures beyond DORMANT_RADIUS from the player are dormant — they skip
@@ -471,12 +470,12 @@ function endPlayerTurn(action){
   // If the player changed layers since last turn, record departure from the old
   // layer and catch up creatures on the new layer for the time the player was away.
   const currentLayer = state.player.layer;
-  if (_prevLayer != null && _prevLayer !== currentLayer) {
+  if (state.prevLayer != null && state.prevLayer !== currentLayer) {
     // Record when we left the previous layer
-    _layerLeftTurn[_prevLayer] = state.turnCount;
+    state.layerLeftTurn[state.prevLayer] = state.turnCount;
     // If returning to a layer we've visited before, catch up its creatures
-    if (_layerLeftTurn[currentLayer] != null) {
-      const turnsAway = state.turnCount - _layerLeftTurn[currentLayer];
+    if (state.layerLeftTurn[currentLayer] != null) {
+      const turnsAway = state.turnCount - state.layerLeftTurn[currentLayer];
       if (turnsAway > 0) {
         const layerMons = monsters[currentLayer] || [];
         for (const m of layerMons) {
@@ -486,10 +485,10 @@ function endPlayerTurn(action){
           m._dormantTurns = (m._dormantTurns || 0) + turnsAway;
         }
       }
-      delete _layerLeftTurn[currentLayer];
+      delete state.layerLeftTurn[currentLayer];
     }
   }
-  _prevLayer = currentLayer;
+  state.prevLayer = currentLayer;
 
   // Enemies act — only on current layer, town cells are safe
   if (!isTownCell(state.player.layer)){

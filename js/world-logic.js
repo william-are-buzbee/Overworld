@@ -1,5 +1,6 @@
 // ==================== WORLD LOGIC — placement, spawning, init ====================
-import { state, worlds, covers, features, monsters, activateLayer } from './state.js';
+import { state, worlds, covers, features, monsters, groundItems, activateLayer } from './state.js';
+import { resetScent } from './scent.js';
 import { LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, W_UNDER, H_UNDER, LAYER_META, BIOME_TARGET, CELL_TILE_W, CELL_TILE_H, ACTIVE_RADIUS, DORMANT_RADIUS,
          SPAWN_DENSITY_SMALL_HERB, SPAWN_DENSITY_LARGE_HERB, SPAWN_DENSITY_MESO_PRED,
          SPAWN_DENSITY_AMBUSH_PRED, SPAWN_DENSITY_APEX_PRED,
@@ -692,7 +693,9 @@ export function initWorld(seed){
   for (const k in covers) delete covers[k];
   for (const k in features) delete features[k];
   for (const k in monsters) delete monsters[k];
+  for (const k in groundItems) delete groundItems[k];   // corpses of the last run
   for (const k in LAYER_META) delete LAYER_META[k];
+  resetScent();
   clearPlacementState();
 
   generateLayer(LAYER_SURFACE, seed);

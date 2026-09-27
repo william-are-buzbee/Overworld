@@ -18,10 +18,14 @@ function log(text, category) {
   _rawLog(text, category);
 }
 import { updatePlayerFOV } from './fov.js';
+import { resetScent } from './scent.js';
 import { rand, getRngState, setRngState } from './rng.js';
 
 const SAVE_KEY = 'overworld_zero_save';
+const BACKUP_KEY = 'overworld_zero_save_backup';   // a save that failed to load, kept rather than deleted
 const SAVE_VERSION = 4;
+const ACCEPTED_VERSIONS = [1, 2, 3, SAVE_VERSION];   // older ones are migrated on load
+let _saveFailWarned = false;
 
 // ==================== INDEXEDDB STORAGE BACKEND ====================
 // Replaces localStorage. No 5 MB cap — IndexedDB supports hundreds of MB to GB.
@@ -369,15 +373,11 @@ function serializePlayer(p) {
   out._booksRead = p.booksRead ? [...p.booksRead] : [];
   delete out.npcsMet;
   delete out.booksRead;
-  // Body map → save only zone runtime state (hp, maxHp, destroyed, clotting)
+  // Body map → save only zone runtime state (hp, maxHp, destroyed, clotting,
+  // substrate). Same extractor as monsters; a hand-rolled copy here used to
+  // leave substrate out, so a reload was a free sprint recovery.
   if (p.bodyMap) {
-    out._zoneState = p.bodyMap.map(z => ({
-      key: z.key,
-      hp: z.hp,
-      maxHp: z.maxHp,
-      destroyed: z.destroyed,
-      clotting: z.clotting || 0,
-    }));
+    out._zoneState = extractZoneState(p.bodyMap);
   }
   delete out.bodyMap;  // don't persist full body map (static data reloaded from template)
   // Blood system — save current blood level (bloodMax/bleedPenalty/bloodShare are derived on load)
@@ -697,6 +697,10 @@ export async function saveGame() {
         worldSeed: state.worldSeed,
         cgAttrs: state.cgAttrs,
         rngState: getRngState(),
+        windDirection: state.windDirection,
+        windSpeed: state.windSpeed,
+        prevLayer: state.prevLayer,
+        layerLeftTurn: { ...(state.layerLeftTurn || {}) },
       },
 
       // World grids — Object keyed by layerIndex, values are 2D arrays
@@ -754,10 +758,18 @@ export async function saveGame() {
       return;
     }
 
-    // Store structured object directly into IndexedDB
-    await saveToIDB(SAVE_KEY, saveData);
+    // Snapshot NOW, before any await. saveData holds live references (worlds
+    // by reference, monsters by shallow spread); a keydown during the
+    // openDB() await would run a turn and the stored object would mix
+    // turn N primitives with turn N+1 nested state.
+    const snapshot = structuredClone(saveData);
+    await saveToIDB(SAVE_KEY, snapshot);
   } catch (err) {
     console.error('[Save] Failed to save game:', err);
+    if (!_saveFailWarned) {
+      _saveFailWarned = true;
+      log('Autosave failed; this run will not survive a reload. (Private window or storage full?)', LOG_CATEGORIES.SYSTEM);
+    }
   } finally {
     _saveInProgress = false;
   }
@@ -771,7 +783,7 @@ export async function hasSave() {
     const data = await loadFromIDB(SAVE_KEY);
     if (!data) return false;
     // Accept current version AND previous versions (will be migrated on load)
-    return !!(data && (data.version === SAVE_VERSION || data.version === 3 || data.version === 2 || data.version === 1) && data.state && data.state.player);
+    return !!(data && ACCEPTED_VERSIONS.includes(data.version) && data.state && data.state.player);
   } catch {
     return false;
   }
@@ -795,10 +807,10 @@ export async function loadGame() {
     const data = await loadFromIDB(SAVE_KEY);
     if (!data) return false;
 
-    // Version check — accept v1, v2, v3 (will migrate) and current version
-    if (!data || (data.version !== SAVE_VERSION && data.version !== 3 && data.version !== 2 && data.version !== 1)) {
-      console.warn('[Save] Incompatible save version, discarding.');
-      await deleteSave();
+    // Version check — older accepted versions are migrated below
+    if (!ACCEPTED_VERSIONS.includes(data.version)) {
+      console.warn('[Save] Incompatible save version:', data.version);
+      await keepAsBackup(data);
       return false;
     }
 
@@ -815,12 +827,13 @@ export async function loadGame() {
 
     // Validate critical data
     if (!data.state || !data.state.player || !data.worlds) {
-      console.warn('[Save] Corrupt save data, discarding.');
-      await deleteSave();
+      console.warn('[Save] Corrupt save data.');
+      await keepAsBackup(data);
       return false;
     }
 
     // --- Restore core state ---
+    resetScent();   // scent maps are transient; never carry a stale plume into a loaded run
     const savedState = data.state;
     state.player     = deserializePlayer(savedState.player);
     state.turnCount   = savedState.turnCount  || 0;
@@ -830,6 +843,10 @@ export async function loadGame() {
     state.inputLocked = false;
     if (savedState.worldSeed != null) state.worldSeed = savedState.worldSeed;
     if (savedState.rngState != null) setRngState(savedState.rngState);
+    if (savedState.windDirection != null) state.windDirection = savedState.windDirection;
+    if (savedState.windSpeed != null) state.windSpeed = savedState.windSpeed;
+    state.prevLayer = savedState.prevLayer != null ? savedState.prevLayer : null;
+    state.layerLeftTurn = savedState.layerLeftTurn ? { ...savedState.layerLeftTurn } : {};
     if (savedState.cgAttrs) {
       state.cgAttrs = needsStatMigration ? migrateCgAttrs(savedState.cgAttrs) : savedState.cgAttrs;
     }
@@ -953,8 +970,25 @@ export async function loadGame() {
     return true;
   } catch (err) {
     console.error('[Save] Failed to load game:', err);
-    await deleteSave();
+    // One deserialization bug used to wipe the run here. Keep the data.
+    try { await keepAsBackup(await loadFromIDB(SAVE_KEY)); } catch (e2) { console.error('[Save] Backup failed:', e2); }
     return false;
+  }
+}
+
+/**
+ * A save that could not be loaded is copied to BACKUP_KEY instead of being
+ * deleted (the title flow deletes the primary key when resume fails). The
+ * player is told; a developer can recover it from IndexedDB
+ * (overworld_zero / saves / overworld_zero_save_backup).
+ */
+async function keepAsBackup(data) {
+  if (!data) return;
+  try {
+    await saveToIDB(BACKUP_KEY, data);
+    log('Your save could not be loaded. It was kept as a backup, not deleted.', LOG_CATEGORIES.SYSTEM);
+  } catch (err) {
+    console.error('[Save] Could not write backup:', err);
   }
 }
 

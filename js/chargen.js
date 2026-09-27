@@ -1,6 +1,6 @@
 // ==================== SPECIES SELECTION + DEATH/VICTORY ====================
 // Prompt F: replaces stat allocation with species selection.
-import { state } from './state.js';
+import { state, resetRunState } from './state.js';
 import { SPECIES_TEMPLATES } from './constants.js';
 import { freshPlayer } from './player.js';
 import { initWorld } from './world-logic.js';
@@ -83,7 +83,7 @@ function renderColorSwatches(){
 function beginGame(){
   if (!state.selectedSpecies) return;
 
-  state.exploredCells = new Set();
+  resetRunState();   // nothing from the previous run carries over
   state.player = freshPlayer(
     state.selectedSpecies,
     state.selectedColorPalette || SPECIES_TEMPLATES[state.selectedSpecies].colorPalette
