@@ -39,7 +39,6 @@ export const BIOME = {
 
   // --- Built structures: warm amber lamplight ---
   town:      {bg:'#302418', fg:'#d4be98', mid:'#9a8060', tint:null},
-  castle:    {bg:'#2e2a28', fg:'#beb8b0', mid:'#746c60', tint:null},
   road:      {bg:'#362c20', fg:'#987c58', mid:'#6a5438', tint:null},
   wood_floor:{bg:'#2c2010', fg:'#8e6c44', mid:'#604828', tint:null},
 

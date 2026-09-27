@@ -77,7 +77,6 @@ function attemptMove(dx, dy){
     if (f.type === 'sign') log('A signpost. Press R to read.', LOG_CATEGORIES.INTERACTION);
     else if (f.type === 'npc'){ const n=NPCS[f.npcKey]; log(`${n.name} stands here. Press R.`, LOG_CATEGORIES.INTERACTION); }
     else if (f.type === 'town') log(`Gates of ${TOWNS[f.townKey].name}. Press R to enter.`, LOG_CATEGORIES.INTERACTION);
-    else if (f.type === 'castle') log(`${f.name}. Press R.`, LOG_CATEGORIES.INTERACTION);
     else if (f.type === 'stairs') log(`Stairs ${f.dir}. Press R.`, LOG_CATEGORIES.INTERACTION);
     else if (f.type === 'chest') log('A chest. Press R.', LOG_CATEGORIES.INTERACTION);
     else if (f.type === 'book') log('A book. Press R to pick up.', LOG_CATEGORIES.INTERACTION);

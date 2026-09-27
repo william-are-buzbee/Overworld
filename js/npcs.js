@@ -289,7 +289,6 @@ const SIGN_TEXTS = {
   thornwell_w: "◤ WEST: KARST HOLLOW · mountain road ◢\nFrost and worse.",
   oldsign1:    "The old kingdom fell to ONE THRONE.\nThat throne still sits. Beneath.",
   oldsign2:    "They say the Kingsbane sleeps\nwhere the knights still kneel.\n— Sunward Hold —",
-  castle_warn: "BLACKSPIRE KEEP\nTurn away, if you can.",
   cave_warn:   "The deep remembers nothing of the sun.\nBring cold, bring light, bring courage.",
 };
 
