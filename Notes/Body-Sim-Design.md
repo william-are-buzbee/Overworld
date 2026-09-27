@@ -348,6 +348,8 @@ Armor derives from the structural mass in the zone. More integument/bone = more 
 
 ## Bleed System
 
+*Status (Sep 2026):* the code uses a blood-volume model (`blood`/`bloodMax`, seep from wounded zones scaled by connective tissue and clotting, regeneration, penalty bands) rather than the `totalBleed`/`bleedRate` fields below; the fields are stale. Bleeding runs every turn for every creature on the active layer, whether it is within the active simulation radius or dormant, so distance never pauses a wound.
+
 **Bleed accumulation:** Each damaged zone whose HP is below bleedThreshold × maxHp adds bleedRate to a creature-wide totalBleed counter each turn. Multiple bleeding zones stack.
 
 **Bleed effects:**
