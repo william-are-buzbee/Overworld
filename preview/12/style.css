@@ -1,0 +1,103 @@
+/* style.css */
+body {
+  background-color: #0a0a0a; /* Deep black background */
+  color: #e0e0e0;
+  font-family: 'Courier New', Courier, monospace; /* Roguelike vibe */
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  overflow: hidden;
+}
+
+#viewport {
+  border: 2px solid #333;
+  image-rendering: pixelated; /* Keeps tiles sharp */
+}
+
+/* ─── Sidebar (frosted-glass HUD) ─── */
+#sidebar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  width: 300px;
+  background: rgba(6, 6, 10, 0.72); /* Frosted glass base */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.4),
+              -4px 0 20px rgba(0,0,0,0.3);
+
+  /* Smooth slide transition */
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease;
+  padding: 20px;
+  box-sizing: border-box;
+  z-index: 10;
+}
+
+#sidebar.minimized {
+  transform: translateX(calc(100% - 28px));
+  opacity: 0.6;
+  pointer-events: none;  /* Clicks pass through to canvas */
+}
+#sidebar.minimized .hud-toggle {
+  pointer-events: auto;  /* Toggle stays clickable */
+  opacity: 1;
+}
+
+/* ─── HUD Toggle Button ─── */
+.hud-toggle {
+  position: absolute;
+  top: 8px;
+  left: -28px;
+  width: 26px;
+  height: 34px;
+  background: rgba(6, 6, 10, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  color: #8a8a8a;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 11;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+.hud-toggle:hover {
+  background: rgba(20, 20, 28, 0.92);
+  color: #e0e0e0;
+}
+.hud-toggle .arrow {
+  display: inline-block;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#sidebar.minimized .hud-toggle .arrow {
+  transform: rotate(180deg);
+}
+
+/* Status Bars */
+.bar-container {
+  width: 100%;
+  height: 12px;
+  background: #222;
+  border: 1px solid #444;
+  margin: 5px 0;
+}
+
+#hp-bar { background: #b03030; height: 100%; transition: width 0.2s; }
+#xp-bar { background: #3080b0; height: 100%; transition: width 0.2s; }
+
+/* Item/Perk Lists */
+.list-item {
+  font-size: 0.9em;
+  padding: 4px 0;
+  border-bottom: 1px solid #222;
+}
