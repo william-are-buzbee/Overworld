@@ -18,27 +18,6 @@ import { makeUnderground, makeLavaLayer, playableRadius } from './underground-ge
 export { makeSurface, placeDirtRoads } from './surface-gen.js';
 export { makeUnderground, makeLavaLayer, playableRadius, carveCorridors, carveBetween } from './underground-gen.js';
 
-// ==================== LAYER BOOTSTRAPPING ====================
-export function addLayer(w, h) {
-  const idx = nextLayerIndex();
-  const grid = [];
-  const coverGrid = [];
-  for (let y = 0; y < h; y++) {
-    const row = [];
-    const crow = [];
-    for (let x = 0; x < w; x++){
-      row.push(T.STONE);
-      crow.push(0);
-    }
-    grid.push(row);
-    coverGrid.push(crow);
-  }
-  worlds[idx] = grid;
-  covers[idx] = coverGrid;
-  if (!features[idx]) features[idx] = {};
-  if (!monsters[idx]) monsters[idx] = [];
-  return idx;
-}
 
 export function generateLayer(layerIndex, seed) {
   if (layerExists(layerIndex)) return;

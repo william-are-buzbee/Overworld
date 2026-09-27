@@ -20,22 +20,18 @@ const CAVE_WALL_DARK = { bg: '#1a1614', fg: '#342e28', mid: '#262220' };
 const PREVIEW_PALETTE_KEYS = {
   GRASS:        'plains',
   DIRT:         'plains',
-  MUD:          'swamp',
+  MUD:          'mud',
   SAND:         'desert',
   ROCK:         'stone',
   BEACH:        'beach',
-  FUNGAL_GRASS: 'fungal',
+  FUNGAL_GRASS: 'fungal_grass',
   WATER:        'water',
-  DEEP_WATER:   'deep_water',
+  DEEP_WATER:   'deep',
   CAVE_FLOOR:   'cave',
-  ROAD:         'road',
-  RUIN_FLOOR:   'ruin',
   FOREST:       'forest',
   MUSHFOREST:   'mushforest',
   CAVE_WALL:    '_cave_wall_dark',
   CAVE_ROCK:    'cave',
-  HUT_WALL:     'town',
-  WHEAT:        'wheat',
 };
 
 function getPreviewPalette(spriteName) {

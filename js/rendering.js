@@ -406,40 +406,6 @@ function render(){
           ctx.fillStyle = '#302a22';
           ctx.fillRect((decor*4)%26+3, (decor*6)%20+6, 2, 3);
         }
-        if (ground === T.DIRT_ROAD && decor < 25){
-          if (decor < 10){
-            ctx.fillStyle = 'rgba(40,30,14,0.4)';
-            const ry = (decor*3)%10+12;
-            ctx.fillRect(6, ry, 20, 1);
-          } else if (decor < 18){
-            ctx.fillStyle = '#5a4c28';
-            const px2 = (decor*4)%22+4, py2 = (decor*7)%20+6;
-            ctx.fillRect(px2, py2, 2, 2);
-            ctx.fillRect(px2+7, py2+3, 2, 1);
-          } else {
-            ctx.fillStyle = 'rgba(120,100,56,0.15)';
-            const bx = (decor*3)%16+6, by = (decor*5)%14+8;
-            ctx.fillRect(bx, by, 8, 5);
-          }
-        }
-        if (ground === T.RUIN_FLOOR && decor < 20){
-          if (decor < 10){
-            ctx.fillStyle = '#3a362c';
-            const cx2 = (decor*4)%20+4, cy2 = (decor*6)%18+4;
-            ctx.fillRect(cx2, cy2, 1, 6);
-            ctx.fillRect(cx2+1, cy2+3, 4, 1);
-          } else {
-            ctx.fillStyle = '#4a4638';
-            const dx2 = (decor*3)%18+6, dy2 = (decor*5)%16+8;
-            ctx.fillRect(dx2, dy2, 3, 2);
-            ctx.fillRect(dx2+1, dy2+2, 1, 1);
-          }
-        }
-        if (ground === T.SHOP_INSIDE && decor < 12){
-          ctx.fillStyle = 'rgba(72,50,20,0.18)';
-          const gy = (decor*4)%20+6;
-          ctx.fillRect(2, gy, 28, 1);
-        }
         if (ground === T.FUNGAL_GRASS && decor < 18){
           if (decor < 9){
             // manganese mineral flecks — violet
