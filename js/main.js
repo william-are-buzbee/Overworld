@@ -26,15 +26,8 @@ window.scentAt = debugScentAt;
 window.scentStats = debugScentStats;
 import { setOnVictoryCallback, toggleStealth } from './combat.js';
 import { useAction, showHelp, readBook } from './interactions.js';
-import { log as _rawLog, LOG_CATEGORIES } from './log.js';
-
-// Wrap log() to push the category into the global queue before the DOM
-// element is appended. The MutationObserver in index.html reads the queue
-// and tags each new <div> with data-category for tab/mute filtering.
-function log(text, category) {
-  if (window._pendingLogCatQueue) window._pendingLogCatQueue.push(category || 'system');
-  _rawLog(text, category);
-}
+import { log, LOG_CATEGORIES } from './log.js';
+import { initLogUI } from './log-ui.js';
 import { openCharGen, renderCharGen, randomizeAttrs, beginGame, onPlayerDeath, onVictory, speciesKeyNav } from './chargen.js';
 import { hasSave, tryResume, deleteSave, migrateFromLocalStorage } from './save-load.js';
 import { isMapOpen, toggleMap, closeMap, markCurrentCell } from './worldmap.js';
@@ -43,6 +36,7 @@ import { isOverlayOpen, activePanel, togglePanel, closeOverlay, setInventoryActi
 
 
 // ==================== WIRE CALLBACKS ====================
+initLogUI();
 setUpdateUICallback(updateUI);
 setOnPlayerDeathCallback(() => {
   deleteSave().catch(e => console.error('[Save]', e));

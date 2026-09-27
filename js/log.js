@@ -1,8 +1,8 @@
 // ==================== LOG SYSTEM ====================
 // Structured message log. Every entry is an object with text, category, and turn.
-// Visual distinction between categories is NOT applied yet — all messages render
-// identically. A future prompt will add tab filtering, per-category muting, and
-// styled rendering that consumes the category field.
+// Rendering is one <div data-category> per entry, uniform style. The panel's
+// tabs, muting, font size and resizing live in log-ui.js, which registers a
+// filter here so each new entry is shown or hidden as it is appended.
 
 import { state } from './state.js';
 
@@ -18,6 +18,10 @@ export const LOG_CATEGORIES = {
 
 // ==================== DOM ====================
 export const logEl = document.getElementById('log');
+
+// ==================== ENTRY FILTER (set by log-ui.js) ====================
+let _entryFilter = null;   // (category) => boolean, or null = show everything
+export function setLogEntryFilter(fn) { _entryFilter = fn; }
 
 // ==================== IN-MEMORY LOG ====================
 // Each entry: { text: string, category: string, turn: number }
@@ -60,13 +64,13 @@ export function log(text, category = 'system') {
 
   logEntries.push(entry);
 
-  // Render to DOM — uniform style, no per-category classes.
-  // data-category is read by the MutationObserver in index.html
-  // for tab filtering and per-category muting.
+  // Render to DOM — uniform style, no per-category classes. data-category
+  // lets log-ui.js re-filter existing entries when the tab or mutes change.
   if (logEl) {
     const div = document.createElement('div');
     div.textContent = entry.text;
     div.dataset.category = entry.category;
+    if (_entryFilter && !_entryFilter(entry.category)) div.style.display = 'none';
     logEl.appendChild(div);
     logEl.scrollTop = logEl.scrollHeight;
   }
