@@ -24,11 +24,11 @@ window.debugCognition = debugCognition;
 window.debugSubstrate = debugSubstrate;
 window.scentAt = debugScentAt;
 window.scentStats = debugScentStats;
-import { setOnVictoryCallback, toggleStealth } from './combat.js';
+import { toggleStealth } from './combat.js';
 import { useAction, showHelp, readBook } from './interactions.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { initLogUI } from './log-ui.js';
-import { openCharGen, renderCharGen, randomizeAttrs, beginGame, onPlayerDeath, onVictory, speciesKeyNav } from './chargen.js';
+import { openCharGen, beginGame, onPlayerDeath, speciesKeyNav } from './chargen.js';
 import { hasSave, tryResume, deleteSave, migrateFromLocalStorage } from './save-load.js';
 import { isMapOpen, toggleMap, closeMap, markCurrentCell } from './worldmap.js';
 // LEGACY POPUP: overlay.js still used by inventory panel. Migrate to HUD-native.
@@ -43,12 +43,6 @@ setOnPlayerDeathCallback(() => {
   onPlayerDeath();
   hideHud();
   renderDeathScreen();
-});
-setOnVictoryCallback(() => {
-  deleteSave().catch(e => console.error('[Save]', e));
-  onVictory();
-  hideHud();
-  renderVictoryScreen();
 });
 // LEGACY POPUP: ground pickup still uses modal. Migrate to HUD-native.
 setGroundModalCallbacks(openModal, closeModal);
@@ -94,10 +88,6 @@ function canvasToWorld(ev) {
     wy: state.player.y - (VH >> 1) + cy,
   };
 }
-
-// ==================== EARLY DOM REFS ====================
-// Must be declared before event handlers that reference them.
-const restartConfirmEl = document.getElementById('restart-confirm');
 
 // ==================== INPUT: MOUSE ====================
 canvas.addEventListener('click', (ev) => {
@@ -178,7 +168,6 @@ canvas.addEventListener('wheel', (ev) => {
       _titleBackdropCanvas = null; // invalidate cache for new tile size
       renderTitle();
     } else if (state.gameState === 'death') renderDeathScreen();
-    else if (state.gameState === 'victory') renderVictoryScreen();
     updateZoomLabel();
   }
 }, { passive: false });
@@ -404,7 +393,7 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
-  // ---- Canvas-rendered screen states: title, species, death, victory ----
+  // ---- Canvas-rendered screen states: title, species, death ----
   // Title screen keyboard navigation
   if (state.gameState === 'title') {
     const speciesScreen = document.getElementById('species-screen');
@@ -420,16 +409,6 @@ document.addEventListener('keydown', (ev) => {
 
   // Death screen — Enter returns to title
   if (state.gameState === 'death') {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      ev.preventDefault();
-      deleteSave().catch(e => console.error('[Save]', e));
-      goToTitle();
-    }
-    return;
-  }
-
-  // Victory screen — Enter returns to title
-  if (state.gameState === 'victory') {
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
       deleteSave().catch(e => console.error('[Save]', e));
@@ -642,115 +621,10 @@ document.addEventListener('keyup', (ev) => {
 //   }
 // });
 
-// ==================== CHARGEN CONTROLS ====================
-// Prompt F: old stat-allocation buttons (cg-random, cg-reset, cg-begin) removed.
-// Species selection wiring is handled inside chargen.js openCharGen().
-// Guard legacy elements in case old HTML is still cached.
-const _cgRandom = document.getElementById('cg-random');
-const _cgReset  = document.getElementById('cg-reset');
-const _cgBegin  = document.getElementById('cg-begin');
-if (_cgRandom) _cgRandom.addEventListener('click', randomizeAttrs);
-if (_cgReset) _cgReset.addEventListener('click', () => {
-  state.cgAttrs = { siz: 1, strength: 1, chem: 1, vib: 1, vis: 1, central: 1, distributed: 1 };
-  renderCharGen();
-});
-if (_cgBegin) _cgBegin.addEventListener('click', beginGame);
-
-// ==================== STATE MACHINE TRANSITIONS ====================
-// Canvas-rendered screens replace DOM overlays. showScreen is now only
-// used internally by canvas rendering — DOM elements stay hidden via CSS.
-
-function showScreen(id) {
-  // DOM screens are hidden via CSS (!important) — no need to toggle them.
-  // Just manage game state and trigger appropriate canvas rendering.
-  if (id === 'title') {
-    state.gameState = 'title';
-    hideHud();
-    // Invalidate backdrop so it regenerates fresh
-    _titleBackdropCanvas = null;
-    updateTitleMenu().then(() => renderTitle()).catch(e => console.error(e));
-  }
-  if (id === 'death' || id === 'victory') hideHud();
-}
-
-// ---- Save-aware title screen (canvas-rendered) ----
-// DOM refs kept for backward compat — elements are hidden via CSS.
-const titleEl = document.getElementById('title');
-const titleContinueBtn = document.getElementById('title-continue');
-const titleNewGameBtn  = document.getElementById('title-newgame');
-
-// Legacy: updateTitleButtons still used during startup migration path.
-// Replaced by updateTitleMenu for canvas rendering.
-async function updateTitleButtons() {
-  await updateTitleMenu();
-}
-
-// ══════════════════════════════════════════════════════════════
-// LEGACY DOM HANDLERS — commented out, replaced by keyboard navigation.
-// Title menu: handleTitleKeys (above) replaces these click handlers.
-// Death/victory: Enter key replaces these click handlers.
-// ══════════════════════════════════════════════════════════════
-
-// titleContinueBtn.addEventListener('click', async (ev) => {
-//   ev.stopPropagation();
-//   if (await hasSave()) {
-//     const resumed = await tryResume();
-//     if (resumed) {
-//       titleEl.style.display = 'none';
-//       state.gameState = 'play';
-//       try { updateUI(); } catch(e) { console.error(e); }
-//     } else {
-//       deleteSave().catch(e => console.error('[Save]', e));
-//       await updateTitleButtons();
-//       openCharGen();
-//     }
-//   }
-// });
-//
-// titleNewGameBtn.addEventListener('click', (ev) => {
-//   ev.stopPropagation();
-//   deleteSave().catch(e => console.error('[Save]', e));
-//   openCharGen();
-// });
-//
-// titleEl.addEventListener('click', (ev) => {
-//   // Only buttons above should act
-// });
-//
-// document.getElementById('death').addEventListener('click', () => {
-//   deleteSave().catch(e => console.error('[Save]', e));
-//   showScreen('title');
-// });
-// document.getElementById('victory').addEventListener('click', () => {
-//   deleteSave().catch(e => console.error('[Save]', e));
-//   showScreen('title');
-// });
-
-// ---- In-game restart confirmation (canvas-rendered) ----
-// showRestartConfirm / hideRestartConfirm defined above in canvas section.
-// DOM click handlers for restart-yes/restart-no commented out —
-// Y/N keyboard handling replaces them.
-
-// document.getElementById('restart-yes').addEventListener('click', (ev) => {
-//   ev.stopPropagation();
-//   hideRestartConfirm();
-//   deleteSave().catch(e => console.error('[Save]', e));
-//   showScreen('title');
-// });
-//
-// document.getElementById('restart-no').addEventListener('click', (ev) => {
-//   ev.stopPropagation();
-//   hideRestartConfirm();
-// });
-//
-// restartConfirmEl.addEventListener('click', (ev) => {
-//   ev.stopPropagation();
-// });
-
 // ==================== CANVAS-RENDERED SCREENS ====================
-// Title, death, victory, and restart confirmation are all rendered on
-// the game canvas using the same sprite pipeline as gameplay.
-// DOM elements for these screens are hidden via CSS.
+// Title, death, and restart confirmation are all rendered on the game
+// canvas using the same sprite pipeline as gameplay. (The restart
+// confirmation is drawn by showRestartConfirm, which nothing binds yet.)
 
 // ---- Seeded 2D Perlin noise (self-contained for title backdrop) ----
 function _titleNoise2D(seed) {
@@ -981,34 +855,6 @@ function renderDeathScreen() {
   ctx.fillText('PRESS ENTER', canvas.width / 2, canvas.height * 0.52);
 }
 
-// ---- Render: Victory Screen ----
-function renderVictoryScreen() {
-  // Re-render the game world behind the overlay
-  if (state.player) {
-    try { render(); } catch (e) { /* fallback: leave existing canvas */ }
-  }
-
-  // Dark overlay
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // "VICTORY" text
-  ctx.font = '24px "Press Start 2P"';
-  ctx.fillStyle = '#e8e8e8';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('VICTORY', canvas.width / 2, canvas.height * 0.38);
-
-  // Subtitle
-  ctx.font = '8px "Press Start 2P"';
-  ctx.fillStyle = '#888';
-  ctx.fillText('The land exhales.', canvas.width / 2, canvas.height * 0.46);
-
-  // "PRESS ENTER" prompt
-  ctx.fillStyle = '#4a4a4a';
-  ctx.fillText('PRESS ENTER', canvas.width / 2, canvas.height * 0.54);
-}
-
 // ---- Render: Restart Confirmation (canvas overlay during gameplay) ----
 let _restartConfirmVisible = false;
 
@@ -1163,8 +1009,6 @@ window.addEventListener('resize', () => {
     renderTitle();
   } else if (state.gameState === 'death') {
     renderDeathScreen();
-  } else if (state.gameState === 'victory') {
-    renderVictoryScreen();
   }
 });
 

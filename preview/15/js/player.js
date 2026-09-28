@@ -41,7 +41,6 @@ function freshPlayer(speciesKey, colorPalette){
     npcsMet:new Set(),
     booksRead:new Set(),
     perks:{},
-    defeatedBoss:false,
     isPlayer:true,
     hitFlash:0,
     bodyMapKey: species.creatureKey,

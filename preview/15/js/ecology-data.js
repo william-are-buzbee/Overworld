@@ -38,22 +38,17 @@ export const BIOME = {
   uwater:    {bg:'#1c2214', fg:'#748c5c', mid:'#404a34', tint:'#7a9a64'},
 
   // --- Built structures: warm amber lamplight ---
-  town:      {bg:'#302418', fg:'#d4be98', mid:'#9a8060', tint:null},
-  road:      {bg:'#362c20', fg:'#987c58', mid:'#6a5438', tint:null},
-  wood_floor:{bg:'#2c2010', fg:'#8e6c44', mid:'#604828', tint:null},
 
   // --- Chemotrophic biomes: non-photosynthetic, manganese-purple ---
   mushroom:  {bg:'#281930', fg:'#7E6494', mid:'#523C64', tint:'#6C5480'},
   mushforest:{bg:'#281E34', fg:'#886E94', mid:'#5C4070', tint:'#705880'},
 
   // --- Crops: muted amber ---
-  wheat:     {bg:'#382e18', fg:'#aa8c48', mid:'#7a6438', tint:null},
 
   // --- Beach: transition between sand and water, warm but darker than sand ---
   beach:     {bg:'#40321C', fg:'#A69270', mid:'#76684C', tint:'#8E7C58'},
   // --- Sand: mineral grains reflecting amber starlight, warm tan ---
   sand:      {bg:'#383636', fg:'#bab6b2', mid:'#868280', tint:'#a09c98'},
-  ruin:      {bg:'#2a2624', fg:'#6e645c', mid:'#524e48', tint:'#645c58'},
   void:      {bg:'#000000', fg:'#000000', mid:'#000000', tint:null},
   cave_wall: {bg:'#1a1614', fg:'#342e28', mid:'#262220', tint:null},
   cave_rock: {bg:'#181816', fg:'#2c2a28', mid:'#201e1c', tint:null},
@@ -66,7 +61,6 @@ export const BIOME = {
 
   // --- Bare earth: dry ground ---
   dirt:      {bg:'#382814', fg:'#78532C', mid:'#583E22', tint:null},
-  hut_wall:  {bg:'#2c2010', fg:'#8e6c44', mid:'#604828', tint:null},
 };
 
 // ==================== BIOME TARGET MAP ====================

@@ -2,7 +2,7 @@
 // Stripped: sidebar panels removed. DOM writes that targeted removed
 // elements are gutted. Data computation kept for future modal/HUD use.
 
-import { state, worlds, features, monsters } from './state.js';
+import { state, worlds, covers, features, monsters } from './state.js';
 import { DMG, LAYER_SURFACE, LAYER_UNDER } from './constants.js';
 import { T } from './terrain.js';
 import { FOOD, POTIONS, BOOKS, findWeapon, findArmor } from './items.js';
@@ -805,10 +805,6 @@ function getRegionName() {
   if (!row) return 'unknown';
   const t = row[p.x];
 
-  if (p.layer === LAYER_SURFACE && (t === T.WOOD_FLOOR || t === T.WALL)) {
-    return 'Millhaven';
-  }
-
   if (p.layer === LAYER_UNDER) {
     for (let dy = -3; dy <= 3; dy++) {
       for (let dx = -3; dx <= 3; dx++) {
@@ -822,14 +818,21 @@ function getRegionName() {
     return 'stone caverns';
   }
 
+  // Cover first (forest/mushroom forest live in the cover grid, not the ground
+  // grid — the old table keyed them on ground and used ids that don't exist,
+  // so it could only ever say plains, sea or coast).
+  const cover = covers[p.layer]?.[p.y]?.[p.x] || 0;
+  if (cover === T.FOREST)     return 'forest';
+  if (cover === T.MUSHFOREST) return 'mushroom forest';
   const SURFACE_LABELS = {
-    [T.FOREST]:     'forest',
-    [T.MUSHFOREST]: 'mushroom forest',
-    [T.DESERT]:     'desert',
-    [T.MOUNTAIN]:   'mountains',
-    [T.WATER]:      'sea',
-    [T.DEEP]:       'sea',
-    [T.BEACH]:      'coast',
+    [T.WATER]:        'sea',
+    [T.DEEP_WATER]:   'sea',
+    [T.BEACH]:        'coast',
+    [T.SAND]:         'sand flats',
+    [T.ROCK]:         'rocky ground',
+    [T.MUD]:          'marsh',
+    [T.FUNGAL_GRASS]: 'fungal ground',
+    [T.DIRT]:         'bare earth',
   };
   return SURFACE_LABELS[t] ?? 'plains';
 }

@@ -15,7 +15,7 @@ const MON = {
                [T.GRASS],          LAYER_SURFACE,
                15, 1,
                0, 2,                // passive, tiny aggro
-               [T.GRASS,T.DIRT,T.DIRT_ROAD,T.BEACH],
+               [T.GRASS,T.DIRT,T.BEACH],
                0, 0,
                '#7a8070',           // muted gray-green, plated integument
                null],
@@ -27,7 +27,7 @@ const MON = {
                [T.FOREST],            LAYER_SURFACE,
                40, 2,
                1, 3,                // territorial, reduced aggro range
-               [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.DIRT_ROAD,T.BEACH],  // roams freely across most terrain
+               [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.BEACH],  // roams freely across most terrain
                5, 2,                // solo chase ~5 tiles; personalities adjust for pack/wary
                '#5a4a40',           // dark warm gray-brown, wrinkled skin
                {nightVision:true}],
@@ -335,7 +335,7 @@ MON.dire_wolf = ['Apex Predator',  'APEX_PRED',
                [T.FOREST],            LAYER_SURFACE,
                45, 4,
                1, 3,                // territorial, reduced aggro range
-               [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.DIRT_ROAD,T.BEACH],
+               [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.BEACH],
                5, 2,
                '#3a302a',           // dark charcoal-brown, dense skin
                {nightVision:true}];
@@ -888,7 +888,7 @@ const SPAWN_HABITAT = {
   // C3 — Small herbivore: open-ground grazer, feeds on photosynthetic mats in open light.
   // Spawns on open grassland, light forest edges, and bare earth.
   hare: {
-    ground: new Set([T.GRASS, T.DIRT, T.RUIN_FLOOR]),
+    ground: new Set([T.GRASS, T.DIRT]),
     cover:  new Set([T.FOREST]),        // forest-edge tiles count as habitat
     // Note: FUNGAL_GRASS omitted — C3 feeds on photosynthetic mats, not chemotrophic substrate
   },
@@ -905,7 +905,7 @@ const SPAWN_HABITAT = {
   // C1 — Meso-predator: generalist, crosses biome boundaries.
   // Spawns across most terrestrial terrain.
   wolf: {
-    ground: new Set([T.GRASS, T.DIRT, T.MUD, T.RUIN_FLOOR]),
+    ground: new Set([T.GRASS, T.DIRT, T.MUD]),
     cover:  new Set([T.FOREST]),
     // Note: wider habitat than other predators reflects generalist niche
   },
