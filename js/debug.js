@@ -111,7 +111,7 @@ function debugCognition() {
       actions: m._actionsThisTurn != null ? m._actionsThisTurn : '—',
       rule: t.reactiveRule || '—',
       mag: t.reactiveMagnitude != null ? t.reactiveMagnitude.toFixed(1) : '—',
-      'P(ovr)': t.overrideProbability != null ? (t.overrideProbability * 100).toFixed(0) + '%' : '—',
+      'ovr': t.overrideRatio != null ? (t.overrideRatio === Infinity ? '∞' : t.overrideRatio.toFixed(2)) : '—',
       override: t.overrideSucceeded ? 'YES' : (t.overrideAttempted ? 'tried' : 'no'),
       final: t.finalBehavior || '—',
       delib: t.fromDeliberate ? '✓' : '',
