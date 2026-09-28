@@ -327,6 +327,8 @@ Armor derives from the structural mass in the zone. More integument/bone = more 
 
 ### Step 3 — Consequence Resolution
 
+*Status (Sep 2026):* one function, `applyZoneDamage(entity, zone, dmg)` in physiology.js, applies the damage and resolves every consequence below for every strike in the game (player on creature, creature on player, creature on creature). Death order is vital → neural → blood; it sets `hp = 0` and `deathCause`, and the caller drops the corpse or shows the death screen.
+
 **Zone destroyed (HP reaches 0):**
 - If vital: true → creature dies.
 - All neural mass in this zone is permanently lost. Recompute centralization and distribution scores.

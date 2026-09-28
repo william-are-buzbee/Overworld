@@ -5,14 +5,12 @@
 
 import { state, groundItems } from './state.js';
 import { DMG, getBodyMap, getAvailableAttacks, selectHitZone,
-         computeStrikeDamage, computeBleedPenalty, getPathways,
-         checkNeuralDeath, hasLocomotion, checkSenseLoss,
+         computeStrikeDamage,
          ARMOR_PER_STRUCTURAL_KG, getAttackDirection, getExposedZones, selectContactedZones,
          CHASE_LEASH_BASE, CHASE_LEASH_HUNGER_MULT, MEAL_HUNGER_REDUCTION,
          BITE_MASS_FRACTION, GRAZE_HUNGER_REDUCTION,
          REST_RECOVERY_NORMAL, REST_RECOVERY_WEAKENED, REST_RECOVERY_CRITICAL,
          REST_EATING_BONUS,
-         BURST_COEFF, BLOOD_DEATH_THRESHOLD,
          SAFETY_DECAY_RATE, facingSteps } from './constants.js';
 import { rand, randi, roll100 } from './rng.js';
 import { monAcc, monDodge, monDamage, monCritChance, monCritMult, DEFAULT_WANDER_PROFILE } from './monsters.js';
@@ -27,7 +25,7 @@ import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          wouldExceedTerritory, hasCladeTerritory, tileIsFood,
          findNearestFoodTile, getCorpseAt } from './ai-utils.js';
 import { getAdjacentPrey, isViablePrey, applySafetyFromDamage } from './detection.js';
-import { applyTurningCost } from './physiology.js';
+import { applyTurningCost, applyZoneDamage } from './physiology.js';
 
 // ==================== ACTION DISPATCHER (Prompt O) ====================
 // Translates reactive/deliberative output into existing behavior functions.
@@ -551,71 +549,28 @@ function performNPCAttack(attacker, defender) {
   const zoneArmor = (hitZone.structural || 0) * ARMOR_PER_STRUCTURAL_KG;
   const finalDmg = Math.max(1, dmg - zoneArmor);
 
-  hitZone.hp = Math.max(0, (hitZone.hp || 0) - finalDmg);
-
-  // Reset clotting on hit
-  if (hitZone.clotting > 0) hitZone.clotting = 0;
-
-  // Spike defender's safety
+  // Spike defender's safety (pain is a signal even before the zone gives)
   applySafetyFromDamage(defender, finalDmg, attacker);
 
-  // Zone destruction
-  if (hitZone.hp <= 0 && !hitZone.destroyed) {
-    hitZone.hp = 0;
-    hitZone.destroyed = true;
-
-    // Blood dump from destroyed zone
-    if (defender.blood != null && defender.bloodMax > 0) {
-      const dump = hitZone.bloodShare || 0;
-      defender.blood -= dump;
-
-      const pathways = getPathways(defender);
-      let severedBandwidth = 0;
-      for (const pw of pathways) {
-        if (pw.from === hitZone.key || pw.to === hitZone.key) {
-          severedBandwidth += pw.bandwidth;
-        }
-      }
-      const burst = severedBandwidth * BURST_COEFF * defender.bloodMax;
-      defender.blood -= burst;
-      defender.blood = Math.max(0, defender.blood);
-      defender.bleedPenalty = computeBleedPenalty(defender);
-    }
-
-    // Death checks
-    if (hitZone.vital) {
-      defender.hp = 0;
-      defender.deathCause = 'vital';
-    } else if (checkNeuralDeath(defBodyMap)) {
-      defender.hp = 0;
-      defender.deathCause = 'neural';
-    } else if (defender.blood != null && defender.blood <= defender.bloodMax * BLOOD_DEATH_THRESHOLD) {
-      defender.hp = 0;
-      defender.deathCause = 'blood';
-    }
-
-    if (defender.hp <= 0) {
-      log(`The ${attacker.name} kills the ${defender.name}.`, LOG_CATEGORIES.COMBAT);
-      // Drop a corpse for the predator (or others) to eat
-      placeItem(state.player.layer, defender.x, defender.y, {
-        id:       generateItemId(),
-        kind:     'corpse',
-        type:     'corpse',
-        name:     `${defender.name} Corpse`,
-        desc:     `${defender.name} Corpse — could be butchered or examined.`,
-        sprite:   'CORPSE',
-        weight:   2,
-        quantity: 1,
-        source:   defender.key,
-        nutrition: defender.hpMax,
-        mass:     defender.totalMass || 1,
-      });
-    }
-
-    // Locomotion check
-    if (hitZone.locomotion && !hasLocomotion(defBodyMap)) {
-      defender.immobilized = true;
-    }
+  // Same resolver as every other strike. Quiet: the player is not in this
+  // fight, so only the kill is logged (as before).
+  const result = applyZoneDamage(defender, hitZone, finalDmg, { quiet: true });
+  if (result.died) {
+    log(`The ${attacker.name} kills the ${defender.name}.`, LOG_CATEGORIES.COMBAT);
+    // Drop a corpse for the predator (or others) to eat
+    placeItem(state.player.layer, defender.x, defender.y, {
+      id:       generateItemId(),
+      kind:     'corpse',
+      type:     'corpse',
+      name:     `${defender.name} Corpse`,
+      desc:     `${defender.name} Corpse — could be butchered or examined.`,
+      sprite:   'CORPSE',
+      weight:   2,
+      quantity: 1,
+      source:   defender.key,
+      nutrition: defender.hpMax,
+      mass:     defender.totalMass || 1,
+    });
   }
 }
 
@@ -970,7 +925,7 @@ function monsterMelee(mon){
       const zoneArmor = (zone.structural || 0) * ARMOR_PER_STRUCTURAL_KG;
       zoneDmg = Math.max(1, zoneDmg - zoneArmor);
 
-      resolvePlayerZoneDamage(zone, zoneDmg, playerBodyMap);
+      applyZoneDamage(player, zone, zoneDmg);
     }
   }
 
@@ -992,89 +947,6 @@ function monsterMelee(mon){
     }
   }
   if (state.player.stealth) endStealth('Your cover is blown.');
-}
-
-// Resolve zone damage on the player.
-function resolvePlayerZoneDamage(hitZone, dmg, bodyMap) {
-  if (hitZone.hp == null) return;
-  hitZone.hp = Math.max(0, hitZone.hp - dmg);
-
-  if (hitZone.clotting > 0) {
-    hitZone.clotting = 0;
-  }
-
-  if (hitZone.hp <= 0 && !hitZone.destroyed) {
-    hitZone.hp = 0;
-    hitZone.destroyed = true;
-
-    log(`Your ${hitZone.name} is destroyed.`, LOG_CATEGORIES.COMBAT);
-
-    const player = state.player;
-    if (player.blood != null && player.bloodMax > 0) {
-      const dump = hitZone.bloodShare || 0;
-      player.blood -= dump;
-
-      const pathways = getPathways(player);
-      let severedBandwidth = 0;
-      for (const pw of pathways) {
-        if (pw.from === hitZone.key || pw.to === hitZone.key) {
-          severedBandwidth += pw.bandwidth;
-        }
-      }
-      const burst = severedBandwidth * BURST_COEFF * player.bloodMax;
-      player.blood -= burst;
-
-      player.blood = Math.max(0, player.blood);
-      player.bleedPenalty = computeBleedPenalty(player);
-    }
-
-    // Death checks — vital → neural → blood
-    if (hitZone.vital) {
-      log(`Something vital tears loose inside you. Everything stops.`, LOG_CATEGORIES.COMBAT);
-      state.player.hp = 0;
-      state.player.deathCause = 'vital';
-      return;
-    }
-
-    if (checkNeuralDeath(bodyMap)) {
-      const headDestroyed = hitZone.key === 'head';
-      if (headDestroyed) {
-        log(`A flash of nothing. Then nothing.`, LOG_CATEGORIES.COMBAT);
-      } else {
-        log(`Your limbs stop answering. The world blurs. Silence.`, LOG_CATEGORIES.COMBAT);
-      }
-      state.player.hp = 0;
-      state.player.deathCause = 'neural';
-      return;
-    }
-
-    if (player.blood != null && player.blood <= player.bloodMax * BLOOD_DEATH_THRESHOLD) {
-      log(`Everything narrows. Fades. Goes still.`, LOG_CATEGORIES.COMBAT);
-      state.player.hp = 0;
-      state.player.deathCause = 'blood';
-      return;
-    }
-
-    if (hitZone.locomotion && !hasLocomotion(bodyMap)) {
-      state.player.immobilized = true;
-      log(`You collapse, unable to move.`, LOG_CATEGORIES.COMBAT);
-    }
-
-    if (hitZone.attacks && hitZone.attacks.length > 0) {
-      for (const atk of hitZone.attacks) {
-        log(`Your ${atk.name} is gone.`, LOG_CATEGORIES.COMBAT);
-      }
-    }
-
-    const senseLosses = checkSenseLoss(bodyMap, hitZone);
-    for (const sl of senseLosses) {
-      if (sl.type === 'lost') {
-        log(`You can no longer ${sl.verb}.`, LOG_CATEGORIES.COMBAT);
-      } else {
-        log(`Your ${sl.sense} weakens.`, LOG_CATEGORIES.COMBAT);
-      }
-    }
-  }
 }
 
 // ==================== BONUS MOVE (DEPRECATED) ====================
