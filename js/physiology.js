@@ -3,7 +3,8 @@
 // substrate depletion/regeneration, stress chemistry, zone healing.
 // Split from enemy-ai.js — these are tissue physics, not AI.
 
-import { getBodyMap, computeBleedPenalty,
+import { getBodyMap, computeBleedPenalty, getPathways,
+         checkNeuralDeath, hasLocomotion, checkSenseLoss, BURST_COEFF,
          SEEP_COEFF, CLOT_RATE, REGEN_FRACTION, BLOOD_DEATH_THRESHOLD,
          SUBSTRATE_DEPLETION_HIGH, SUBSTRATE_DEPLETION_MOD,
          SUBSTRATE_REGEN_BASE, CIRC_REGEN_EFF_CLOSED, CIRC_REGEN_EFF_OPEN, CIRC_REGEN_EFF_HYBRID,
@@ -13,7 +14,7 @@ import { getBodyMap, computeBleedPenalty,
          SPECIES_TEMPLATES,
          STRESS_RELEASE_AMOUNT, STRESS_CLEARANCE_BASE, STRESS_MAX,
          HEAL_BASE_RATE, HEAL_REST_MULTIPLIER } from './constants.js';
-import { log } from './log.js';
+import { log, LOG_CATEGORIES } from './log.js';
 
 /** Locomotion muscle / total mass — physics-derived power-to-weight ratio.
  *  Used by the speed system so player and NPCs of the same species are at parity.
@@ -436,8 +437,102 @@ function applyTurningCost(creature, facingStepsChanged) {
   creature._consecutiveMoveTurns = creature._consecutiveMoveTurns * retained;
 }
 
+// ==================== ZONE DAMAGE — THE ONE RESOLVER ====================
+/**
+ * Apply damage to one zone of an entity and resolve every physical
+ * consequence in one place: clotting torn open, zone destruction, the
+ * zone's blood share dumped plus a severance burst through its pathways,
+ * death (vital → neural → blood, first met is the cause), immobilization
+ * when the last locomotion zone goes, attack loss and sense loss.
+ *
+ * Every strike in the game comes through here — player on creature,
+ * creature on player, creature on creature — so the death rules exist once.
+ * (There used to be three copies, and the creature-on-creature one had no
+ * sense-loss or attack-loss consequences at all.)
+ *
+ * On death sets entity.hp = 0 (the alive flag the turn loop reads) and
+ * entity.deathCause. Corpses and the player's death screen are the
+ * caller's business. Messages are second person for the player, third
+ * person otherwise; pass { quiet: true } for fights the player is not part
+ * of (the caller logs the kill itself).
+ *
+ * @returns {{ destroyed: boolean, died: boolean, cause: string|null }}
+ */
+function applyZoneDamage(entity, hitZone, dmg, opts = {}) {
+  const result = { destroyed: false, died: false, cause: null };
+  const bodyMap = getBodyMap(entity);
+  if (!hitZone || !bodyMap || hitZone.hp == null) return result;
+
+  const isPlayer = !!entity.isPlayer;
+  const name = entity.name || 'creature';
+  const poss = isPlayer ? 'Your' : `${name}'s`;
+  const say = (msg) => { if (!opts.quiet) log(msg, LOG_CATEGORIES.COMBAT); };
+
+  hitZone.hp = Math.max(0, hitZone.hp - Math.round(dmg));
+  // New damage tears open any clotting progress
+  if (hitZone.clotting > 0) hitZone.clotting = 0;
+  if (hitZone.hp > 0 || hitZone.destroyed) return result;
+
+  // ── Zone newly destroyed ──
+  hitZone.hp = 0;
+  hitZone.destroyed = true;
+  result.destroyed = true;
+  say(`${poss} ${hitZone.name} is destroyed.`);
+
+  // Blood: the zone's share is lost, and every pathway through it bursts
+  if (entity.blood != null && entity.bloodMax > 0) {
+    let severedBandwidth = 0;
+    for (const pw of getPathways(entity)) {
+      if (pw.from === hitZone.key || pw.to === hitZone.key) severedBandwidth += pw.bandwidth;
+    }
+    entity.blood -= (hitZone.bloodShare || 0) + severedBandwidth * BURST_COEFF * entity.bloodMax;
+    entity.blood = Math.max(0, entity.blood);
+    entity.bleedPenalty = computeBleedPenalty(entity);
+  }
+
+  const die = (cause, msg) => {
+    entity.deathCause = cause;
+    entity.hp = 0;
+    result.died = true;
+    result.cause = cause;
+    say(msg);
+    return result;
+  };
+
+  // Death checks — first condition met is the cause
+  if (hitZone.vital) {
+    return die('vital', isPlayer
+      ? 'Something vital tears loose inside you. Everything stops.'
+      : `The ${name}'s body gives out. It collapses.`);
+  }
+  if (checkNeuralDeath(bodyMap)) {
+    const head = hitZone.key === 'head';
+    return die('neural', isPlayer
+      ? (head ? 'A flash of nothing. Then nothing.' : 'Your limbs stop answering. The world blurs. Silence.')
+      : (head ? `The ${name}'s body seizes and falls. It does not get up.`
+              : `The ${name} shudders, limbs twitching without coordination. It goes still.`));
+  }
+  if (entity.blood != null && entity.blood <= entity.bloodMax * BLOOD_DEATH_THRESHOLD) {
+    return die('blood', isPlayer
+      ? 'Everything narrows. Fades. Goes still.'
+      : `The ${name} collapses. Its wounds finally emptied it.`);
+  }
+
+  // Survived the destruction: what the body can no longer do
+  if (hitZone.locomotion && !hasLocomotion(bodyMap)) {
+    entity.immobilized = true;
+    say(isPlayer ? 'You collapse, unable to move.' : `${name} collapses, unable to move.`);
+  }
+  for (const atk of (hitZone.attacks || [])) say(`${poss} ${atk.name} is gone.`);
+  for (const sl of checkSenseLoss(bodyMap, hitZone)) {
+    if (sl.type === 'lost') say(isPlayer ? `You can no longer ${sl.verb}.` : `${name} can no longer ${sl.verb}.`);
+    else                    say(`${poss} ${sl.sense} weakens.`);
+  }
+  return result;
+}
+
 // ==================== EXPORTS ====================
-export { getBodyPTW, getMovementIntensity, _getCirculatoryEfficiency, _getCirculatoryRegenEfficiency,
+export { getBodyPTW, applyZoneDamage, getMovementIntensity, _getCirculatoryEfficiency, _getCirculatoryRegenEfficiency,
          _depleteLocomotionSubstrate, _regenerateSubstrate,
          processBleed, getHealingRate, applyHealing,
          _releaseStressChemistry, _clearStressChemistry,
