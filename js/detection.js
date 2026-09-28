@@ -15,8 +15,8 @@ import { getBodyMap,
          CONDITION_CONF_MIN, CONDITION_CONF_FULL, DIET_DECISION_THRESHOLD,
          ASSESS_INTEGRATION_THRESHOLD,
          SPECIES_DISPLAY_CONFIDENCE,
-         computeBleedPenalty, computeStrikeDamage, getPathways,
-         getAvailableAttacks, checkNeuralDeath, hasLocomotion,
+         computeBleedPenalty, getPathways,
+         checkNeuralDeath, hasLocomotion,
          BURST_COEFF, BLOOD_DEATH_THRESHOLD, ARMOR_PER_STRUCTURAL_KG,
          selectHitZone,
          MOTION_CONCEALMENT_REDUCTION, BODY_PLAN_HEIGHT_COEFF,
@@ -32,7 +32,7 @@ import { hasLOS, EYE_OFFSETS, isInEyeField } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
 import { dist, directionToward, getCreatureMass, getPlayerDiet, WATER_TILES, isWaterTile,
-         getNearbyCreatures } from './ai-utils.js';
+         getNearbyCreatures, combatCapability } from './ai-utils.js';
 
 // ==================== LIGHT LEVEL ====================
 // Maps the day/night cycle phase to a 0.0–1.0 light multiplier.
@@ -670,23 +670,6 @@ function assessFightOutcome(observer, target, info) {
   if (ratio > 1.2) return 'comparable';
   if (ratio > 0.5) return 'stronger';
   return 'overwhelming';                   // target is overwhelming
-}
-
-// combatCapability is needed by assessFightOutcome — imported inline to avoid
-// circular dep with cognition.js. This is a local copy of the same logic.
-function combatCapability(creature) {
-  const bodyMap = getBodyMap(creature);
-  if (!bodyMap) return { canFight: false, maxDamage: 0, attackCount: 0 };
-  const attacks = getAvailableAttacks(bodyMap);
-  let maxDamage = 0;
-  for (const atk of attacks) {
-    const zone = bodyMap.find(z => z.key === atk.sourceZone);
-    if (zone) {
-      const dmg = computeStrikeDamage(creature, zone, atk);
-      if (dmg > maxDamage) maxDamage = dmg;
-    }
-  }
-  return { canFight: attacks.length > 0, maxDamage, attackCount: attacks.length };
 }
 
 // ==================== DETECTION AGGREGATORS ====================

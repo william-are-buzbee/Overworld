@@ -19,7 +19,6 @@ import { isWalkable, terrainInfo } from './terrain.js';
 import { inBounds, monsterAt, isTownCell, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { render } from './rendering.js';
-import { fedDrainFor } from './player-actions.js';
 import { advanceTick } from './time-cycle.js';
 import { saveGame } from './save-load.js';
 import { rand } from './rng.js';
@@ -41,6 +40,18 @@ let _useActionCallback = null;
 export function setUseActionCallback(fn){ _useActionCallback = fn; }
 
 function monstersHere(){ return monsters[state.player.layer] || []; }
+
+// Food spent per player action, in hundredths of a FED point (endPlayerTurn
+// banks it and takes a point per 10). PLACEHOLDER until there is a
+// metabolism: the numbers are the legacy costs, not derived from the body.
+function fedDrainFor(action){
+  if (action === 'rest') return 2;
+  if (action === 'move') return 0.5625;
+  if (action === 'attack') return 5.4;
+  if (action === 'miss') return 5.4;
+  if (action === 'turn') return 0.5625;
+  return 1;
+}
 
 // The turn counter lives on state.turnCount (saved, and read by log.js and
 // scent.js). It used to be shadowed by a module-local that nothing else saw.

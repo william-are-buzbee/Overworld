@@ -391,7 +391,7 @@ When implementing, include:
 - `player.js` (player body map)
 - `monsters.js` (creature body map definitions and templates)
 - `combat.js` (damage, accuracy, dodge formulas reading body map values)
-- `enemy-ai.js` (detection and behavior reading derived senses and cognition)
+- `detection.js`, `ai.js` (detection and behavior reading derived senses and cognition)
 - `chargen.js` (body configuration at character creation)
 - `ui.js` (status display showing derived values)
 - `interactions.js` (examine system gated by centralization score)

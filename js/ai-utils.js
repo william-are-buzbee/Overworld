@@ -6,7 +6,8 @@ import { state, worlds, monsters, groundItems } from './state.js';
 import { T, isWalkable, isFoodTile, terrainInfo } from './terrain.js';
 import { rand, randi } from './rng.js';
 import { inBounds, monsterAt, chebyshev, getCover } from './world-state.js';
-import { getBodyMap, SPATIAL_CELL_SIZE, SPATIAL_QUERY_RADIUS, FORAGE_SEARCH_RADIUS } from './constants.js';
+import { getBodyMap, getAvailableAttacks, computeStrikeDamage,
+         SPATIAL_CELL_SIZE, SPATIAL_QUERY_RADIUS, FORAGE_SEARCH_RADIUS } from './constants.js';
 
 // ==================== DIRECTION SYSTEM ====================
 // 8 directions, indexed 0-7 clockwise from north
@@ -272,6 +273,24 @@ function getCorpseAt(layer, x, y) {
 const _spatialGrid = new Map();   // "cellX,cellY" → creature[]
 
 function _monstersHere(){ return monsters[state.player.layer] || []; }
+
+/** What weapons does this body have? The attacks its surviving zones can
+ *  make and the hardest strike among them. Read by the reactive rules
+ *  (cognition.js) and the fight assessment (detection.js). */
+export function combatCapability(creature) {
+  const bodyMap = getBodyMap(creature);
+  if (!bodyMap) return { canFight: false, maxDamage: 0, attackCount: 0 };
+  const attacks = getAvailableAttacks(bodyMap);
+  let maxDamage = 0;
+  for (const atk of attacks) {
+    const zone = bodyMap.find(z => z.key === atk.sourceZone);
+    if (zone) {
+      const dmg = computeStrikeDamage(creature, zone, atk);
+      if (dmg > maxDamage) maxDamage = dmg;
+    }
+  }
+  return { canFight: attacks.length > 0, maxDamage, attackCount: attacks.length };
+}
 
 /** Clear and rebuild the spatial grid from the given creature list (or all living creatures on the active layer). */
 function rebuildSpatialGrid(creatureList) {

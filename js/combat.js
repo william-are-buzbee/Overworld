@@ -7,14 +7,13 @@
 // through applyZoneDamage. There are no weapons, no armor items, no XP or
 // levels, no stats: the body is the character.
 import { render } from './rendering.js';
-import { monsterMelee, applySafetyFromDamage } from './enemy-ai.js';
 import { state, monsters } from './state.js';
 import { getBodyMap, selectHitZone, getAvailableAttacks, ARMOR_PER_STRUCTURAL_KG,
          getAttackDirection, getExposedZones, selectContactedZones,
          computeStrikeDamage, dodgeChance,
          BASE_ACCURACY, ACCURACY_PER_SNR, ACCURACY_SNR_CAP } from './constants.js';
 import { randi, roll100 } from './rng.js';
-import { canDetect } from './detection.js';
+import { canDetect, applySafetyFromDamage } from './detection.js';
 import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { applyZoneDamage } from './physiology.js';
@@ -239,4 +238,4 @@ function endStealth(msg){
 }
 
 export { rollHit, accuracyOf, playerAttack, alertNearby, killMonster,
-         inCombatProximity, toggleStealth, endStealth, monsterMelee };
+         inCombatProximity, toggleStealth, endStealth };
