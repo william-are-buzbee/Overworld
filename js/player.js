@@ -28,8 +28,8 @@ function freshPlayer(speciesKey, colorPalette){
     // body: a vital zone destroyed, neural mass below threshold, or blood
     // below threshold (applyZoneDamage / processBleed set it to 0).
     hp: 1,
-    effects: [],          // only 'stealth' remains (the F-key placeholder)
-    stealth:false,
+    effects: [],          // only the 'stealth' marker remains
+    stealth:false,        // creeping (the F key): the gait player-actions.js drives the body at
     fed:100,              // food reserve, 0-100 (hunger; see turn-loop.js)
     isPlayer:true,
     hitFlash:0,

@@ -10,7 +10,9 @@ import {
   VIB_GROUND_COEFF, VIB_AIR_BASELINE_COEFF, VIB_AIR_ACTIVITY_COEFF, VIB_AIR_COMBAT_BONUS,
   VIB_WATER_COEFF, VIB_WATER_IDLE_COEFF,
   VIS_SIZE_COEFF,
+  CREEP_INTENSITY, WALK_INTENSITY,
 } from './constants.js';
+import { getMovementIntensity } from './physiology.js';
 
 // ==================== CHEMICAL EMISSION ====================
 
@@ -50,10 +52,16 @@ function computeVibrationEmission(creature) {
   if (mass <= 0) return { ground: 0, air: 0, water: 0 };
 
   // --- Ground --- the footfall impulse: the mass a moving body drops on the
-  // substrate each step. Still creatures put nothing into the ground.
+  // substrate each step, times the energy of the step. Impact energy goes
+  // with the square of the speed the foot comes down at, and that speed goes
+  // with the locomotion intensity the body is driven at, so the emission is
+  // mass × (intensity / walk)²: a creep at 0.1 puts 16% of a walk into the
+  // ground, a sprint at 1.0 sixteen times as much. Still creatures put
+  // nothing in. Motor-System-Design step 6.
   let ground = 0;
   if (creature.movedThisTurn && !creature.inWater) {
-    ground = mass * VIB_GROUND_COEFF;
+    const pace = Math.max(CREEP_INTENSITY, getMovementIntensity(creature)) / WALK_INTENSITY;
+    ground = mass * VIB_GROUND_COEFF * pace * pace;
   }
 
   // --- Air ---
@@ -99,7 +107,7 @@ function computeVisualDetectability(creature) {
 // uses to size others (Sensory-Design "Size estimation"): its own smell at
 // rest, its own footfalls and breathing as if moving, its own silhouette.
 // A creature standing still still knows what its own footfalls sound like,
-// so movement-dependent channels are computed as if moving.
+// so movement-dependent channels are computed as if moving, at a walk.
 export function referenceEmission(creature, channel) {
   const mass = creature.totalMass || 0;
   if (mass <= 0) return 0;

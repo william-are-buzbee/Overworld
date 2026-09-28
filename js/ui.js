@@ -204,6 +204,8 @@ function updateHud(d) {
     // Sprint indicator — appended to region label when sprinting
     if (p && p.sprintMode) {
       label += '  ⚡ SPRINT';
+    } else if (p && p.stealth) {
+      label += '  CREEP';
     }
     regionEl.textContent = label;
   }

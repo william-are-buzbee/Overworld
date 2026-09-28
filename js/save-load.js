@@ -182,7 +182,7 @@ const TRANSIENT_FIELDS = [
 
     // Speed overhaul: mass-dependent acceleration and sprint (runtime only)
     '_consecutiveMoveTurns',     // int: consecutive turns this entity has been moving (inertia tracking)
-    '_lastMovementIntensity',    // float: player movement intensity this turn (0.25 walk, 1.0 sprint)
+    '_lastMovementIntensity',    // float: player movement intensity this turn (creep 0.1, walk 0.25, sprint 1.0)
     'sprintMode',                // boolean: player is holding sprint (Shift key)
     '_sprintWarnedLow',          // boolean: player has been warned about low substrate
 ];

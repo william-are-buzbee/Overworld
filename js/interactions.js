@@ -16,7 +16,7 @@ function showHelp(){
     <b>L</b> then a direction · look at a tile<br>
     <b>V</b> · sniff the ground &nbsp;·&nbsp; <b>SHIFT+V</b> · sniff the air<br>
     <b>R</b> · eat the corpse you are standing on<br>
-    <b>F</b> · toggle sneaking<br>
+    <b>F</b> · creep (soft footfalls, felt from less far; sprinting ends it)<br>
     <b>M</b> · world map &nbsp;·&nbsp; <b>T</b> · full / minimal status &nbsp;·&nbsp; <b>TAB</b> · hide the log<br>
     <b>+ / −</b> · zoom &nbsp;·&nbsp; <b>[ / ]</b> · UI scale &nbsp;·&nbsp; <b>P</b> · sprite pack &nbsp;·&nbsp; <b>ALT+T</b> · textures<br>
     <b>?</b> · this manual &nbsp;·&nbsp; <b>ESC</b> · close

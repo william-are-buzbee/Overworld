@@ -9,7 +9,7 @@ import { getBodyMap, computeBleedPenalty, getPathways,
          SUBSTRATE_DEPLETION_HIGH, SUBSTRATE_DEPLETION_MOD,
          SUBSTRATE_REGEN_BASE, CIRC_REGEN_EFF_CLOSED, CIRC_REGEN_EFF_OPEN, CIRC_REGEN_EFF_HYBRID,
          VASCULARITY_MIN, REGEN_UPREGULATION,
-         FAST_TWITCH_RECRUIT_THRESHOLD,
+         FAST_TWITCH_RECRUIT_THRESHOLD, WALK_INTENSITY,
          CIRC_EFFICIENCY_CLOSED, CIRC_EFFICIENCY_OPEN, CIRC_EFFICIENCY_HYBRID,
          SPECIES_TEMPLATES,
          STRESS_RELEASE_AMOUNT, STRESS_CLEARANCE_BASE, STRESS_MAX,
@@ -129,17 +129,19 @@ function _getCirculatoryRegenEfficiency(entity) {
  * No depletion for hold, rest, orient, or if creature didn't move.
  */
 /**
- * Movement intensity (0-1) of a creature's last action. Ganglion creatures
+ * Movement intensity (0-1) of a creature's last action. The player's is the
+ * gait it was driven at (player-actions.js). Ganglion creatures
  * report it directly. Reactive-rule creatures are read from their behaviour
  * label — a PLACEHOLDER for the motor layer (Motor-System-Design steps 3-5),
  * which will carry intensity on the pathway itself. One reading, used by
  * force-to-weight, substrate depletion and substrate regeneration alike.
  */
 function getMovementIntensity(creature) {
+  if (creature.isPlayer) return creature._lastMovementIntensity ?? WALK_INTENSITY;
   if (creature._lastGanglionIntensity != null) return creature._lastGanglionIntensity;
   const behavior = creature.currentBehavior;
   if (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt') return 1.0;
-  if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance') return 0.25;
+  if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance') return WALK_INTENSITY;
   return 0;
 }
 

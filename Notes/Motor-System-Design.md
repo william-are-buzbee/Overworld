@@ -188,6 +188,10 @@ This connects to the existing clade architecture patterns. Clade A's distributed
 5. **Derive strike damage from motor output.** Attack pathway activation at some intensity, attack zone responds with force based on tissue state. Replaces or augments the current flat damage formula. A fresh zone hits hard. A depleted zone hits with slow-contracting force only.
 
 6. **Connect signal emission to motor activation intensity.** Vibration emission proportional to locomotion activation intensity rather than the binary `movedThisTurn` flag. High-intensity locomotion emits full vibration. Low-intensity emits proportionally less. Stalking becomes physically quiet because the activation intensity is low, not because of a special flag.
+   *Status (Sep 2026):* done for ground vibration: `signals.js` scales the footfall emission by (intensity / walk)²,
+   reading `getMovementIntensity` (the player's gait, an NPC's ganglion output). The player's F key is a creep gait
+   (`CREEP_INTENSITY`); it costs no time yet, because step 4 has not happened and force-to-weight below the
+   fast-twitch threshold does not depend on intensity. Air vibration still uses the binary flag.
 
 7. **Zone occupation tracking.** Zones in sustained activation (grapple, bite hold) are marked as occupied and excluded from other pathway recruitment. Release frees the zone. This becomes the physical basis for action trade-offs.
 
