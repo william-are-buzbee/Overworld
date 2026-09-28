@@ -150,6 +150,14 @@ export const VIS_BEARING_RES_DEG  = 0;
 export const VIB_BEARING_RES_DEG  = 90;
 export const CHEM_BEARING_RES_DEG = 180;
 
+// Olfactory adaptation (perception pass 6b-2): a nose is adapted to its own
+// odour, the constant background its body holds the air at on its own tile
+// (scent.js ownAirborneLevel). An adapted sense detects an increment only
+// above a fixed fraction of its background (Weber's law); olfaction's
+// fraction is roughly a quarter. So a meat-eater's own reek raises its
+// threshold for meat-eater volatiles and a grazer's for plant ones.
+export const OLFACTORY_WEBER_FRACTION = 0.25;
+
 // Own footfalls in the listening channel. A body's ground-vibration
 // transducers hear its own steps as they would a neighbour of the same weight
 // at this many tiles (every sensor on a 5-200 kg body is within a stride of

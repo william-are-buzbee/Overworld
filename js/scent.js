@@ -21,7 +21,7 @@ import { log, LOG_CATEGORIES } from './log.js';
 import { rand } from './rng.js';
 import {
   GROUND_EMISSION_BASE, AIRBORNE_EMISSION_BASE, BLOOD_EMISSION_MULT,
-  AIRBORNE_DECAY_RATE, ADVECTION_RATE, SPREAD_RATE, SCENT_FLOOR,
+  AIRBORNE_DECAY_RATE, ADVECTION_RATE, SPREAD_RATE, SCENT_FLOOR, SCENT_CLEANUP_FLOOR,
 } from './constants.js';
 
 // ==================== MOLECULAR CLASSES ====================
@@ -341,7 +341,7 @@ function _updateGroundLayer(layer) {
     scent.age++;
 
     // Cleanup — drop the tile once every class has fallen below the floor.
-    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_FLOOR)) {
+    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_CLEANUP_FLOOR)) {
       toRemove.push(key);
     }
   }
@@ -362,7 +362,7 @@ function _updateGroundLayer(layer) {
     for (const cls of MOLECULAR_CLASSES) scent[cls] *= decay;
     scent.age++;
 
-    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_FLOOR)) {
+    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_CLEANUP_FLOOR)) {
       sgRemove.push(key);
     }
   }
@@ -407,7 +407,7 @@ function _updateAirborneLayer(layer) {
 
     for (const ch of MOLECULAR_CLASSES) {
       const val = scent[ch];
-      if (val < SCENT_FLOOR) continue;
+      if (val < SCENT_CLEANUP_FLOOR) continue;
 
       let remaining = val;
 
@@ -445,7 +445,7 @@ function _updateAirborneLayer(layer) {
   const toRemove = [];
   for (const [key, scent] of next) {
     for (const cls of MOLECULAR_CLASSES) scent[cls] *= AIRBORNE_DECAY_RATE;
-    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_FLOOR)) {
+    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_CLEANUP_FLOOR)) {
       toRemove.push(key);
     }
   }
@@ -480,7 +480,7 @@ function _updateAirborneLayer(layer) {
 
     for (const ch of MOLECULAR_CLASSES) {
       const val = scent[ch];
-      if (val < SCENT_FLOOR) continue;
+      if (val < SCENT_CLEANUP_FLOOR) continue;
 
       let remaining = val;
 
@@ -510,7 +510,7 @@ function _updateAirborneLayer(layer) {
   const selfRemove = [];
   for (const [key, scent] of selfNext) {
     for (const cls of MOLECULAR_CLASSES) scent[cls] *= AIRBORNE_DECAY_RATE;
-    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_FLOOR)) {
+    if (!MOLECULAR_CLASSES.some(cls => scent[cls] >= SCENT_CLEANUP_FLOOR)) {
       selfRemove.push(key);
     }
   }
@@ -919,6 +919,46 @@ export function depositGroundScent(creature) {
   _emitCreatureScent(creature, layer, { ground: true, air: false });
 }
 
+/** The airborne scent on a tile, raw, or null. */
+export function airborneScentAt(layer, x, y) {
+  return _getAirborneMap(layer).get(`${x},${y}`) || null;
+}
+
+/** What a creature's own odour holds the air on its own tile at, per class:
+ *  the steady state of its emission under this tile's transport (what stays
+ *  on the tile each turn: not advected, not spread, not diluted). Noses adapt
+ *  to this constant background of their own (receptor adaptation), so it is
+ *  subtracted from what they read; without it a meat-eater reads every
+ *  plume as meat-eater, its own. A moving body has left some of its cloud
+ *  behind and is over-corrected slightly. */
+export function ownAirborneLevel(creature) {
+  const layer = creature.layer != null ? creature.layer : state.player.layer;
+  const mods = _getScentTerrainMods(layer, creature.x, creature.y);
+  const advFraction = Math.min(1.0, (state.windSpeed || 0) * ADVECTION_RATE) * mods.advectionMod;
+  const stay = Math.max(0, 1 - advFraction - SPREAD_RATE * mods.spreadMod) * AIRBORNE_DECAY_RATE;
+  const factor = stay < 1 ? stay / (1 - stay) : 0;
+  const emitted = (creature.totalMass || 5) * AIRBORNE_EMISSION_BASE * _airActivity(creature);
+  const profile = _getScentProfile(creature);
+  const out = {};
+  for (const cls of MOLECULAR_CLASSES) out[cls] = emitted * (profile[cls] || 0) * factor;
+  return out;
+}
+
+/** Airborne emission multiplier for a creature's current activity. */
+function _airActivity(creature) {
+  const b = creature.currentBehavior;
+  if (b === 'flee' || b === 'flee_refuge' || b === 'hunt') return 2.5;
+  if (b === 'rest' || b === 'idle' || !creature.movedThisTurn) return 0.5;
+  return 1.0;
+}
+
+/** The step (dx, dy) toward where the wind comes from, or null in still air. */
+export function upwindStep() {
+  if (!(state.windSpeed > 0)) return null;
+  const [ox, oy] = WIND_OFFSETS[state.windDirection];   // where scent moves: downwind
+  return { dx: -ox, dy: -oy };
+}
+
 /** The ground deposit on a tile, raw (no self-subtraction), or null. */
 export function groundScentAt(layer, x, y) {
   return _getGroundMap(layer).get(`${x},${y}`) || null;
@@ -931,8 +971,11 @@ export function updateScentSystem(layer) {
   // laid step by step in the turn loop (depositGroundScent), where their feet
   // touch; here only the air. The player takes one step per input, so the
   // player deposits both here.
+  // Dormant creatures (beyond the active simulation radius) are not
+  // simulated, and nothing active is near enough to smell them: they put
+  // nothing in the air, as they lay no trail.
   for (const m of mons) {
-    if (m.hp > 0) _emitCreatureScent(m, layer, { ground: false, air: true });
+    if (m.hp > 0 && !m._dormant) _emitCreatureScent(m, layer, { ground: false, air: true });
   }
 
   // Also emit for the player

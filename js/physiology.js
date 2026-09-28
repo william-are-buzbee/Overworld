@@ -153,7 +153,7 @@ function getMovementIntensity(creature) {
   const behavior = creature.currentBehavior;
   if (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt') return 1.0;
   if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance' ||
-      behavior === 'track' || behavior === 'follow_trail') return WALK_INTENSITY;
+      behavior === 'track' || behavior === 'follow_trail' || behavior === 'follow_scent') return WALK_INTENSITY;
   return 0;
 }
 
