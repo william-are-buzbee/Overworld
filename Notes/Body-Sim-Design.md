@@ -174,6 +174,24 @@ attackDamage = strikeDamage * attack.damageModifier
 
 A bite might have modifier 1.2 (focused through a narrow point). A blunt kick might have modifier 0.8 (spread across a wide surface). This replaces the old baseDamage field on attacks — damage is no longer a fixed number, it's derived from the zone's physical composition and then modified by attack geometry.
 
+*Status (Sep 2026):* implemented as written, in `combat-constants.js computeStrikeDamage(attacker, zone, attack)`, with
+MUSCLE_FORCE_COEFF 6 and MOMENTUM_COEFF 0.6 against HP_PER_KG 5, and `damageModifier` on every attack (bite 1.2, hook 1.1,
+claw 1.0, kick 0.8, shove 0.6, probe 0.4). The earlier code multiplied muscle by mass and by a hardness factor, which made a
+200 kg wader's kick 167 against a 37 HP prowler torso while a prowler's bite was 4; it is linear now. A wounded zone strikes
+in proportion to its remaining HP; blood loss scales every strike down. What the current bodies produce, before the target
+zone's armor (structural kg × 1.5) and the footprint split across contacted zones:
+
+| attacker | attack | damage | vs prowler torso (37 HP, armor 2) | vs own torso |
+|---|---|---|---|---|
+| Meso-Predator 22 kg | bite / claw | 8 / 6 | 6 bites | 6 bites |
+| Ambush Predator 22 kg | kick / hook / bite / probe | 10 / 9 / 4 / 2 | 5 kicks | 4 kicks (30 HP) |
+| Apex Predator 90 kg | claw / bite | 28 / 20 | 2 claws | 6 claws (150 HP) |
+| Wading Grazer 200 kg | kick / shove | 63 / 23 | 1 kick | 12 kicks (400 HP, armor 30) |
+| Small Grazer 5.7 kg | none | | | torso 5 HP: one bite from anything |
+
+Big things kill small things in a blow or two and small things cannot dent big ones (a prowler's bite is armor-stopped to 1
+against the wader's torso); that is the physics and the game is about knowing it. The two coefficients are the only levers.
+
 **Charge/tackle damage (future system):**
 
 ```

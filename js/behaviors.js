@@ -510,7 +510,7 @@ function performNPCAttack(attacker, defender) {
   const atkZone = atkBodyMap.find(z => z.key === usedAttack.sourceZone);
 
   // Compute damage from physics
-  const dmg = computeStrikeDamage(attacker, atkZone);
+  const dmg = computeStrikeDamage(attacker, atkZone, usedAttack);
 
   if (!rollHit(attacker, defender)) return; // miss
 
@@ -843,7 +843,7 @@ function monsterMelee(mon){
     attackingZone = monBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
 
-  const dmg = Math.max(1, computeStrikeDamage(mon, attackingZone) + randi(3));   // zone structural mass is the armor (below)
+  const dmg = Math.max(1, computeStrikeDamage(mon, attackingZone, usedAttack) + randi(3));   // zone structural mass is the armor (below)
 
   // ─── Footprint-based zone resolution on player ───
   if (playerBodyMap && usedAttack) {

@@ -75,7 +75,7 @@ function playerAttack(mon){
     usedAttack = availAtks[randi(availAtks.length)];
     attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
-  const dmg = Math.max(1, computeStrikeDamage(player, attackingZone) + randi(3));
+  const dmg = Math.max(1, computeStrikeDamage(player, attackingZone, usedAttack) + randi(3));
 
   // ─── Footprint-based zone resolution on the defender ───
   const monBodyMap = getBodyMap(mon);

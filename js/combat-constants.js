@@ -3,30 +3,30 @@
 // Split from constants.js — self-contained, no imports from project modules.
 
 // ==================== PHYSICS-BASED DAMAGE ====================
-// Strike damage derives entirely from the attacking zone's tissue composition.
-// Muscle generates force, mass adds momentum, structural fraction sets transfer efficiency.
-export const MUSCLE_FORCE_COEFF = 4.0;    // base damage per kg of effective muscle
-export const MOMENTUM_COEFF    = 0.15;    // damage bonus per kg of effective mass
-export const BASE_TRANSFER     = 0.6;     // minimum force transfer (soft tissue)
-export const HARDNESS_BONUS    = 1.5;     // additional transfer per point of structural fraction
+// Body-Sim-Design "Damage": a strike is the striking zone's muscle (force)
+// plus its mass (momentum), scaled by the attack's geometry (a bite focuses
+// through a point, a kick spreads across a surface). Linear in both, so a
+// limb four times heavier hits about four times harder, not sixteen. The
+// scale is set against zone HP (HP_PER_KG = 5): a 22 kg prowler's bite is
+// about 8 against a prowler torso of 37, a 90 kg ravager's claw about 28,
+// a 200 kg wader's kick about 63. A wounded zone strikes in proportion to
+// its remaining HP; blood loss weakens every strike.
+export const MUSCLE_FORCE_COEFF = 6.0;    // damage per kg of effective muscle in the striking zone
+export const MOMENTUM_COEFF    = 0.6;     // damage per kg of the striking zone's mass
 
-// Compute physics-based strike damage from the attacking zone's tissue.
-// Called once per attack — the result enters the footprint distribution pipeline.
 // attacker: the creature (for bleedPenalty)
-// atkZone: the zone object performing the strike (from the attacker's body map)
-// Returns integer damage.
-export function computeStrikeDamage(attacker, atkZone) {
+// atkZone:  the zone performing the strike (from the attacker's body map)
+// attack:   the attack definition on that zone (for damageModifier; 1 if omitted)
+// Returns integer damage before armor and footprint distribution.
+export function computeStrikeDamage(attacker, atkZone, attack) {
   if (!atkZone) return 1;
 
   const hpFrac = (atkZone.maxHp > 0) ? (atkZone.hp / atkZone.maxHp) : 1;
-
   const effMuscle = (atkZone.muscle || 0) * hpFrac;
   const effMass   = (atkZone.mass   || 0) * hpFrac;
-  const structFrac = (atkZone.mass > 0) ? ((atkZone.structural || 0) / atkZone.mass) : 0;
 
-  let damage = effMuscle * MUSCLE_FORCE_COEFF
-             * (1 + effMass * MOMENTUM_COEFF)
-             * (BASE_TRANSFER + structFrac * HARDNESS_BONUS);
+  let damage = effMuscle * MUSCLE_FORCE_COEFF + effMass * MOMENTUM_COEFF;
+  damage *= (attack && attack.damageModifier != null) ? attack.damageModifier : 1;
 
   // Blood loss penalty — less oxygen to muscles, less force output
   damage *= (1 - (attacker.bleedPenalty || 0));
