@@ -73,13 +73,7 @@ export function findSpotNear(layer, cx, cy, predicate, radius){
 // and dynamic reproduction. See Spawning-Design.md for the full roadmap.
 
 // Cover types that block creature spawning (structures, interactables, etc.)
-const NO_SPAWN_COVERS = new Set([
-  T.STAIRS_DOWN, T.STAIRS_UP, T.GATE, T.NPC, T.SHOP, T.INN,
-  T.HOUSE, T.HOUSE_LG, T.WALL, T.SHOPKEEPER, T.SIGN, T.CHEST,
-  T.BOOK, T.WELL, T.WELL_TL, T.WELL_TR, T.WELL_BL,
-  T.WELL_BR, T.BARREL, T.CRATE, T.LAMP_POST, T.FOUNTAIN,
-  T.FARM, T.TOWN,
-]);
+const NO_SPAWN_COVERS = new Set([T.STAIRS_DOWN, T.STAIRS_UP]);
 
 // ---- Tile-level habitat matching ----
 // FIRST PASS SPAWNING — placeholder, see Spawning-Design.md
@@ -213,10 +207,8 @@ export function spawnMonstersInWorld(){
       const walkable = isWalkable(ground, cover);
       const isWaterTile = (ground === T.WATER);
 
-      // Skip structure covers
+      // Skip stair tiles
       if (cover && NO_SPAWN_COVERS.has(cover)) continue;
-      // Skip town interiors
-      if (ground === T.WOOD_FLOOR) continue;
       // Skip safe zone
       if (inSafeZone(x, y)) continue;
 
@@ -373,7 +365,6 @@ export function spawnMonstersInWorld(){
           const ground = grid[y][x];
           const cover = coverGrid ? coverGrid[y][x] : 0;
           if (!isWalkable(ground, cover)) continue;
-          if (ground === T.WOOD_FLOOR) continue;
           if (cover && NO_SPAWN_COVERS.has(cover)) continue;
           if (inSafeZone(x, y)) continue;
 

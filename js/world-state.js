@@ -31,25 +31,6 @@ export function isCoordInRegion(x, y, regionName, layerIndex){
   return check(x, y, layerW, layerH);
 }
 
-export function addLayer(w, h){
-  const grid = [];
-  const coverGrid = [];
-  for (let y=0;y<h;y++){
-    const row = [];
-    const crow = [];
-    for (let x=0;x<w;x++){
-      row.push(T.PLAINS);
-      crow.push(0);
-    }
-    grid.push(row);
-    coverGrid.push(crow);
-  }
-  worlds.push(grid);
-  covers.push(coverGrid);
-  features.push({});
-  monsters.push([]);
-  return worlds.length - 1;
-}
 
 export function worldDims(layer){
   return [worlds[layer][0].length, worlds[layer].length];
