@@ -43,13 +43,12 @@ import { T, tileBlocksVision, tileHasVisionPenalty, tileSightlineOpacity } from 
 // it from there); importing from constants.js avoids a circular dependency.
 import {
   AMBIENT_VISUAL_COEFF, AMBIENT_VIB_COEFF,
-  LAYER_SURFACE, LAYER_META,
   getBodyMap, getVisualConfig,
   OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS,
 } from './constants.js';
 
 // Time-of-day phase for the ambient visual light modifier.
-import { getTimePhase } from './time-cycle.js';
+import { getLightLevel } from './time-cycle.js';
 
 // Import player stat functions here to avoid circular dependency issues.
 // player.js has no dependency on fov.js, so this is safe.
@@ -541,7 +540,7 @@ export function updatePlayerFOV() {
   // fullEyeRange: physical optical reach of the eye for field coverage.
   // The visual field extends to whichever is larger.
   const identRange = playerViewRadius(p);
-  const lightMod = _getVisualLightModifier(layer);
+  const lightMod = getLightLevel(layer);
   const fullEyeRange = eyeConfig
     ? Math.round(eyeConfig.acuity * AMBIENT_VISUAL_COEFF * lightMod)
     : 0;
@@ -715,36 +714,6 @@ function _markCircleExplored(layer, ox, oy, radius, explored) {
         explored.add(`${wx},${wy}`);
       }
     }
-  }
-}
-
-/**
- * Get the ambient light modifier for visual peripheral sensing.
- * Peripheral vision requires light — it collapses in darkness.
- * Mirrors the darkness/time-of-day logic in creatureViewRadius() (player.js)
- * but returns a 0–1 modifier instead of a tile count.
- * Returns 0.0 (no light) to 1.0 (full daylight).
- *
- * @param {number} layer
- * @returns {number} light modifier in [0, 1]
- */
-function _getVisualLightModifier(layer) {
-  // Determine if the current layer is "dark" (underground, lava, etc.).
-  // Surface and town/shop interiors use time-based lighting; everything else is dark.
-  const meta = LAYER_META[layer];
-  const layerType = meta ? meta.type : (layer === LAYER_SURFACE ? 'surface' : 'underground');
-  const isDark = layerType !== 'surface' && layerType !== 'town' && layerType !== 'shop';
-
-  if (isDark) return 0.0;  // no ambient light underground
-
-  // Surface — time of day governs available light.
-  const { phase } = getTimePhase(state.worldTick);
-  switch (phase) {
-    case 'day':   return 1.0;
-    case 'dawn':  return 0.5;
-    case 'dusk':  return 0.5;
-    case 'night': return 0.0;   // no peripheral vision in darkness
-    default:      return 1.0;
   }
 }
 

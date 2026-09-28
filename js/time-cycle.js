@@ -1,5 +1,6 @@
 // ==================== DAY / NIGHT CYCLE ====================
-// Pure functions for time-of-day phase calculation and visual tinting.
+// Time-of-day phase, the one ambient-light model every sense reads, and
+// the visual tint.
 //
 // Cycle length: DAY_CYCLE_TICKS (defined in constants.js, currently 1200).
 // Phase proportions are constant — absolute lengths scale with cycle length.
@@ -9,7 +10,7 @@
 //   Night : 25%
 
 import { state } from './state.js';
-import { DAY_CYCLE_TICKS } from './constants.js';
+import { DAY_CYCLE_TICKS, LAYER_META, LAYER_SURFACE } from './constants.js';
 
 export const CYCLE_LENGTH = DAY_CYCLE_TICKS;
 
@@ -56,6 +57,34 @@ export function currentTimePhase() {
  */
 export function advanceTick(ticks) {
   state.worldTick += (ticks != null ? ticks : 1);
+}
+
+// ==================== AMBIENT LIGHT ====================
+// The one light model. 1 is full daylight; a surface night is NIGHT_LIGHT
+// (native eyes are sensitive under the dim star, so it is never black
+// outdoors); dusk and dawn run linearly between; a layer that is not the
+// surface has no ambient light at all. NPC visual range (detection.js), the
+// player's visual field (fov.js) and the view radius (player.js) all read
+// this, so they cannot disagree about how dark it is.
+export const NIGHT_LIGHT = 0.1;
+
+/**
+ * Ambient light on a layer at a tick, 0..1.
+ * @param {number} layer
+ * @param {number} [tick=state.worldTick]
+ */
+export function getLightLevel(layer, tick) {
+  const meta = LAYER_META[layer];
+  const type = meta ? meta.type : (layer === LAYER_SURFACE ? 'surface' : 'underground');
+  if (type !== 'surface') return 0;
+  const { phase, progress } = getTimePhase(tick === undefined ? state.worldTick : tick);
+  switch (phase) {
+    case 'day':   return 1;
+    case 'dusk':  return 1 + (NIGHT_LIGHT - 1) * progress;
+    case 'night': return NIGHT_LIGHT;
+    case 'dawn':  return NIGHT_LIGHT + (1 - NIGHT_LIGHT) * progress;
+    default:      return 1;
+  }
 }
 
 // ==================== VISUAL TINT ====================
