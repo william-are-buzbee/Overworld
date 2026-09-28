@@ -104,16 +104,9 @@ const MECHANICAL_SPRITES = new Set([
   'ROCK', 'ROCK_V2', 'ROCK_V3',
   'CAVE_WALL', 'CAVE_WALL_V2', 'CAVE_WALL_V3',
   'CAVE_FLOOR', 'CAVE_ROCK',
-  'ROAD', 'WHEAT', 'WOOD_FLOOR',
   'BEACH', 'DIRT', 'MUD', 'FUNGAL_GRASS',
-  'RUIN_FLOOR',
-  // Dense walls (repeating block patterns)
-  'RUIN_WALL', 'HUT_WALL',
   // Geometric structures (sharp edges intentional)
-  'CRATE', 'GATE', 'STAIRS_DOWN', 'STAIRS_UP',
-  'SIGN', 'CHEST', 'BOOK', 'LAMP_POST',
-  // Repeating crop/planting pattern
-  'FARM',
+  'STAIRS_DOWN', 'STAIRS_UP',
 ]);
 
 // Everything NOT in MECHANICAL_SPRITES gets Scale2x anti-aliasing:

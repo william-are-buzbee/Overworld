@@ -29,40 +29,9 @@ function useAction(){
   if (here && interactable(here)){ interact(here, state.player.x, state.player.y); return; }
   const adj = adjacentFeature();
   if (adj){ interact(adj.f, adj.x, adj.y); return; }
-  if (tryWellInteract()) return;
   log('Nothing to use here.', LOG_CATEGORIES.INTERACTION);
 }
 
-// ---- Well quadrant interaction ----
-function tryWellInteract(){
-  const px = state.player.x, py = state.player.y;
-  const ly = state.player.layer;
-  const coverGrid = covers[ly];
-  for (let dy = -1; dy <= 1; dy++){
-    for (let dx = -1; dx <= 1; dx++){
-      const x = px + dx, y = py + dy;
-      if (!inBounds(ly, x, y)) continue;
-      const c = coverGrid ? coverGrid[y][x] : 0;
-      if (c === T.WELL_TL || c === T.WELL_TR || c === T.WELL_BL || c === T.WELL_BR){
-        const wellPositions = [
-          [x, y], [x-1, y], [x+1, y], [x, y-1], [x, y+1],
-          [x-1, y-1], [x+1, y-1], [x-1, y+1], [x+1, y+1]
-        ];
-        for (const [wx, wy] of wellPositions){
-          const f = getFeature(ly, wx, wy);
-          if (f && f.type === 'well'){
-            interact(f, wx, wy);
-            return true;
-          }
-        }
-        const fallback = {type:'well', text:'A stone well. The water is cold.'};
-        interact(fallback, x, y);
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 function interact(f, x, y){
   switch(f.type){

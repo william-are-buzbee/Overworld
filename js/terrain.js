@@ -1,42 +1,25 @@
 // ==================== TERRAIN TYPES ====================
 export const T = {
   GRASS:0, FOREST:1, SAND:2, ROCK:3, WATER:4, DEEP_WATER:5,
-  ROAD:6, BEACH:7, MUSHFOREST:8,
+  BEACH:7, MUSHFOREST:8,
   CAVE_WALL:10, CAVE_FLOOR:11, LAVA:12, UWATER:13,
-  WHEAT:14, WOOD_FLOOR:15, WALL:16,
-  TOWN:20,   // ids 21-22 retired (castle, blackspire keep — removed with castle.js)
-  STAIRS_DOWN:23, STAIRS_UP:24, SIGN:25, CHEST:26, BOOK:27, GATE:28,
-  NPC:29, HOUSE:30, SHOP:31, INN:32, WELL:33, FARM:34,
-
-  // --- Extended types ---
-  // (id 36 retired — formerly DIRT_ROAD, now use DIRT)
-  RUIN_WALL:37,        // crumbled stone wall (non-walkable)
-  RUIN_FLOOR:38,       // broken stone floor (walkable)
-  WELL_TL:39,          // 2x2 well — top-left quadrant
-  WELL_TR:40,          // 2x2 well — top-right quadrant
-  WELL_BL:41,          // 2x2 well — bottom-left quadrant
-  WELL_BR:42,          // 2x2 well — bottom-right quadrant
-  BARREL:43,           // settlement decoration
-  CRATE:44,            // settlement decoration
-  LAMP_POST:45,        // settlement road lighting
-  SHOP_INSIDE:46,      // interior floor when entering a shop building
-  SHOPKEEPER:47,       // merchant NPC inside a shop
-  FOUNTAIN:48,         // settlement decoration
-  HOUSE_LG:49,         // large (2x2) building on overworld
-  RUIN_PILLAR:50,      // decorative ruin column
+  STAIRS_DOWN:23, STAIRS_UP:24,
   VOID:51,             // impassable black void outside cave boundaries
   CAVE_ROCK:52,        // dense cave boundary rock — impassable, blocks LOS
   BOULDER:53,          // large rock formation (cover, impassable)
   ROCK_OUTCROP:54,     // smaller rocky protrusion (cover, impassable)
 
-  // --- New surface ground types ---
+  // --- Surface ground types ---
   MUD:55,              // swamp/wetland ground
   FUNGAL_GRASS:56,     // organic ground for the mushroom biome
   DIRT:57,             // dry, bare earth
 
-  // --- Village / landmark structure types ---
-  HUT_WALL:58,         // wooden hut wall (cover, impassable, blocks vision)
-  CAMPFIRE:59,         // campfire marker (cover, walkable)
+  // Retired ids (never renumber; a save stores these as numbers):
+  //   6 road · 14 wheat · 15 wood floor · 16 wall · 20-22 town/castle/keep ·
+  //   25-34 sign/chest/book/gate/npc/house/shop/inn/well/farm · 36 dirt road ·
+  //   37-50 ruins, well quadrants, barrels, crates, lamp posts, shop interiors,
+  //   shopkeeper, fountain, large house · 58-59 hut wall/campfire.
+  //   All belonged to the removed settlement/structure generators.
 };
 
 // ==================== TERRAIN LAYER CLASSIFICATION ====================
@@ -47,82 +30,45 @@ export const T = {
 export const TERRAIN_INFO = {
   // ---- GROUND types ----
   [T.GRASS]:     {name:'grass',         sprite:'GRASS',      palette:'plains',     walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.FOREST,T.MUSHFOREST,T.WHEAT,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.FOREST,T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
   [T.SAND]:      {name:'sand',          sprite:'SAND',       palette:'desert',     walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP]},
   [T.ROCK]:      {name:'rock',          sprite:'ROCK',       palette:'rock',       walk:true,  cover:10,  terrainLayer:'ground',
-                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP]},
   [T.WATER]:     {name:'water',         sprite:'WATER',      palette:'water',      walk:false, cover:0,   terrainLayer:'ground', transparent:true,
                   allowedCover:[]},
   [T.DEEP_WATER]:{name:'deep water',    sprite:'DEEP_WATER', palette:'deep',       walk:false, cover:0,   terrainLayer:'ground', transparent:true,
                   allowedCover:[]},
-  [T.ROAD]:      {name:'road',          sprite:'ROAD',       palette:'road',       walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[]},
   [T.BEACH]:     {name:'beach',         sprite:'BEACH',      palette:'beach',      walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.FOREST,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.FOREST,T.BOULDER,T.ROCK_OUTCROP]},
   [T.CAVE_WALL]: {name:'cave wall',     sprite:'CAVE_WALL',  palette:'cave_wall',  walk:false, cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
   [T.CAVE_FLOOR]:{name:'cave floor',    sprite:'CAVE_FLOOR', palette:'cave',       walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_PILLAR]},
+                  allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
   [T.LAVA]:      {name:'lava',          sprite:'LAVA',       palette:'lava',       walk:false, cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
   [T.UWATER]:    {name:'dark water',    sprite:'DEEP_WATER', palette:'uwater',     walk:false, cover:0,   terrainLayer:'ground', transparent:true,
-                  allowedCover:[]},
-  [T.WOOD_FLOOR]:{name:'wood floor',    sprite:'WOOD_FLOOR', palette:'wood_floor', walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[]},
-  [T.WALL]:      {name:'wall',          sprite:'CAVE_WALL',  palette:'stone',      walk:false, cover:0,   terrainLayer:'ground',
-                  allowedCover:[]},
-  [T.RUIN_FLOOR]:{name:'ancient floor', sprite:'RUIN_FLOOR', palette:'ruin',       walk:true,  cover:10,  terrainLayer:'ground',
-                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
-  [T.SHOP_INSIDE]:{name:'shop floor',   sprite:'SHOP_FLOOR', palette:'wood_floor', walk:true,  cover:0,   terrainLayer:'ground',
                   allowedCover:[]},
   [T.VOID]:      {name:'void',          sprite:'VOID',       palette:'void',       walk:false, cover:0,   terrainLayer:'ground', transparent:false,
                   allowedCover:[]},
   [T.CAVE_ROCK]: {name:'cave rock',     sprite:'CAVE_ROCK',  palette:'cave_rock',  walk:false, cover:0,   terrainLayer:'ground', transparent:false,
                   allowedCover:[]},
   [T.MUD]:       {name:'mud',           sprite:'MUD',        palette:'mud',        walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.FOREST,T.MUSHFOREST,T.WHEAT,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.FOREST,T.MUSHFOREST]},
   [T.FUNGAL_GRASS]:{name:'fungal grass',sprite:'FUNGAL_GRASS',palette:'fungal_grass',walk:true,cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP,T.WHEAT,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
   [T.DIRT]:      {name:'dirt',          sprite:'DIRT',       palette:'dirt',       walk:true,  cover:0,   terrainLayer:'ground',
-                  allowedCover:[T.FOREST,T.MUSHFOREST,T.WHEAT,T.BOULDER,T.ROCK_OUTCROP,T.RUIN_WALL,T.RUIN_PILLAR]},
+                  allowedCover:[T.FOREST,T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
 
   // ---- COVER types ----
   [T.FOREST]:    {name:'forest',        sprite:'FOREST',   palette:'forest',   walk:true,  cover:45,  terrainLayer:'cover', overlay:true, visionPenalty:true,
                   sightlineOpacity:0.5, localConcealment:0.25, coverHeightClass:0.7},
   [T.MUSHFOREST]:{name:'mushroom forest',sprite:'MUSHFOREST',palette:'mushforest',walk:true,cover:45, terrainLayer:'cover', overlay:true, noRotate:true, visionPenalty:true,
                   sightlineOpacity:0.5, localConcealment:0.25, coverHeightClass:0.7},
-  [T.WHEAT]:     {name:'wheat',         sprite:'WHEAT',    palette:'wheat',    walk:true,  cover:20,  terrainLayer:'cover', overlay:true,
-                  sightlineOpacity:0.05, localConcealment:0.6, coverHeightClass:0.7},
-  [T.TOWN]:      {name:'town',          sprite:'TOWN',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.STAIRS_DOWN]:{name:'stairs down',  sprite:'STAIRS_DOWN',palette:'stone',  walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
   [T.STAIRS_UP]: {name:'stairs up',     sprite:'STAIRS_UP',palette:'stone',    walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.SIGN]:      {name:'signpost',      sprite:'SIGN',     palette:'plains',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.CHEST]:     {name:'chest',         sprite:'CHEST',    palette:'plains',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.BOOK]:      {name:'book',          sprite:'BOOK',     palette:'plains',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.GATE]:      {name:'gate',          sprite:'GATE',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.NPC]:       {name:'person',        sprite:'NPC_TOWN', palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.HOUSE]:     {name:'house',         sprite:'HOUSE',    palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.SHOP]:      {name:'shop',          sprite:'SHOP',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.INN]:       {name:'inn',           sprite:'INN',      palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.WELL]:      {name:'well',          sprite:'WELL',     palette:'town',     walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.FARM]:      {name:'farm',          sprite:'FARM',     palette:'wheat',    walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.RUIN_WALL]: {name:'crumbled wall', sprite:'RUIN_WALL',palette:'ruin',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.WELL_TL]:   {name:'well',          sprite:'WELL_TL',  palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.WELL_TR]:   {name:'well',          sprite:'WELL_TR',  palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.WELL_BL]:   {name:'well',          sprite:'WELL_BL',  palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.WELL_BR]:   {name:'well',          sprite:'WELL_BR',  palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.BARREL]:    {name:'barrel',        sprite:'BARREL',   palette:'town',    walk:false, cover:15,  terrainLayer:'cover', overlay:true},
-  [T.CRATE]:     {name:'crate',         sprite:'CRATE',    palette:'town',    walk:false, cover:15,  terrainLayer:'cover', overlay:true},
-  [T.LAMP_POST]: {name:'lamp post',     sprite:'LAMP_POST',palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.SHOPKEEPER]:{name:'shopkeeper',    sprite:'NPC_SHOPKEEP',palette:'town', walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.FOUNTAIN]:  {name:'fountain',      sprite:'FOUNTAIN', palette:'town',    walk:false, cover:0,   terrainLayer:'cover', overlay:true},
-  [T.HOUSE_LG]:  {name:'large house',   sprite:'HOUSE_LG', palette:'town',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
-  [T.RUIN_PILLAR]:{name:'ruined pillar',sprite:'RUIN_PILLAR',palette:'ruin', walk:false, cover:20,  terrainLayer:'cover', overlay:true},
   [T.BOULDER]:   {name:'boulder',      sprite:'BOULDER',  palette:'stone',  walk:false, cover:40,  terrainLayer:'cover', overlay:true},
   [T.ROCK_OUTCROP]:{name:'rock outcrop',sprite:'ROCK_OUTCROP',palette:'stone',walk:false,cover:25, terrainLayer:'cover', overlay:true},
-  [T.HUT_WALL]:  {name:'wall',        sprite:'HUT_WALL', palette:'hut_wall',walk:false, cover:0,   terrainLayer:'cover', overlay:true, blocksVision:true},
-  [T.CAMPFIRE]:  {name:'campfire',     sprite:'CAMPFIRE', palette:'town',   walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
 };
 
 // ==================== SINGLE-TYPE QUERIES ====================
@@ -189,36 +135,10 @@ export function isTransparent(ground, coverType){
 const DEFAULT_GROUND_FOR_COVER = {
   [T.FOREST]:     T.GRASS,
   [T.MUSHFOREST]:  T.FUNGAL_GRASS,
-  [T.WHEAT]:       T.GRASS,
-  [T.TOWN]:        T.GRASS,
   [T.STAIRS_DOWN]: T.CAVE_WALL,
   [T.STAIRS_UP]:   T.CAVE_WALL,
-  [T.SIGN]:        T.GRASS,
-  [T.CHEST]:       T.GRASS,
-  [T.BOOK]:        T.GRASS,
-  [T.GATE]:        T.GRASS,
-  [T.NPC]:         T.GRASS,
-  [T.HOUSE]:       T.GRASS,
-  [T.SHOP]:        T.GRASS,
-  [T.INN]:         T.GRASS,
-  [T.WELL]:        T.GRASS,
-  [T.FARM]:        T.GRASS,
-  [T.RUIN_WALL]:   T.RUIN_FLOOR,
-  [T.WELL_TL]:     T.GRASS,
-  [T.WELL_TR]:     T.GRASS,
-  [T.WELL_BL]:     T.GRASS,
-  [T.WELL_BR]:     T.GRASS,
-  [T.BARREL]:      T.GRASS,
-  [T.CRATE]:       T.GRASS,
-  [T.LAMP_POST]:   T.GRASS,
-  [T.SHOPKEEPER]:  T.SHOP_INSIDE,
-  [T.FOUNTAIN]:    T.GRASS,
-  [T.HOUSE_LG]:    T.GRASS,
-  [T.RUIN_PILLAR]: T.GRASS,
   [T.BOULDER]:     T.ROCK,
   [T.ROCK_OUTCROP]:T.ROCK,
-  [T.HUT_WALL]:    T.WOOD_FLOOR,
-  [T.CAMPFIRE]:    T.DIRT,
 };
 
 export function defaultGroundFor(coverType){
@@ -227,7 +147,7 @@ export function defaultGroundFor(coverType){
 
 // ==================== VISION BLOCKING ====================
 // Used by FOV calculation. A tile blocks vision (hard block) if:
-//   • The cover is non-walkable (walls, boulders, barrels, etc.)
+//   • The cover is non-walkable (boulders, outcrops, etc.)
 //   • The ground is non-walkable (cave walls, void, etc.)
 //   • The terrain has transparent:false set explicitly
 // Vision-penalty tiles (trees/mushroom forest with visionPenalty:true)
@@ -297,14 +217,10 @@ const TERRAIN_VISUAL = {
   [T.ROCK]:        { brightness: 0.45, hue: 'gray' },       // mineral surface, higher reflectance
   [T.WATER]:       { brightness: 0.30, hue: 'dark' },       // reflective but dark
   [T.DEEP_WATER]:  { brightness: 0.15, hue: 'dark' },       // very dark surface
-  [T.ROAD]:        { brightness: 0.30, hue: 'brown' },      // packed dirt/gravel
   [T.BEACH]:       { brightness: 0.45, hue: 'brown' },      // lighter mineral substrate, coastal
   [T.CAVE_FLOOR]:  { brightness: 0.30, hue: 'gray' },       // dark rock floor underground
   [T.LAVA]:        { brightness: 0.60, hue: 'warm-red' },   // glowing — very bright
   [T.UWATER]:      { brightness: 0.15, hue: 'dark' },       // underground dark water
-  [T.WOOD_FLOOR]:  { brightness: 0.35, hue: 'brown' },      // wooden planks
-  [T.RUIN_FLOOR]:  { brightness: 0.35, hue: 'gray' },       // ancient weathered stone
-  [T.SHOP_INSIDE]: { brightness: 0.35, hue: 'brown' },      // interior wood floor
   [T.MUD]:         { brightness: 0.20, hue: 'brown' },      // dark, mixed organic-mineral substrate
   [T.FUNGAL_GRASS]:{ brightness: 0.30, hue: 'mineral' },    // chemotrophic zone ground cover
   [T.DIRT]:        { brightness: 0.30, hue: 'brown' },      // medium brightness, neutral
@@ -313,7 +229,6 @@ const TERRAIN_VISUAL = {
   // Cover visual represents the dominant background a creature is seen against.
   [T.FOREST]:      { brightness: 0.15, hue: 'dark-red' },   // dark photosynthetic mat cover, deep shadow
   [T.MUSHFOREST]:  { brightness: 0.25, hue: 'mineral' },    // chemotrophic colony structures, moderate cover
-  [T.WHEAT]:       { brightness: 0.35, hue: 'warm-red' },   // tall photosynthetic growth
 };
 
 // Default for any terrain type without specific visual data.
@@ -340,7 +255,7 @@ export function getTerrainVisual(groundType, coverType) {
 // Ground types with inherent vegetation, or any tile with organic cover.
 
 const FOOD_GROUND = new Set([T.GRASS, T.MUD, T.FUNGAL_GRASS]);
-const FOOD_COVER  = new Set([T.FOREST, T.MUSHFOREST, T.WHEAT]);
+const FOOD_COVER  = new Set([T.FOREST, T.MUSHFOREST, ]);
 
 /** True if this ground+cover combination counts as a food tile for herbivores. */
 export function isFoodTile(groundType, coverType){
