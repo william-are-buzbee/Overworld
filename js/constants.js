@@ -278,6 +278,7 @@ export const SPAWN_VIABILITY_MIN    = 6;  // need at least this many habitat til
 export const BASE_AP_COST          = 1000;  // AP required to take one action
 export const MAX_ACTIONS_PER_INPUT = 3;     // cap on creature actions per player input
 export const DAY_CYCLE_TICKS       = 1200;  // ticks per full day/night cycle (was 600)
+export const DAWN_TICKS            = Math.floor(DAY_CYCLE_TICKS * 0.15);  // dawn length; a new run starts at its end (sunrise)
 export const REFERENCE_SPEED       = 0.26;  // baseline PTW for "normal" walking speed (prowler at full substrate)
 export const BASE_TICKS_PER_ACTION = 1.0;   // world-ticks per player action at REFERENCE_SPEED
 
