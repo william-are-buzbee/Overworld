@@ -1,7 +1,7 @@
 // ==================== WORLD GENERATION — COORDINATION LAYER ====================
 import {
   worlds, covers, features, monsters,
-  state, nextLayerIndex, layerExists, activateLayer,
+  state, nextLayerIndex, layerExists,
 } from './state.js';
 import {
   W_SURF, H_SURF, W_UNDER, H_UNDER,
@@ -103,64 +103,5 @@ export function generateLayer(layerIndex, seed) {
         }
       }
     }
-  }
-}
-
-// ==================== TELEPORT / LAZY LOAD ====================
-export function teleportPlayer(layerIndex, x, y, seed) {
-  let feat = null;
-  if (state.player) {
-    const pKey = state.player.x + ',' + state.player.y;
-    feat = features[state.player.layer] && features[state.player.layer][pKey];
-  }
-
-  if (!layerExists(layerIndex)) {
-    generateLayer(layerIndex, seed ?? 42);
-  }
-
-  if (x == null || y == null) {
-    if (feat && feat.type === 'stairs' && feat.targetX != null && feat.targetY != null) {
-      x = feat.targetX;
-      y = feat.targetY;
-    }
-  }
-
-  if (x == null || y == null) {
-    const grid = worlds[layerIndex];
-    const coverGrid = covers[layerIndex];
-    if (grid) {
-      const goingDown = state.player && state.player.layer < layerIndex;
-      const lookFor = goingDown ? T.STAIRS_UP : T.STAIRS_DOWN;
-      let fallbackX = null, fallbackY = null;
-      for (let sy = 0; sy < grid.length; sy++) {
-        for (let sx = 0; sx < grid[0].length; sx++) {
-          if (coverGrid && coverGrid[sy][sx] === lookFor) {
-            const sf = features[layerIndex] && features[layerIndex][sx + ',' + sy];
-            if (sf && sf.type === 'stairs' &&
-                sf.targetLayer === (state.player && state.player.layer)) {
-              x = sx; y = sy;
-              break;
-            }
-            if (fallbackX == null) { fallbackX = sx; fallbackY = sy; }
-          }
-        }
-        if (x != null) break;
-      }
-      if (x == null) { x = fallbackX; y = fallbackY; }
-    }
-  }
-
-  if (x == null || y == null) {
-    const grid = worlds[layerIndex];
-    x = x ?? Math.floor((grid ? grid[0].length : W_UNDER) / 2);
-    y = y ?? Math.floor((grid ? grid.length : H_UNDER) / 2);
-  }
-
-  activateLayer(layerIndex);
-
-  if (state.player) {
-    state.player.layer = layerIndex;
-    state.player.x = x;
-    state.player.y = y;
   }
 }

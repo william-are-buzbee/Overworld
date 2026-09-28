@@ -463,7 +463,9 @@ function applyTurningCost(creature, facingStepsChanged) {
  */
 function applyZoneDamage(entity, hitZone, dmg, opts = {}) {
   const result = { destroyed: false, died: false, cause: null };
-  const bodyMap = getBodyMap(entity);
+  // The entity's own body map only: getBodyMap falls back to the shared
+  // template for anything without one, and damage must never land there.
+  const bodyMap = entity.bodyMap;
   if (!hitZone || !bodyMap || hitZone.hp == null) return result;
 
   const isPlayer = !!entity.isPlayer;
