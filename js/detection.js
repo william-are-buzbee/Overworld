@@ -26,7 +26,7 @@ import { getBodyMap,
          BLEED_CONTRAST_BONUS, BLEED_VISUAL_SATURATION,
          getIntegument, getVisualAcuity, getVisualConfig,
        } from './constants.js';
-import { currentTimePhase } from './time-cycle.js';
+import { getLightLevel } from './time-cycle.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -35,16 +35,6 @@ import { dist, directionToward, getCreatureMass, getPlayerDiet, WATER_TILES, isW
 
 // ==================== LIGHT LEVEL ====================
 // Maps the day/night cycle phase to a 0.0–1.0 light multiplier.
-function getLightLevel() {
-  const { phase, progress } = currentTimePhase();
-  switch (phase) {
-    case 'day':   return 1.0;
-    case 'dusk':  return 1.0 + (0.1 - 1.0) * progress;   // 1.0 → 0.1
-    case 'night': return 0.1;
-    case 'dawn':  return 0.1 + (1.0 - 0.1) * progress;   // 0.1 → 1.0
-    default:      return 1.0;
-  }
-}
 
 // ==================== PER-ZONE DETECTION (Prompt P) ====================
 // Each zone-channel pair independently computes detection range and SNR.
@@ -254,7 +244,7 @@ function _computeContrastFactor(target) {
 function getVisualRange(detector, target) {
   let detectability = target.signals ? target.signals.visual : 0;
   const sensitivity = getEffectiveVisual(detector);
-  const light = getLightLevel();
+  const light = getLightLevel(state.player.layer);   // every active creature is on the player's layer
   if (detectability <= 0 || sensitivity <= 0 || light <= 0) return 0;
 
   // ── Motion factor (Visual Detection Pass 1) ──
@@ -1153,7 +1143,6 @@ function computePlayerPerception() {
 
 export {
   // Light
-  getLightLevel,
   // Per-zone detection
   detectTargetPerZone,
   // Sense helpers

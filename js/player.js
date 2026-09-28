@@ -5,10 +5,9 @@
 // inventory, no stats: the body is the character. Dodge, stealth and
 // accuracy are derived in combat-constants.js / combat.js from the body map
 // and the attacker's senses, the same way for the player and every creature.
-import { LAYER_SURFACE, LAYER_META, CREATURE_PATHWAYS, SPECIES_TEMPLATES,
+import { LAYER_SURFACE, CREATURE_PATHWAYS, SPECIES_TEMPLATES,
          initBodyMap, getBestVisualAcuity } from './constants.js';
-import { getTimePhase } from './time-cycle.js';
-import { state } from './state.js';
+import { getLightLevel } from './time-cycle.js';
 import { MON_SPEED, WANDER_PROFILES, DEFAULT_WANDER_PROFILE } from './monsters.js';
 
 // player object lives in state.js — functions here take player as parameter `p`
@@ -80,50 +79,23 @@ function awarenessRadius(p){
   return 1;
 }
 
-// Vision radius from the best surviving eye.
+// Vision radius from the best surviving eye and the ambient light
+// (time-cycle.js getLightLevel, the one light model).
 // @param {number} acuity      — best visual acuity across the creature's zones (getBestVisualAcuity)
 // @param {number} layer       — current map layer
 // @param {object} [opts]
 // @param {number} [opts.lightBonus=0]    — additive tiles from light sources
-// @param {boolean} [opts.nightVision=false] — immune to darkness reduction
 // @returns {number} effective vision depth in tiles
 function creatureViewRadius(acuity, layer, opts) {
-  const { lightBonus = 0, nightVision = false } = opts || {};
-  // Acuity 1 sees 3 tiles by day, acuity 10 about 7 (the old 1-100 "Visual"
-  // stat was acuity × 10; the curve is unchanged).
+  const { lightBonus = 0 } = opts || {};
+  // Acuity 1 sees 3 tiles in full light, acuity 10 about 7 (the old 1-100
+  // "Visual" stat was acuity × 10; the curve is unchanged).
   const base = Math.round(3 + (acuity * 10 - 1) * (4 / 99));
-
-  // Night-vision creatures ignore darkness entirely
-  if (nightVision) return Math.max(2, base + lightBonus);
-
-  // Determine if the current layer is "dark" (underground, lava, etc.)
-  const meta = LAYER_META[layer];
-  const layerType = meta ? meta.type : (layer === LAYER_SURFACE ? 'surface' : 'underground');
-  const isDark = layerType !== 'surface';
-
-  if (isDark) {
-    // Underground / caves — hard limit: cone depth 1 tile.
-    return 1;
-  }
-
-  // Surface — apply time-of-day scaling.
-  const { phase } = getTimePhase(state.worldTick);
-
-  switch (phase) {
-    case 'day':
-      return Math.max(3, base + lightBonus);
-
-    case 'dawn':
-    case 'dusk':
-      return Math.max(3, base - 2 + lightBonus);
-
-    case 'night':
-      // Night surface — hard limit: cone depth 1 tile.
-      return 1;
-
-    default:
-      return Math.max(3, base + lightBonus);
-  }
+  // Full light gives the eye its whole reach; a surface night (light 0.1)
+  // leaves the next tile or two; a layer with no light leaves only the
+  // awareness bubble.
+  const light = getLightLevel(layer);
+  return Math.max(1, Math.round(1 + (base - 1) * light) + lightBonus);
 }
 
 function playerViewRadius(p, lightBonus){

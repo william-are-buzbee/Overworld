@@ -52,7 +52,7 @@ transducers: {
 
 The optical quality of the eye — receptor density, lens quality, neural wiring precision. This is the existing quality number. It determines:
 - **Detection SNR** for entities in the visual field (same role as current visual quality in the entity detection formula)
-- **Terrain awareness range** for ambient sensing (acuity × AMBIENT_VISUAL_COEFF × lightModifier)
+- **Terrain awareness range** for ambient sensing (acuity × AMBIENT_VISUAL_COEFF × lightModifier). *Status (Sep 2026):* lightModifier is `time-cycle.js getLightLevel(layer)`, the one ambient-light model: 1 in daylight, 0.1 on a surface night, linear through dusk and dawn, 0 off the surface. NPC visual range, the player's visual field and the view radius all read it; they used to carry three different tables.
 - **Information extraction quality** — higher acuity resolves more detail at a given distance
 
 Destroying a zone with visual transducers removes this acuity from the creature's sensing. If it was the only eye pair, visual sensing goes to zero.
