@@ -13,7 +13,9 @@ import { isTexturePickerOpen, toggleTexturePicker } from './texture-picker.js';
 
 import { attemptMove, restAction, turnInPlace, setGroundModalCallbacks, eatAction } from './player-actions.js';
 import { T, terrainName, terrainInfo } from './terrain.js';
-import { inBounds, getCover, monsterAt as worldMonsterAt } from './world-state.js';
+import { inBounds, getCover } from './world-state.js';
+import { MON } from './monsters.js';
+import { SPECIES_DISPLAY_CONFIDENCE } from './constants.js';
 import { getItems } from './ground-items.js';
 import { setOnPlayerDeathCallback } from './turn-loop.js';
 import { debugEcology, debugForceHunger, debugCognition, debugSubstrate } from './debug.js';
@@ -215,6 +217,26 @@ function articleFor(name) {
   return /^[aeiou]/i.test(name) ? 'An' : 'A';
 }
 
+/** What the player perceives of a creature on a tile, as a log line, or
+ *  null. Perception pass 7: the species it is taken to be, right or wrong,
+ *  and nothing at all for a creature no sense delivers. clear: seen with both
+ *  eyes (monocular sightings stay a shape). */
+function perceivedCreatureLine(tx, ty, clear) {
+  const key = `${tx},${ty}`;
+  const seen = state.player._perceivedAt && state.player._perceivedAt.get(key);
+  if (seen) {
+    if (!clear) return 'A shape moves here.';
+    const name = (MON[seen.species] && MON[seen.species].name) || 'creature';
+    return `${articleFor(name)} ${name} is here.`;
+  }
+  const felt = (state.player.sensedCreatures || []).find(s => s.x === tx && s.y === ty);
+  if (felt) {
+    const d = felt.speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE && MON[felt.species];
+    return d ? `Something like ${articleFor(d.name).toLowerCase()} ${d.name} is there.` : 'Something is there.';
+  }
+  return null;
+}
+
 /** Log-only tile inspection — never opens a panel or modal. */
 function lookAtTile(tx, ty) {
   const layer = state.player.layer;
@@ -243,11 +265,9 @@ function lookAtTile(tx, ty) {
     parts.push(`${articleFor(it.name)} ${it.name} lies on the ground.`);
   }
 
-  // 4. Creature
-  const mon = worldMonsterAt(tx, ty, layer);
-  if (mon) {
-    parts.push(`${articleFor(mon.name)} ${mon.name} is here.`);
-  }
+  // 4. Creature, as perceived
+  const mon = perceivedCreatureLine(tx, ty, true);
+  if (mon) parts.push(mon);
 
   // 5. If own tile and nothing notable
   const isSelf = tx === state.player.x && ty === state.player.y;
@@ -324,17 +344,9 @@ function inspectTile(tx, ty) {
     }
   }
 
-  // 4. Creatures
-  const mon = worldMonsterAt(tx, ty, layer);
-  if (mon) {
-    if (inBinocular || !fovActive) {
-      // Binocular: clear identification
-      parts.push(`${articleFor(mon.name)} ${mon.name} is here.`);
-    } else if (inMonocular) {
-      // Monocular: less certain description
-      parts.push('A shape moves here.');
-    }
-  }
+  // 4. Creatures, as perceived (binocular: named; monocular: a shape)
+  const mon = perceivedCreatureLine(tx, ty, inBinocular || !fovActive);
+  if (mon) parts.push(mon);
 
   // 5. Self tile
   const isSelf = tx === state.player.x && ty === state.player.y;

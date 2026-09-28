@@ -12,6 +12,7 @@ import { inBounds, getCover } from './world-state.js';
 import { updateUI } from './ui.js';
 import { drawTimeTint } from './time-cycle.js';
 import { getGroundScentNear, MOLECULAR_CLASSES } from './scent.js';
+import { MON } from './monsters.js';
 
 // ---- Sprite pack dispatch ----
 // Delegates to the active pack (16 or 32) based on display.js state.
@@ -145,12 +146,7 @@ function _applyVisualCreatureDip(wx, wy, px, py, TILE, layer) {
   // Only dip creatures the player perceives here at the full-sprite tier
   const mon = _perceivedMonAt(wx, wy);
   if (!mon) return;
-
-  let tintColor = null;
-  if (mon.tint) {
-    tintColor = mon.tint.startsWith('#') ? mon.tint : (BIOME[mon.tint] && BIOME[mon.tint].tint);
-  }
-  const spr = tintColor ? getTintedMon(mon.spr, tintColor) : getSprite(mon.spr);
+  const spr = _perceivedSprite(_perceivedSpeciesAt(wx, wy), mon);
   if (spr) applyAmbientDip(ctx, spr, px, py, TILE, 1.0);
 }
 
@@ -159,7 +155,26 @@ function _applyVisualCreatureDip(wx, wy, px, py, TILE, layer) {
  *  the creature is perceived, not where it is: the display shows percepts. */
 function _perceivedMonAt(wx, wy) {
   const at = state.player._perceivedAt;
-  return at ? (at.get(`${wx},${wy}`) || null) : null;
+  const entry = at ? at.get(`${wx},${wy}`) : null;
+  return entry ? entry.creature : null;
+}
+
+/** The sprite of the species the player takes a creature to be (perception
+ *  pass 7): the template species' own sprite and tint, not the creature's. A
+ *  shaleback taken for something else is drawn as that something else. */
+function _perceivedSprite(species, creature) {
+  const d = (species && MON[species]) || null;
+  const sprKey = d ? d.sprite : creature.spr;
+  const tint = d ? d.tint : creature.tint;
+  let tintColor = null;
+  if (tint) tintColor = tint.startsWith('#') ? tint : (BIOME[tint] && BIOME[tint].tint);
+  return tintColor ? getTintedMon(sprKey, tintColor) : getSprite(sprKey);
+}
+
+function _perceivedSpeciesAt(wx, wy) {
+  const at = state.player._perceivedAt;
+  const entry = at ? at.get(`${wx},${wy}`) : null;
+  return entry ? entry.species : null;
 }
 
 /**
@@ -595,12 +610,8 @@ function render(){
       ctx.globalAlpha = opacity;
 
       if ((sensed.speciesConfidence || 0) >= SPECIES_DISPLAY_CONFIDENCE) {
-        // IDENTIFIED: draw the creature's actual sprite
-        let tintColor = null;
-        if (creature.tint) {
-          tintColor = creature.tint.startsWith('#') ? creature.tint : (BIOME[creature.tint] && BIOME[creature.tint].tint);
-        }
-        const spr = tintColor ? getTintedMon(creature.spr, tintColor) : getSprite(creature.spr);
+        // IDENTIFIED: draw the species it is taken to be (pass 7)
+        const spr = _perceivedSprite(sensed.species, creature);
         if (spr) ctx.drawImage(spr, spx, spy, TILE, TILE);
         // Facing indicator
         if (creature.facing) {
@@ -770,11 +781,7 @@ function drawEntityAtTile(wx, wy, px, py, layer){
   const mon = _perceivedMonAt(wx, wy);
   if (mon){
     {
-    let tintColor = null;
-    if (mon.tint){
-      tintColor = mon.tint.startsWith('#') ? mon.tint : (BIOME[mon.tint] && BIOME[mon.tint].tint);
-    }
-    const spr = tintColor ? getTintedMon(mon.spr, tintColor) : getSprite(mon.spr);
+    const spr = _perceivedSprite(_perceivedSpeciesAt(wx, wy), mon);
     if (spr) ctx.drawImage(spr, px, py, TILE, TILE);
 
     // Prompt G: facing indicator overlay

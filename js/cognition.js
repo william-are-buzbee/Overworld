@@ -19,7 +19,7 @@ import { getBodyMap,
          CONFIDENCE_NORMALIZATION,
          THREAT_CONF_CHANNEL_CAP, THREAT_CONF_SIZE_MUCH_LARGER,
          THREAT_CONF_SIZE_LARGER, THREAT_CONF_SIZE_AMBIGUOUS,
-         STRESS_NEURAL_SENSITIVITY, STRESS_MAX,
+         STRESS_NEURAL_SENSITIVITY, STRESS_MAX, SPECIES_DISPLAY_CONFIDENCE,
          LOOM_WINDOW_ACTIONS, REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          GROUND_EMISSION_BASE } from './constants.js';
 import { getBodyPTW } from './physiology.js';
@@ -593,7 +593,7 @@ function _massWeight(det, selfMass) {
 
 function _isLowThreat(det, ownSpecies) {
   if (det.sizeRelative === 'smaller' || det.sizeRelative === 'much_smaller' || det.sizeRelative === 'similar') return true;
-  if (det.species && det.speciesConfidence >= 1.0 && det.species === ownSpecies) return true;
+  if (det.species && det.speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE && det.species === ownSpecies) return true;
   return false;
 }
 

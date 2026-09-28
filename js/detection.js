@@ -25,6 +25,7 @@ import { getBodyMap,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          VIS_RESOLVE_SNR, VIB_RESOLVE_SNR, CHEM_RESOLVE_SNR,
          VIS_BEARING_RES_DEG, VIB_BEARING_RES_DEG, CHEM_BEARING_RES_DEG, OLFACTORY_WEBER_FRACTION,
+         ID_MASS_UNIT, ID_LIMB_UNIT, ID_BRIGHTNESS_UNIT, ID_PROFILE_UNIT, ID_MARGIN, BODY_MAPS,
          // Visual Detection Pass 1 — motion and contrast
          MOTION_SIGNAL_MOVING, MOTION_SIGNAL_STILL,
          CONTRAST_FLOOR, BRIGHTNESS_CONTRAST_WEIGHT, HUE_MISMATCH_PENALTY,
@@ -33,7 +34,8 @@ import { getBodyMap,
        } from './constants.js';
 import { getLightLevel } from './time-cycle.js';
 import { referenceEmission } from './signals.js';
-import { groundScentAt, airborneScentAt, upwindStep, ownAirborneLevel } from './scent.js';
+import { groundScentAt, airborneScentAt, upwindStep, ownAirborneLevel, MOLECULAR_CLASSES } from './scent.js';
+import { MON } from './monsters.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField, sightlineOpacity } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -847,8 +849,8 @@ function bindPlumes(creature) {
     if (diff > Math.PI) diff = 2 * Math.PI - diff;
     if (diff > Math.PI / 4 + 1e-9) continue;
     if (snr > DIET_CONF_MIN) {
-      info.dietConfidence = Math.min(1.0, (snr - DIET_CONF_MIN) / (DIET_CONF_FULL - DIET_CONF_MIN));
-      info.dietType = kind;
+      const conf = Math.min(1.0, (snr - DIET_CONF_MIN) / (DIET_CONF_FULL - DIET_CONF_MIN));
+      if (conf > info.dietConfidence) { info.dietConfidence = conf; info.dietType = kind; }
     }
     if (plume.bloodSNR > CONDITION_CONF_MIN) info.woundChemistry = true;
     // Fight assessment needs the diet it now has (buildDetectionInfo ran first)
@@ -884,27 +886,112 @@ const _BEARING_RES_DEG = {
   vibrationAir: VIB_BEARING_RES_DEG, chemicalAirborne: CHEM_BEARING_RES_DEG,
 };
 
-/** The percept of one source: { x, y, mass, sizeChannel, resolved }, where
- *  mass is the size estimate, (x, y) the tile it is perceived on, resolved
- *  the weight the signal's structure carried (0: only the yardstick of its
- *  own body; 1: the signal's own size). */
+// ==================== IDENTIFICATION (perception pass 7) ====================
+// Wired templates, one per species of the observer's world (sensory-
+// constants.js "Identification"), built from the species' own template body:
+// its mass, its locomotion limbs, its integument, its volatile mix, and the
+// diet that goes with it (a plant-digestion volatile in the mix: herbivore).
+const _templatesByLayer = new Map();
+function _speciesTemplates(layer) {
+  if (_templatesByLayer.has(layer)) return _templatesByLayer.get(layer);
+  const list = [];
+  for (const key of Object.keys(MON)) {
+    if (MON[key].layer !== layer || !BODY_MAPS[key]) continue;
+    const zones = BODY_MAPS[key];
+    const profile = SCENT_PROFILES[key] || null;
+    const integ = getIntegument({ key });
+    list.push({
+      key,
+      mass: zones.reduce((s, z) => s + (z.mass || 0), 0),
+      legs: zones.filter(z => z.locomotion).length,
+      brightness: integ ? integ.brightness : null,
+      profile: profile ? _normalisedMix(profile) : null,
+      diet: profile && profile.greenLeaf > 0 ? 'herbivore' : 'predator',
+    });
+  }
+  _templatesByLayer.set(layer, list);
+  return list;
+}
+
+function _normalisedMix(v) {
+  let total = 0;
+  for (const c of MOLECULAR_CLASSES) total += v[c] || 0;
+  const out = {};
+  for (const c of MOLECULAR_CLASSES) out[c] = total > 0 ? (v[c] || 0) / total : 0;
+  return out;
+}
+
+function _mixDistance(a, b) {
+  let d = 0;
+  for (const c of MOLECULAR_CLASSES) d += Math.abs((a[c] || 0) - (b[c] || 0));
+  return d;
+}
+
+/** Match what the channels resolve of a source against the templates.
+ *  chanW: the resolve weight each modality reached (visual, vibration,
+ *  chemical); massEst: the size estimate so far. The features: mass (at the
+ *  size weight), locomotion limbs (footfall pattern or silhouette: the
+ *  better of feet and eyes), integument brightness (eyes), the volatile mix
+ *  of the air on its tile (nose, near field). What the target's body is,
+ *  its channels carry; what they resolve of it, their SNR sets.
+ *  Returns { template, confidence }; confidence 0 when nothing is resolved. */
+function _identify(observer, target, massEst, wMass, chanW) {
+  const layer = observer.layer != null ? observer.layer : state.player.layer;
+  const templates = _speciesTemplates(layer);
+  if (!templates.length) return { template: null, confidence: 0 };
+  const legsW = Math.max(chanW.visual, chanW.vibration);
+  const briW = chanW.visual, chemW = chanW.chemical;
+  const bodyMap = getBodyMap(target);
+  const legs = (legsW > 0 && bodyMap) ? bodyMap.filter(z => z.locomotion && !z.destroyed).length : null;
+  const integ = briW > 0 ? getIntegument(target) : null;
+  const air = chemW > 0 ? airborneScentAt(layer, target.x, target.y) : null;
+  const mix = air ? _normalisedMix(air) : null;
+  let best = null, d1 = Infinity, d2 = Infinity;
+  for (const t of templates) {
+    let d = wMass * Math.abs(Math.log(massEst / t.mass)) / ID_MASS_UNIT;
+    if (legs != null) d += legsW * Math.abs(legs - t.legs) / ID_LIMB_UNIT;
+    if (integ && t.brightness != null) d += briW * Math.abs(integ.brightness - t.brightness) / ID_BRIGHTNESS_UNIT;
+    if (mix && t.profile) d += chemW * _mixDistance(mix, t.profile) / ID_PROFILE_UNIT;
+    if (d < d1) { d2 = d1; d1 = d; best = t; }
+    else if (d < d2) { d2 = d; }
+  }
+  const confidence = Number.isFinite(d2) ? Math.max(0, Math.min(1, (d2 - d1) / ID_MARGIN)) : 1;
+  return { template: best, confidence };
+}
+
+/** The percept of one source: { x, y, mass, sizeChannel, resolved, species,
+ *  speciesConfidence, template }, where mass is the size estimate, (x, y)
+ *  the tile it is perceived on, resolved the weight the signal's structure
+ *  carried (0: only the yardstick of its own body; 1: the signal's own size),
+ *  species the best-matching template's key (right or wrong) and its
+ *  confidence. A recognised species sets the size expectation in place of
+ *  the observer's own body, in proportion to the confidence. */
 function _inferPercept(observer, target, detections) {
   const selfMass = getCreatureMass(observer);
   let sizeDet = null, w = -1, bearRes = Infinity;
+  const chanW = { visual: 0, vibration: 0, chemical: 0 };
   for (const det of detections) {
     // Two eyes on it add parallax to the eyes' distance cues
     const snr = (det.channel === 'visual' && det.eyes >= 2) ? det.snr * BINOCULAR_DEPTH_BONUS : det.snr;
     const R = _RESOLVE_SNR[det.channel] || VIB_RESOLVE_SNR;
     const dw = Math.max(0, Math.min(1, (snr - 1) / (R - 1)));
     if (dw > w || (dw === w && det.snr > sizeDet.snr)) { w = dw; sizeDet = det; }
+    const mod = det.channel === 'visual' ? 'visual' : det.channel === 'chemicalAirborne' ? 'chemical' : 'vibration';
+    if (dw > chanW[mod]) chanW[mod] = dw;
     const res = (_BEARING_RES_DEG[det.channel] ?? VIB_BEARING_RES_DEG) / Math.max(1, det.snr);
     if (res < bearRes) bearRes = res;
   }
-  if (!sizeDet) return { x: target.x, y: target.y, mass: getCreatureMass(target), sizeChannel: null, resolved: 1 };
+  if (!sizeDet) return { x: target.x, y: target.y, mass: getCreatureMass(target), sizeChannel: null, resolved: 1,
+                         species: null, speciesConfidence: 0, template: null };
 
-  // Size, and the distance the received signal implies for it
+  // Size, first against its own body, then against what it is taken to be
   const apparent = estimateMassFromSignal(target, observer, sizeDet.channel);
-  const mass = Math.pow(selfMass, 1 - w) * Math.pow(apparent, w);
+  let mass = Math.pow(selfMass, 1 - w) * Math.pow(apparent, w);
+  const id = _identify(observer, target, mass, w, chanW);
+  if (id.template && id.confidence > 0) {
+    const prior = Math.pow(selfMass, 1 - id.confidence) * Math.pow(id.template.mass, id.confidence);
+    mass = Math.pow(prior, 1 - w) * Math.pow(apparent, w);
+  }
   const dTrue = dist(observer.x, observer.y, target.x, target.y);
   const dEst = apparent > 0 ? dTrue * Math.cbrt(mass / apparent) : dTrue;
 
@@ -928,7 +1015,9 @@ function _inferPercept(observer, target, detections) {
     y = observer.y + Math.round(Math.sin(ang));
     if (x === observer.x && y === observer.y) x += Math.cos(ang) >= 0 ? 1 : -1;
   }
-  return { x, y, mass, sizeChannel: sizeDet.channel, resolved: w };
+  return { x, y, mass, sizeChannel: sizeDet.channel, resolved: w,
+           species: id.template ? id.template.key : null, speciesConfidence: id.confidence,
+           template: id.template };
 }
 
 /** This observer's percept of an entity on its current action, or null if no
@@ -1063,11 +1152,14 @@ function buildDetectionInfo(observer, target, detections) {
     info.dietType = bestChemDet ? bestChemDet.kind : null;   // read off the air's composition
   }
 
-  // Species: best SNR on any channel
-  if (bestSNR > SPECIES_CONF_MIN) {
-    info.speciesConfidence = Math.min(1.0,
-      (bestSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
-    info.species = getSpeciesKey(target);   // the same key a creature knows itself by
+  // Species: the best-matching template (pass 7), right or wrong. A
+  // recognised species brings the diet that goes with it: the template knows
+  // what that kind of animal eats.
+  info.species = tile.species;
+  info.speciesConfidence = tile.speciesConfidence;
+  if (tile.template && tile.speciesConfidence > info.dietConfidence) {
+    info.dietType = tile.template.diet;
+    info.dietConfidence = tile.speciesConfidence;
   }
 
   // Condition: requires high SNR
@@ -1346,8 +1438,8 @@ function isViablePrey(predator, info) {
   const minRatio = predator.drives.hunger > 0.85 ? 0.02 : 0.05;
   if (massRatio < minRatio) return false;
 
-  // Don't hunt what the channels have resolved as your own species
-  if (info.species && info.speciesConfidence >= 1.0 && info.species === getSpeciesKey(predator)) return false;
+  // Don't hunt what the channels have recognised as your own species
+  if (info.species && info.speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE && info.species === getSpeciesKey(predator)) return false;
 
   return true;
 }
@@ -1499,16 +1591,13 @@ function computePlayerPerception() {
       if (vis) {
         const visSNR = vis.snr;
         const tile = _inferPercept(player, creature, [vis]);
-        let speciesConfidence = 0;
-        if (visSNR > SPECIES_CONF_MIN) {
-          speciesConfidence = Math.min(1.0,
-            (visSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
-        }
+        const speciesConfidence = tile.speciesConfidence;
 
         if (speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE) {
-          // High confidence — creature renders normally via drawEntityAtTile
+          // Recognised — drawn via drawEntityAtTile as the species it is
+          // taken to be (pass 7: right or wrong), on its perceived tile
           player._visuallyDetected.set(creature, tile);
-          player._perceivedAt.set(`${tile.x},${tile.y}`, creature);
+          player._perceivedAt.set(`${tile.x},${tile.y}`, { creature, species: tile.species });
         } else {
           // Low confidence — route through sensedCreatures for blob rendering
           const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / visSNR;
@@ -1519,7 +1608,7 @@ function computePlayerPerception() {
             upper: rawEstimate * (1 + uncertaintyFactor),
           };
           player.sensedCreatures.push({
-            creature, x: tile.x, y: tile.y, bestSNR: visSNR, speciesConfidence, sizeEstimate,
+            creature, x: tile.x, y: tile.y, bestSNR: visSNR, speciesConfidence, species: tile.species, sizeEstimate,
             _visualFOV: true,
           });
         }
@@ -1543,14 +1632,9 @@ function computePlayerPerception() {
 
     if (bestSNR <= 0) continue;
 
-    let speciesConfidence = 0;
-    if (bestSNR > SPECIES_CONF_MIN) {
-      speciesConfidence = Math.min(1.0,
-        (bestSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
-    }
-
     // Smell is the scent field's (scent.js), not a marker: infer from the rest
     const tile = _inferPercept(player, creature, detections.filter(d => d.channel !== 'chemicalAirborne'));
+    const speciesConfidence = tile.speciesConfidence;
     const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
     const rawEstimate = tile.mass;
     const sizeEstimate = {
@@ -1559,7 +1643,7 @@ function computePlayerPerception() {
       upper: rawEstimate * (1 + uncertaintyFactor),
     };
 
-    player.sensedCreatures.push({ creature, x: tile.x, y: tile.y, bestSNR, speciesConfidence, sizeEstimate });
+    player.sensedCreatures.push({ creature, x: tile.x, y: tile.y, bestSNR, speciesConfidence, species: tile.species, sizeEstimate });
   }
 }
 
