@@ -133,6 +133,8 @@ The per-eye computation (`updatePlayerFOV`) already processes rays per eye. The 
 
 Tiles reached before budget exhaustion are added to `fovSet` (binocular) or `monocularSet` as before. Tiles beyond budget exhaustion on that ray are simply not added — same as if a wall blocked them.
 
+*Status (Sep 2026, perception pass 2):* NPC eyes are charged by the same rule, per target, in `detection.js _visualDetection`: `_eyeCoverage` counts how many of the detector's eyes contain the target and takes the sharpest of them; the budget is that acuity × `OCCLUSION_BUDGET_COEFF`, × `BINOCULAR_DEPTH_BONUS` when two or more eyes cover it; the target is lost when `fov.js sightlineOpacity` (the Bresenham sum over the tiles strictly between, the same function the player's shadowcast calls) reaches the budget. A fleeing creature tracking its threat has both eyes on it. Until this, NPC sightlines were blocked by walls only, so hares saw wolves through twenty tiles of forest while the player's view stopped at three or four. The player's monocular tiles are now charged with the intermediate tiles only, as binocular tiles and NPC eyes are; they used to include the tile's own opacity, which double-counted it against concealment. On seed 7 this cut hare flee time by about two thirds over 300 turns: hares no longer see predators through forest belts.
+
 ### Ambient Visual Sensing (fov.js)
 
 Ambient visual peripheral range (`updateAmbientSensing`) currently uses a simple radius. It should also be subject to sightline opacity — the ambient visual radius is reduced in forested areas because you can't see terrain 15 tiles away through trees.
@@ -183,7 +185,7 @@ This system handles how terrain cover interacts with visual detection. It does n
 - **Camouflage** — integument matching environment (future, depends on pattern library system)
 - **Active concealment** — creature choosing to hide (future, depends on motor system + stealth behavior)
 - **Non-visual detection through cover** — vibration and scent have their own terrain interactions
-- **NPC vision** — NPCs still use VISION_PROFILES and don't have per-eye computation. NPC vision through cover is deferred to the NPC vision update
+- **NPC vision** — done (Sep 2026, perception pass 2); see the status note under Interaction with Existing Systems.
 
 ---
 
