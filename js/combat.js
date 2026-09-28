@@ -3,9 +3,7 @@ import { render } from './rendering.js';
 import { monsterMelee, applySafetyFromDamage } from './enemy-ai.js';
 import { state, worlds, monsters } from './state.js';
 import { DMG, resistMult, getBodyMap, selectHitZone,
-         checkNeuralDeath, getAvailableAttacks, hasLocomotion, checkSenseLoss,
-         getPathways, computeBleedPenalty, BLOOD_FRACTION, BURST_COEFF,
-         BLOOD_DEATH_THRESHOLD, ARMOR_PER_STRUCTURAL_KG,
+         getAvailableAttacks, ARMOR_PER_STRUCTURAL_KG,
          getAttackDirection, getExposedZones, selectContactedZones,
          computeStrikeDamage } from './constants.js';
 import { T, coverBonus } from './terrain.js';
@@ -16,133 +14,12 @@ import { playerAcc, playerDodge, playerDef,
 import { monDodge, monAcc, monDamage } from './monsters.js';
 import { inBounds, chebyshev, monsterAt, isTownCell, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
+import { applyZoneDamage } from './physiology.js';
 import { placeItem, generateItemId } from './ground-items.js';
 
 // Forward reference — set by main.js to break circular dep
 
 function monstersHere(){ return monsters[state.player.layer]; }
-
-// ==================== ZONE DESTRUCTION RESOLUTION ====================
-// Apply damage to a specific zone and resolve all consequences.
-// `entity` is the creature whose zone was hit (monster or player).
-// `hitZone` is the zone object from the entity's body map.
-// `dmg` is the damage dealt (already subtracted from entity.hp).
-// `entityName` is the display name for log messages.
-// `bodyMap` is the zone array for the entity.
-// Returns true if the entity died from zone destruction consequences.
-
-function resolveZoneDamage(entity, hitZone, dmg, entityName, bodyMap) {
-  if (!hitZone || !bodyMap) return false;
-
-  // Apply damage to the zone
-  if (hitZone.hp == null) return false;  // zone HP not initialized
-  hitZone.hp = Math.max(0, hitZone.hp - Math.round(dmg));
-
-  // Clotting reset — new damage tears open any clotting progress
-  if (hitZone.clotting > 0) {
-    hitZone.clotting = 0;
-  }
-
-  // Check if zone is newly destroyed
-  if (hitZone.hp <= 0 && !hitZone.destroyed) {
-    hitZone.hp = 0;
-    hitZone.destroyed = true;
-
-    log(`${entityName}'s ${hitZone.name} is destroyed.`, LOG_CATEGORIES.COMBAT);
-
-    // Blood system — destruction dump + severance burst
-    if (entity.blood != null && entity.bloodMax > 0) {
-      // Dump — zone's blood share is lost
-      const dump = hitZone.bloodShare || 0;
-      entity.blood -= dump;
-
-      // Burst — severed pathway connections
-      const pathways = getPathways(entity);
-      let severedBandwidth = 0;
-      for (const pw of pathways) {
-        if (pw.from === hitZone.key || pw.to === hitZone.key) {
-          severedBandwidth += pw.bandwidth;
-        }
-      }
-      const burst = severedBandwidth * BURST_COEFF * entity.bloodMax;
-      entity.blood -= burst;
-
-      // Clamp and recompute penalty
-      entity.blood = Math.max(0, entity.blood);
-      entity.bleedPenalty = computeBleedPenalty(entity);
-    }
-
-    // ── Death checks (Prompt H) — vital → neural → blood ──
-    // First condition met is the cause of death.
-
-    // Step 1 — Vital zone destruction (torso)
-    if (hitZone.vital) {
-      if (entity.isPlayer) {
-        log(`Something vital tears loose inside you. Everything stops.`, LOG_CATEGORIES.COMBAT);
-      } else {
-        log(`The ${entityName}'s body gives out. It collapses.`, LOG_CATEGORIES.COMBAT);
-      }
-      entity.deathCause = 'vital';
-      return true; // caller handles death
-    }
-
-    // Step 2 — Neural death check
-    if (checkNeuralDeath(bodyMap)) {
-      const headDestroyed = hitZone.key === 'head';
-      if (entity.isPlayer) {
-        if (headDestroyed) {
-          log(`A flash of nothing. Then nothing.`, LOG_CATEGORIES.COMBAT);
-        } else {
-          log(`Your limbs stop answering. The world blurs. Silence.`, LOG_CATEGORIES.COMBAT);
-        }
-      } else {
-        if (headDestroyed) {
-          log(`The ${entityName}'s body seizes and falls. It does not get up.`, LOG_CATEGORIES.COMBAT);
-        } else {
-          log(`The ${entityName} shudders, limbs twitching without coordination. It goes still.`, LOG_CATEGORIES.COMBAT);
-        }
-      }
-      entity.deathCause = 'neural';
-      return true; // caller handles death
-    }
-
-    // Step 3 — Blood loss death (from dump + burst)
-    if (entity.blood != null && entity.blood <= entity.bloodMax * BLOOD_DEATH_THRESHOLD) {
-      if (entity.isPlayer) {
-        log(`Everything narrows. Fades. Goes still.`, LOG_CATEGORIES.COMBAT);
-      } else {
-        log(`The ${entityName} collapses. Its wounds finally emptied it.`, LOG_CATEGORIES.COMBAT);
-      }
-      entity.deathCause = 'blood';
-      return true; // caller handles death
-    }
-
-    // Step 4 — Locomotion check
-    if (hitZone.locomotion && !hasLocomotion(bodyMap)) {
-      entity.immobilized = true;
-      log(`${entityName} collapses, unable to move.`, LOG_CATEGORIES.COMBAT);
-    }
-
-    // Step 5 — Attack loss
-    if (hitZone.attacks && hitZone.attacks.length > 0) {
-      for (const atk of hitZone.attacks) {
-        log(`${entityName}'s ${atk.name} is gone.`, LOG_CATEGORIES.COMBAT);
-      }
-    }
-
-    // Step 6 — Sensory log messages
-    const senseLosses = checkSenseLoss(bodyMap, hitZone);
-    for (const sl of senseLosses) {
-      if (sl.type === 'lost') {
-        log(`${entityName} can no longer ${sl.verb}.`, LOG_CATEGORIES.COMBAT);
-      } else {
-        log(`${entityName}'s ${sl.sense} weakens.`, LOG_CATEGORIES.COMBAT);
-      }
-    }
-  }
-
-  return false;
-}
 
 function rollHit(acc, dodge){
   const c = Math.max(5, Math.min(95, acc - dodge));
@@ -301,8 +178,7 @@ function playerAttack(mon){
       const zoneArmor = (zone.structural || 0) * ARMOR_PER_STRUCTURAL_KG;
       zoneDmg = Math.max(1, zoneDmg - zoneArmor);
 
-      const died = resolveZoneDamage(mon, zone, zoneDmg, mon.name, monBodyMap);
-      if (died) zoneDeath = true;
+      if (applyZoneDamage(mon, zone, zoneDmg).died) zoneDeath = true;
     }
 
     if (zoneDeath) {
