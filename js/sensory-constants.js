@@ -99,8 +99,34 @@ export const MARKER_MASS_MAX   = 250;    // kg — at or above this → maximum 
 // for playability, but must remain dramatic enough that stillness is a
 // meaningful survival strategy. The ratio below (7.8×) is the ratio of
 // ranges: the visual range is linear in it (detection.js getVisualRange).
-export const MOTION_SIGNAL_MOVING        = 3.5;    // moving creature signal multiplier
+export const MOTION_SIGNAL_MOVING        = 3.5;    // a prowler walking across the view (the anchor for the velocity law below)
 export const MOTION_SIGNAL_STILL         = 0.45;   // stationary creature signal multiplier (was 0.25 — too harsh at short range)
+
+// ── Motion as velocity (perception pass 4) ──
+// The eye's change detection responds to how fast the target moves across
+// its line of sight; motion straight toward or away from the eye (looming or
+// shrinking) is detected at a fraction of that. The signal is
+//   STILL + (MOVING − STILL) × (across + RADIAL_WEIGHT × |along|) / ANCHOR_SPEED
+// with speeds in tiles per world tick, anchored so a prowler walking across
+// the view (0.73 tiles/tick: one tile per 1.37 ticks, measured) reads MOVING
+// as before. A creep crosses at 40% of that, a sprinting hare at ~2×, and a
+// walker coming head-on reads at 0.35 of a crossing one: stalk straight in.
+export const MOTION_ANCHOR_SPEED         = 0.73;   // tiles per world tick: a prowler at a walk
+export const MOTION_RADIAL_WEIGHT        = 0.35;   // sensitivity to motion along the sightline, relative to across it
+
+// A looming circuit on the eyes fires as a seen body closes, harder the
+// sooner contact would come. It saturates at contact and falls to nothing
+// when contact is this many of the observer's own actions away: the time it
+// has to get out of the way. Wired into the hare's threat template.
+export const LOOM_WINDOW_ACTIONS         = 4;
+
+// Own footfalls in the listening channel. A body's ground-vibration
+// transducers hear its own steps as they would a neighbour of the same weight
+// at this many tiles (every sensor on a 5-200 kg body is within a stride of
+// its feet). Real coupling through the body is tighter; this is the
+// conservative bound. Walking, a hare's fore-limbs feel a walking prowler at
+// ~1.6 tiles instead of ~10.6; creeping, ~2.9; standing, the full range.
+export const SELF_FOOTFALL_DISTANCE      = 1.0;
 
 // Background contrast: how different the creature's integument looks
 // from the terrain it's standing on.

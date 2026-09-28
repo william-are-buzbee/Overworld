@@ -182,6 +182,8 @@ Monocular zones get no stealth bonus. A stealthed creature in the hare's vast la
 
 Binocular vision also provides better motion tracking — you can see the direction of movement in three dimensions (approaching vs. crossing). In monocular vision, an approaching object and a stationary object can look identical until the approaching one changes apparent size. This could affect how quickly the creature resolves "moving vs. still" and "approaching vs. lateral" from visual detections. Implementation deferred to the movement detection system.
 
+*Status (Sep 2026, perception pass 4):* motion is now split into across and along the sightline for every eye (Sensory-Design, "motion as velocity"), with along-sightline motion detected at 0.35 of across. Binocular and monocular eyes do not yet differ in how well they resolve the along component; that belongs here when they do.
+
 ---
 
 ## Rendering — Three Visual Tiers

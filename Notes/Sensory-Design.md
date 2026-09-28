@@ -238,6 +238,10 @@ Ground vibration emission is zero for still creatures and nonzero for moving cre
 
 What improves with SNR is movement DETAIL: speed estimation, gait pattern resolution, directional changes. But the basic fact of "moving or not" is free from vibration detection. Chemical detections provide no movement information — a scent plume doesn't tell you if the source is moving or standing still.
 
+*Status (Sep 2026, perception pass 4) — motion as velocity.* Every body records its last step and the speed it was taken at (`turn-loop.js _recordStep`: force-to-weight at the gait × acceleration, the rate the action economy runs it at; tiles per world tick = speed / (REFERENCE_SPEED × BASE_TICKS_PER_ACTION)). An eye splits that velocity into motion across its line of sight and motion along it (`detection.js _motionRelativeTo`), and the visual motion factor is `STILL + (MOVING − STILL) × (across + 0.35 × |along|) / 0.73`, anchored so a prowler walking across the view reads 3.5 as the old binary value did (`_motionFactor`). A wolf picks a prowler out at: still 4.8 tiles; walking across 37; walking head-on or away 16; creeping across 18; creeping head-on 9; sprinting across 55. Stalking is now geometry and gait: come in slow and straight. Detection info carries `closingSpeed` from the eyes, which feeds the hare's looming circuit (Cognition-Design). The concealment motion reduction is still binary (moved or not).
+
+*Own footfalls (perception pass 4).* A body's own steps reach its own ground-vibration transducers as a same-weight neighbour's would from `SELF_FOOTFALL_DISTANCE` (1 tile, the conservative bound: every sensor on these bodies is within a stride of its feet). Received signal goes as emission / d³, so the noise floor `1/(quality × coeff)³` becomes `floor + own emission`, and the range becomes `cbrt(emission / (floor + own))` (`detectTargetPerZone`). A hare's fore-limbs feel a walking prowler at 10 tiles standing, 2 creeping, 1 walking, 0 bolting. Animals that listen through the ground have to stop to listen; the reactive rule `movementCompromisesSense` now has the mechanism it claimed. Air vibration and the eyes carry no self-noise yet: the eyes' version needs the background's optic flow, which nothing models.
+
 **Diet type — chemical airborne only, confidence scaling:**
 
 Predator and herbivore metabolisms produce different volatile compound profiles. Discriminating between them requires chemical receptor specificity. Confidence in the discrimination scales continuously with chemical airborne SNR:
@@ -462,7 +466,7 @@ An apex predator's head (quality 3) should be slightly better — roughly 4-6 ti
 **Designed, not yet implementable:**
 - Sensitivity windows with per-receptor tuning curves
 - Saturation modeling (signal clipping above max operating range)
-- Gain control and adaptation (baseline subtraction over turns)
+- Gain control and adaptation (baseline subtraction over turns). Self-noise from the body's own footfalls is in (pass 4); adaptation to external background is not.
 - Per-limb window specialization
 - Per-window pattern libraries (depends on memory system, Phase 4)
 - Territory-based sensory calibration (adapted baselines in familiar territory)
