@@ -206,6 +206,17 @@ At SNR 12.0+: "approximately 20-25 kg." Near-exact.
 
 `SIZE_UNCERTAINTY_BASE` is a tuning constant. Tune so that the ranges feel physical — at the edge of detection, size is genuinely ambiguous. At close range with good sensors, size is precise.
 
+*Status (Sep 2026):* `deriveFromSignalMagnitude` is `detection.js estimateMassFromSignal(target, observer, channel)`, and the
+channel is the one that produced the best SNR. The observer's reference is its own emission on that channel
+(`signals.js referenceEmission`: its smell at rest, its footfalls and breathing as if moving, its silhouette). Smell and air
+vibration scale with mass, and so does ground vibration, the footfall impulse a moving body puts into the substrate; a
+silhouette scales with the cube root of mass, so that ratio is cubed back. What the observer cannot know it does not
+correct for: a moving predator smells like a heavier animal to a resting grazer. Before this every estimate used the
+chemical channel whatever sense had detected the target, and ground emission was mass over foot contact, which cancelled to
+a gait ratio (a 200 kg wader put less into the ground than a wolf) and contradicted the ranges below. The visual SNR the
+ganglia read is the one that decided the detection, cover and light included (`_visualDetection`, one path for NPCs and
+the player).
+
 **Movement state — vibration channel only, resolves quickly:**
 
 Ground vibration emission is zero for still creatures and nonzero for moving creatures. If a zone detected something through ground vibration, the target was moving — this is inherent in the physics, not a threshold. The movement information is binary and comes for free from the channel itself.
