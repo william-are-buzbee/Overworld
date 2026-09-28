@@ -1,0 +1,273 @@
+// ==================== TERRAIN TYPES ====================
+export const T = {
+  GRASS:0, FOREST:1, SAND:2, ROCK:3, WATER:4, DEEP_WATER:5,
+  BEACH:7, MUSHFOREST:8,
+  CAVE_WALL:10, CAVE_FLOOR:11, LAVA:12, UWATER:13,
+  STAIRS_DOWN:23, STAIRS_UP:24,
+  VOID:51,             // impassable black void outside cave boundaries
+  CAVE_ROCK:52,        // dense cave boundary rock — impassable, blocks LOS
+  BOULDER:53,          // large rock formation (cover, impassable)
+  ROCK_OUTCROP:54,     // smaller rocky protrusion (cover, impassable)
+
+  // --- Surface ground types ---
+  MUD:55,              // swamp/wetland ground
+  FUNGAL_GRASS:56,     // organic ground for the mushroom biome
+  DIRT:57,             // dry, bare earth
+
+  // Retired ids (never renumber; a save stores these as numbers):
+  //   6 road · 14 wheat · 15 wood floor · 16 wall · 20-22 town/castle/keep ·
+  //   25-34 sign/chest/book/gate/npc/house/shop/inn/well/farm · 36 dirt road ·
+  //   37-50 ruins, well quadrants, barrels, crates, lamp posts, shop interiors,
+  //   shopkeeper, fountain, large house · 58-59 hut wall/campfire.
+  //   All belonged to the removed settlement/structure generators.
+};
+
+// ==================== TERRAIN LAYER CLASSIFICATION ====================
+// Each terrain type is classified as 'ground' or 'cover'.
+//   ground — stored in worlds[layer][y][x]
+//   cover  — stored in covers[layer][y][x]
+
+export const TERRAIN_INFO = {
+  // ---- GROUND types ----
+  [T.GRASS]:     {name:'grass',         sprite:'GRASS',      palette:'plains',     walk:true,  cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.FOREST,T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
+  [T.SAND]:      {name:'sand',          sprite:'SAND',       palette:'desert',     walk:true,  cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP]},
+  [T.ROCK]:      {name:'rock',          sprite:'ROCK',       palette:'rock',       walk:true,  cover:10,  terrainLayer:'ground',
+                  allowedCover:[T.BOULDER,T.ROCK_OUTCROP]},
+  [T.WATER]:     {name:'water',         sprite:'WATER',      palette:'water',      walk:false, cover:0,   terrainLayer:'ground', transparent:true,
+                  allowedCover:[]},
+  [T.DEEP_WATER]:{name:'deep water',    sprite:'DEEP_WATER', palette:'deep',       walk:false, cover:0,   terrainLayer:'ground', transparent:true,
+                  allowedCover:[]},
+  [T.BEACH]:     {name:'beach',         sprite:'BEACH',      palette:'beach',      walk:true,  cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.FOREST,T.BOULDER,T.ROCK_OUTCROP]},
+  [T.CAVE_WALL]: {name:'cave wall',     sprite:'CAVE_WALL',  palette:'cave_wall',  walk:false, cover:0,   terrainLayer:'ground',
+                  allowedCover:[]},
+  [T.CAVE_FLOOR]:{name:'cave floor',    sprite:'CAVE_FLOOR', palette:'cave',       walk:true,  cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
+  [T.LAVA]:      {name:'lava',          sprite:'LAVA',       palette:'lava',       walk:false, cover:0,   terrainLayer:'ground',
+                  allowedCover:[]},
+  [T.UWATER]:    {name:'dark water',    sprite:'DEEP_WATER', palette:'uwater',     walk:false, cover:0,   terrainLayer:'ground', transparent:true,
+                  allowedCover:[]},
+  [T.VOID]:      {name:'void',          sprite:'VOID',       palette:'void',       walk:false, cover:0,   terrainLayer:'ground', transparent:false,
+                  allowedCover:[]},
+  [T.CAVE_ROCK]: {name:'cave rock',     sprite:'CAVE_ROCK',  palette:'cave_rock',  walk:false, cover:0,   terrainLayer:'ground', transparent:false,
+                  allowedCover:[]},
+  [T.MUD]:       {name:'mud',           sprite:'MUD',        palette:'mud',        walk:true,  cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.FOREST,T.MUSHFOREST]},
+  [T.FUNGAL_GRASS]:{name:'fungal grass',sprite:'FUNGAL_GRASS',palette:'fungal_grass',walk:true,cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
+  [T.DIRT]:      {name:'dirt',          sprite:'DIRT',       palette:'dirt',       walk:true,  cover:0,   terrainLayer:'ground',
+                  allowedCover:[T.FOREST,T.MUSHFOREST,T.BOULDER,T.ROCK_OUTCROP]},
+
+  // ---- COVER types ----
+  [T.FOREST]:    {name:'forest',        sprite:'FOREST',   palette:'forest',   walk:true,  cover:45,  terrainLayer:'cover', overlay:true, visionPenalty:true,
+                  sightlineOpacity:0.5, localConcealment:0.25, coverHeightClass:0.7},
+  [T.MUSHFOREST]:{name:'mushroom forest',sprite:'MUSHFOREST',palette:'mushforest',walk:true,cover:45, terrainLayer:'cover', overlay:true, noRotate:true, visionPenalty:true,
+                  sightlineOpacity:0.5, localConcealment:0.25, coverHeightClass:0.7},
+  [T.STAIRS_DOWN]:{name:'stairs down',  sprite:'STAIRS_DOWN',palette:'stone',  walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
+  [T.STAIRS_UP]: {name:'stairs up',     sprite:'STAIRS_UP',palette:'stone',    walk:true,  cover:0,   terrainLayer:'cover', overlay:true},
+  [T.BOULDER]:   {name:'boulder',      sprite:'BOULDER',  palette:'stone',  walk:false, cover:40,  terrainLayer:'cover', overlay:true},
+  [T.ROCK_OUTCROP]:{name:'rock outcrop',sprite:'ROCK_OUTCROP',palette:'stone',walk:false,cover:25, terrainLayer:'cover', overlay:true},
+};
+
+// ==================== SINGLE-TYPE QUERIES ====================
+export function terrainInfo(t){ return TERRAIN_INFO[t] || TERRAIN_INFO[T.GRASS]; }
+export function isOverlay(t){ return !!terrainInfo(t).overlay; }
+export function noRotate(t){ return !!terrainInfo(t).noRotate; }
+export function isGround(t){ return terrainInfo(t).terrainLayer === 'ground'; }
+export function isCover(t){ return terrainInfo(t).terrainLayer === 'cover'; }
+
+/** Check whether a cover type may be placed on a given ground type.
+ *  Returns true if the ground's allowedCover list includes the cover,
+ *  or if no allowedCover list is defined (permissive fallback). */
+export function isCoverAllowedOnGround(groundType, coverType){
+  const info = TERRAIN_INFO[groundType];
+  if (!info || !info.allowedCover) return true; // no list → permissive
+  return info.allowedCover.includes(coverType);
+}
+
+// ==================== COMPOSITE QUERIES (ground + cover) ====================
+// These take ground and optional cover, returning the combined result.
+
+/** Walkability: cover can block even if ground is walkable. */
+export function isWalkable(ground, coverType){
+  if (coverType) {
+    const ci = terrainInfo(coverType);
+    if (!ci.walk) return false;
+  }
+  return terrainInfo(ground).walk;
+}
+
+/** Cover bonus: from cover if present and non-zero, otherwise from ground. */
+export function coverBonus(ground, coverType){
+  if (coverType) {
+    const cc = terrainInfo(coverType).cover;
+    if (cc) return cc;
+  }
+  return terrainInfo(ground).cover || 0;
+}
+
+/** Terrain name: cover name if present, otherwise ground name. */
+export function terrainName(ground, coverType){
+  if (coverType) return terrainInfo(coverType).name;
+  return terrainInfo(ground).name;
+}
+
+/** Transparency/LOS: cover can block LOS even if ground is transparent. */
+export function isTransparent(ground, coverType){
+  if (coverType) {
+    const ci = terrainInfo(coverType);
+    if (ci.transparent === false) return false;
+    if (ci.transparent === true) return true;
+    if (!ci.walk) return false;
+  }
+  const gi = terrainInfo(ground);
+  if (gi.transparent === false) return false;
+  if (gi.transparent === true) return true;
+  return gi.walk;
+}
+
+// ==================== DEFAULT GROUND FOR COVER TYPES ====================
+// When legacy code placed e.g. T.FOREST as a single tile, it was
+// implicitly "grass ground + forest cover". This map defines what
+// ground each cover type gets by default.
+const DEFAULT_GROUND_FOR_COVER = {
+  [T.FOREST]:     T.GRASS,
+  [T.MUSHFOREST]:  T.FUNGAL_GRASS,
+  [T.STAIRS_DOWN]: T.CAVE_WALL,
+  [T.STAIRS_UP]:   T.CAVE_WALL,
+  [T.BOULDER]:     T.ROCK,
+  [T.ROCK_OUTCROP]:T.ROCK,
+};
+
+export function defaultGroundFor(coverType){
+  return DEFAULT_GROUND_FOR_COVER[coverType] || T.GRASS;
+}
+
+// ==================== VISION BLOCKING ====================
+// Used by FOV calculation. A tile blocks vision (hard block) if:
+//   • The cover is non-walkable (boulders, outcrops, etc.)
+//   • The ground is non-walkable (cave walls, void, etc.)
+//   • The terrain has transparent:false set explicitly
+// Vision-penalty tiles (trees/mushroom forest with visionPenalty:true)
+// do NOT hard-block — they reduce effective vision depth instead.
+// See fov.js treePenaltyCost() for the PER-scaled depth cost.
+// Ground-only tiles that are walkable (grass, sand, water, rock) never block.
+export function tileBlocksVision(ground, coverType){
+  if (coverType) {
+    const ci = terrainInfo(coverType);
+    // Vision-penalty tiles (trees) reduce range instead of blocking — skip them here.
+    if (ci.visionPenalty) { /* handled by FOV post-filter, not a hard blocker */ }
+    else if (ci.blocksVision) return true;
+    if (ci.transparent === false) return true;
+    if (!ci.walk) return true;
+  }
+  const gi = terrainInfo(ground);
+  if (gi.transparent === false) return true;
+  if (gi.transparent === true) return false;   // explicitly see-through (water, etc.)
+  return !gi.walk;
+}
+
+/** True if the cover type at this tile imposes a vision-depth penalty (trees).
+ *  Used by FOV to compute effective distance through foliage. */
+export function tileHasVisionPenalty(ground, coverType){
+  if (!coverType) return false;
+  return !!terrainInfo(coverType).visionPenalty;
+}
+
+// ==================== SIGHTLINE OPACITY & CONCEALMENT ====================
+// Accessors for the visual occlusion system (per-ray opacity accumulation
+// and per-tile local concealment).  Values live on the TERRAIN_INFO entries.
+
+/** Get sightline opacity for a tile.  Cover type is the primary carrier;
+ *  ground types default to 0.0 (open terrain never degrades sightlines). */
+export function tileSightlineOpacity(ground, coverType) {
+  if (coverType) {
+    const ci = terrainInfo(coverType);
+    if (ci.sightlineOpacity != null) return ci.sightlineOpacity;
+  }
+  return 0.0;
+}
+
+/** Get local concealment data for the target's tile.
+ *  Returns { concealment, heightClass } or null if no concealment. */
+export function tileConcealmentData(ground, coverType) {
+  if (coverType) {
+    const ci = terrainInfo(coverType);
+    if (ci.localConcealment > 0) {
+      return { concealment: ci.localConcealment, heightClass: ci.coverHeightClass || 0 };
+    }
+  }
+  return null;
+}
+
+// ==================== TERRAIN VISUAL PROPERTIES (Visual Detection Pass 1) ====================
+// Reflectance properties for background contrast computation.
+// Each terrain type has brightness (0-1) and hue category.
+// When computing visual contrast against a creature's integument, the
+// terrain behind the creature determines the background signal.
+// Cover types override ground types — a creature in forest cover is seen
+// against the dark forest backdrop, not the underlying grass.
+
+const TERRAIN_VISUAL = {
+  // ---- GROUND types ----
+  [T.GRASS]:       { brightness: 0.35, hue: 'warm-red' },   // photosynthetic mats in open amber light
+  [T.SAND]:        { brightness: 0.45, hue: 'brown' },      // mineral-depleted pale substrate
+  [T.ROCK]:        { brightness: 0.45, hue: 'gray' },       // mineral surface, higher reflectance
+  [T.WATER]:       { brightness: 0.30, hue: 'dark' },       // reflective but dark
+  [T.DEEP_WATER]:  { brightness: 0.15, hue: 'dark' },       // very dark surface
+  [T.BEACH]:       { brightness: 0.45, hue: 'brown' },      // lighter mineral substrate, coastal
+  [T.CAVE_FLOOR]:  { brightness: 0.30, hue: 'gray' },       // dark rock floor underground
+  [T.LAVA]:        { brightness: 0.60, hue: 'warm-red' },   // glowing — very bright
+  [T.UWATER]:      { brightness: 0.15, hue: 'dark' },       // underground dark water
+  [T.MUD]:         { brightness: 0.20, hue: 'brown' },      // dark, mixed organic-mineral substrate
+  [T.FUNGAL_GRASS]:{ brightness: 0.30, hue: 'mineral' },    // chemotrophic zone ground cover
+  [T.DIRT]:        { brightness: 0.30, hue: 'brown' },      // medium brightness, neutral
+
+  // ---- COVER types ----
+  // Cover visual represents the dominant background a creature is seen against.
+  [T.FOREST]:      { brightness: 0.15, hue: 'dark-red' },   // dark photosynthetic mat cover, deep shadow
+  [T.MUSHFOREST]:  { brightness: 0.25, hue: 'mineral' },    // chemotrophic colony structures, moderate cover
+};
+
+// Default for any terrain type without specific visual data.
+// Gray-brown neutral — won't give strong match or mismatch.
+const _DEFAULT_TERRAIN_VISUAL = { brightness: 0.30, hue: 'brown' };
+
+/**
+ * Get visual reflectance properties for the background at a tile.
+ * Cover visual overrides ground visual (creature is seen against cover backdrop).
+ * @param {number} groundType - ground terrain type
+ * @param {number} coverType - cover terrain type (may be 0/null/undefined)
+ * @returns {{ brightness: number, hue: string }}
+ */
+export function getTerrainVisual(groundType, coverType) {
+  // Cover takes priority — creature is seen against cover backdrop
+  if (coverType && TERRAIN_VISUAL[coverType]) {
+    return TERRAIN_VISUAL[coverType];
+  }
+  return TERRAIN_VISUAL[groundType] || _DEFAULT_TERRAIN_VISUAL;
+}
+
+// ==================== FOOD TILE CLASSIFICATION (I-C) ====================
+// A "food tile" is any tile with organic vegetation an herbivore could graze.
+// Ground types with inherent vegetation, or any tile with organic cover.
+
+const FOOD_GROUND = new Set([T.GRASS, T.MUD, T.FUNGAL_GRASS]);
+const FOOD_COVER  = new Set([T.FOREST, T.MUSHFOREST, ]);
+
+/** True if this ground+cover combination counts as a food tile for herbivores. */
+export function isFoodTile(groundType, coverType){
+  if (coverType && FOOD_COVER.has(coverType)) return true;
+  return FOOD_GROUND.has(groundType);
+}
+
+// ==================== WATER TILE CLASSIFICATION (K-B) ====================
+// True if the ground type is a water tile. Used by player movement validation
+// to gate water entry on the canEnterWater flag.
+const WATER_GROUND = new Set([T.WATER, T.DEEP_WATER, T.UWATER]);
+
+export function isWaterGround(groundType){
+  return WATER_GROUND.has(groundType);
+}
