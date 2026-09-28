@@ -20,6 +20,7 @@ import { getBodyMap,
          BURST_COEFF, BLOOD_DEATH_THRESHOLD, ARMOR_PER_STRUCTURAL_KG,
          selectHitZone,
          MOTION_CONCEALMENT_REDUCTION, BODY_PLAN_HEIGHT_COEFF,
+         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS,
          // Visual Detection Pass 1 — motion and contrast
          MOTION_SIGNAL_MOVING, MOTION_SIGNAL_STILL,
          CONTRAST_FLOOR, BRIGHTNESS_CONTRAST_WEIGHT, HUE_MISMATCH_PENALTY,
@@ -28,7 +29,7 @@ import { getBodyMap,
        } from './constants.js';
 import { getLightLevel } from './time-cycle.js';
 import { referenceEmission } from './signals.js';
-import { hasLOS, EYE_OFFSETS, isInEyeField } from './fov.js';
+import { hasLOS, EYE_OFFSETS, isInEyeField, sightlineOpacity } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
 import { dist, directionToward, getCreatureMass, getPlayerDiet, WATER_TILES, isWaterTile,
@@ -293,45 +294,57 @@ function facingToAngle(facing) {
 }
 
 function isInVisionCone(detector, target) {
-  // No facing data = omnidirectional
-  if (!detector.facing) return true;
-  const facingAngleDeg = facingToAngle(detector.facing);
+  return _eyeCoverage(detector, target) != null;
+}
 
-  // Visual field from the body map (Per-Eye-Visual-Field-Design): every
-  // surviving zone with a visual transducer is a pair of eyes at
-  // ±EYE_OFFSETS[placement] from facing, each covering fieldAngle. The target
-  // is in view if any eye's arc contains it. This is the same geometry the
-  // player's FOV uses in fov.js, so a hare's lateral 170° eyes give it a ~330°
-  // field and a prowler's forward 120° eyes give it ~160°. Destroy the zone
-  // carrying the eyes and that part of the field is gone.
+// Which eyes cover the target: { eyes, acuity } (how many eyes' arcs contain
+// it, and the sharpest of those eyes), or null if none does. Two or more is
+// binocular. Visual field from the body map (Per-Eye-Visual-Field-Design):
+// every surviving zone with a visual transducer is a pair of eyes at
+// ±EYE_OFFSETS[placement] from facing, each covering fieldAngle. This is the
+// same geometry the player's FOV uses in fov.js, so a hare's lateral 170° eyes
+// give it a ~330° field and a prowler's forward 120° eyes give it ~160°.
+// Destroy the zone carrying the eyes and that part of the field is gone.
+function _eyeCoverage(detector, target) {
   const bodyMap = getBodyMap(detector);
+  // No facing data = omnidirectional: every eye counts
+  const facingAngleDeg = detector.facing ? facingToAngle(detector.facing) : null;
+
   let hasEyeZone = false;   // any zone with eyes, destroyed or not
+  let eyes = 0, acuity = 0;
   if (bodyMap) {
     for (const zone of bodyMap) {
       const cfg = getVisualConfig(zone);
       if (!cfg || cfg.acuity <= 0) continue;
       hasEyeZone = true;
       if (zone.destroyed) continue;   // eyes gone with the zone
-      if (cfg.fieldAngle >= 360) return true;
-      const offset = EYE_OFFSETS[cfg.placement] ?? EYE_OFFSETS.forward;
-      const half = cfg.fieldAngle / 2;
-      if (isInEyeField(detector.x, detector.y, target.x, target.y, facingAngleDeg + offset, half)) return true;
-      if (isInEyeField(detector.x, detector.y, target.x, target.y, facingAngleDeg - offset, half)) return true;
+      let seen = 0;
+      if (facingAngleDeg == null || cfg.fieldAngle >= 360) {
+        seen = 2;
+      } else {
+        const offset = EYE_OFFSETS[cfg.placement] ?? EYE_OFFSETS.forward;
+        const half = cfg.fieldAngle / 2;
+        if (isInEyeField(detector.x, detector.y, target.x, target.y, facingAngleDeg + offset, half)) seen++;
+        if (isInEyeField(detector.x, detector.y, target.x, target.y, facingAngleDeg - offset, half)) seen++;
+      }
+      if (seen > 0) { eyes += seen; if (cfg.acuity > acuity) acuity = cfg.acuity; }
     }
   }
-  if (hasEyeZone) return false;   // had eyes; none surviving covers the target
+  if (hasEyeZone) return eyes > 0 ? { eyes, acuity } : null;
 
   // No body-map eyes at all (legacy creature): single forward cone from the species
   // table, as before. (The old code read detector.visionConeWidth, which was
   // never assigned, so every creature got 120°.)
+  const legacyAcuity = getEffectiveVisual(detector);
+  if (facingAngleDeg == null) return { eyes: 1, acuity: legacyAcuity };
   const coneWidth = detector.coneAngle || 120;
-  if (coneWidth >= 360) return true;
+  if (coneWidth >= 360) return { eyes: 1, acuity: legacyAcuity };
   const dx = target.x - detector.x;
   const dy = target.y - detector.y;
   const angleToTarget = Math.atan2(dy, dx) * (180 / Math.PI);
   let diff = Math.abs(angleToTarget - facingAngleDeg) % 360;
   if (diff > 180) diff = 360 - diff;
-  return diff <= coneWidth / 2;
+  return diff <= coneWidth / 2 ? { eyes: 1, acuity: legacyAcuity } : null;
 }
 
 /**
@@ -388,8 +401,8 @@ function computeEffectiveConcealment(target) {
 }
 
 // --- Line of Sight ---
-// Uses hasLOS from fov.js. Forests do NOT block NPC LOS in this pass
-// (no per parameter → tree transparency is skipped, only walls block).
+// Walls only (hasLOS from fov.js with no per parameter). Cover along the way is
+// charged against the eye's occlusion budget in _visualDetection.
 
 function hasLineOfSight(detector, target) {
   const layer = detector.layer != null ? detector.layer : state.player.layer;
@@ -413,7 +426,24 @@ function _visualDetection(detector, target) {
   const visRange = getVisualRange(detector, target);
   if (visRange <= 0 || d > visRange) return null;
   if (!hasLineOfSight(detector, target)) return null;
-  if (!isInVisionCone(detector, target) && !(!detector.isPlayer && _isActivelyTracking(detector, target))) return null;
+  let coverage = _eyeCoverage(detector, target);
+  if (!coverage && !detector.isPlayer && _isActivelyTracking(detector, target)) {
+    // Head turned onto the tracked threat: both eyes on it
+    coverage = { eyes: 2, acuity: getEffectiveVisual(detector) };
+  }
+  if (!coverage) return null;
+  // Sightline cover (Visual-Occlusion-Design): every tile between the eye and
+  // the target adds its opacity, and past the eye's occlusion budget the
+  // target is lost in the foliage. The budget is the covering eye's acuity,
+  // with the depth bonus when two eyes see it. The player's field already ran
+  // this exact rule in its shadowcast (fov.js updatePlayerFOV), so only NPCs
+  // are charged here; before, NPC eyes looked straight through forest.
+  if (!detector.isPlayer) {
+    const layer = detector.layer != null ? detector.layer : state.player.layer;
+    const budget = coverage.acuity * OCCLUSION_BUDGET_COEFF *
+                   (coverage.eyes >= 2 ? BINOCULAR_DEPTH_BONUS : 1);
+    if (sightlineOpacity(layer, detector.x, detector.y, target.x, target.y) >= budget) return null;
+  }
   const concealment = computeEffectiveConcealment(target);
   const effectiveVisRange = concealment > 0 ? visRange * (1.0 - concealment) : visRange;
   if (d > effectiveVisRange) return null;

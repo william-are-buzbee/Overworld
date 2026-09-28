@@ -31,8 +31,9 @@
 //      (state.monocularSet) = tiles in exactly 1. Tiles in LOS but no eye cone
 //      are not visible. The composite field is the union of all eyes' fields.
 //
-// Enemies still use the cone+awareness model (computeConeFOV); hasLOS rolls
-// tree transparency per-tile using the monster's PER.
+// NPCs use the same eye geometry and the same budget rule per target
+// (detection.js _visualDetection → sightlineOpacity): cover between the eye
+// and the target is charged against that eye's occlusion budget.
 
 import { worlds, covers, state } from './state.js';
 import { inBounds, getCover } from './world-state.js';
@@ -163,6 +164,13 @@ function _intermediateRayOpacity(layer, ox, oy, wx, wy) {
   }
 
   return accumulated;
+}
+
+/** Accumulated sightline opacity of the tiles strictly between an eye at
+ *  (ox,oy) and (wx,wy): the quantity every eye's occlusion budget is charged
+ *  with, the player's (in the shadowcast below) and an NPC's (detection.js). */
+export function sightlineOpacity(layer, ox, oy, wx, wy) {
+  return _intermediateRayOpacity(layer, ox, oy, wx, wy);
 }
 
 /**
@@ -601,8 +609,15 @@ export function updatePlayerFOV() {
         // Monocular tile — check against the lower monocular budget.
         // The shadowcast used the binocular budget, so some tiles may be
         // visible binocularly but not monocularly.
+        // The budget is charged with the tiles between the eye and this one,
+        // as for binocular tiles and NPC eyes; the tile's own cover hides what
+        // stands on it (concealment), not the tile. (It used to charge the
+        // tile's own opacity too, for monocular tiles only.)
         if (opacityMap && monocularBudget > 0) {
-          const tileOpacity = opacityMap.get(key);
+          const total = opacityMap.get(key);
+          const tileOpacity = total != null
+            ? total - tileSightlineOpacity(worlds[layer][wy][wx], getCover(layer, wx, wy))
+            : null;
           // If opacity data is missing (shouldn't happen) or exceeds
           // monocular budget, exclude from monocular set.
           if (tileOpacity != null && tileOpacity >= monocularBudget) {

@@ -357,7 +357,7 @@ NPC vision computations that currently read from `VISION_PROFILES` (for cone ang
 6. NPC vision updated to read from body map — done (cone test; NPC visual *range* still uses the best acuity across zones, see Code-Audit-2026-09 §3)
 
 **Deferred:**
-- Binocular SNR multiplier for entity detection (requires coordination with Sensory-Design.md's detection refactor)
+- Binocular SNR multiplier for entity detection (requires coordination with Sensory-Design.md's detection refactor). The binocular depth bonus on the occlusion budget is live for NPCs as well as the player (Visual-Occlusion-Design, Sep 2026).
 - Stealth detection bonus in binocular zone
 - Per-eye damage within a zone
 - Exotic eye placements
