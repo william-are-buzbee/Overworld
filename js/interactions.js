@@ -15,7 +15,7 @@ function showHelp(){
     <b>CLICK</b> a tile · step or attack toward it &nbsp;·&nbsp; <b>RIGHT-CLICK</b> · examine<br>
     <b>L</b> then a direction · look at a tile<br>
     <b>V</b> · sniff the ground &nbsp;·&nbsp; <b>SHIFT+V</b> · sniff the air<br>
-    <b>R</b> · eat the corpse you are standing on &nbsp;·&nbsp; <b>G</b> · pick up<br>
+    <b>R</b> · eat the corpse you are standing on<br>
     <b>F</b> · toggle sneaking<br>
     <b>M</b> · world map &nbsp;·&nbsp; <b>T</b> · full / minimal status &nbsp;·&nbsp; <b>TAB</b> · hide the log<br>
     <b>+ / −</b> · zoom &nbsp;·&nbsp; <b>[ / ]</b> · UI scale &nbsp;·&nbsp; <b>P</b> · sprite pack &nbsp;·&nbsp; <b>ALT+T</b> · textures<br>
@@ -40,7 +40,7 @@ function showHelp(){
   `);
   html += sec('Food', `
     The bar top-right is your reserve; the number is how full you are. Every action spends a little, sprinting and fighting the most.
-    At zero you start to fail.<br>
+    At zero your body makes no new blood and slowly consumes what it has; the blood bar shows it.<br>
     Kill something and stand on it, then <b>R</b> to eat. Resting (<b>SPACE</b>) lets wounds knit and costs food.
   `);
   html += sec('Creatures', `
