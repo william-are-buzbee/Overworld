@@ -120,6 +120,36 @@ export const MOTION_RADIAL_WEIGHT        = 0.35;   // sensitivity to motion alon
 // has to get out of the way. Wired into the hare's threat template.
 export const LOOM_WINDOW_ACTIONS         = 4;
 
+// ── Received-signal inference (perception pass 6) ──
+// A channel measures only what arrives: an amplitude (smell, footfalls,
+// breath) that goes as emission / d³, or an angular size that goes as
+// cbrt(mass) / d. Either fixes size³ / distance³, not both, so every size
+// estimate implies a distance: d_est = d × cbrt(m_est / m_apparent). With
+// nothing else to go on the observer's only yardstick is its own body (what
+// it would be if it were like me). What breaks the tie is the signal's
+// structure, which resolves the source's size as SNR rises: footfall cadence
+// and spectrum for ground vibration, the ground plane and parallax for the
+// eyes, the compound mix for smell. The weight of that structure is
+//   w = clamp((SNR − 1) / (RESOLVE_SNR − 1), 0, 1)
+// and the size estimate slides from the yardstick to the signal:
+//   m_est = m_self^(1 − w) × m_apparent^w.
+// So below the resolving SNR a big distant animal reads as a smaller, nearer
+// one and a small near one as a larger, farther one: systematic, not dice.
+export const VIS_RESOLVE_SNR   = 2.0;   // eyes: ground-plane distance is a strong cue
+export const VIB_RESOLVE_SNR   = 3.0;   // feet: a few footfalls clear of the noise give a cadence
+export const CHEM_RESOLVE_SNR  = 6.0;   // nose: the compound mix, as for diet (DIET_CONF_FULL)
+// Two eyes on it: parallax adds a distance cue, as the depth bonus does for cover.
+// (BINOCULAR_DEPTH_BONUS multiplies the visual SNR for this purpose.)
+
+// Bearing: each channel resolves direction to bins of this many degrees at
+// SNR 1, narrowing as 1/SNR, laid out from the observer's facing. The
+// perceived bearing is the centre of the bin the true one falls in. Eyes are
+// sharp at tile scale; feet on the ground hear which side and roughly
+// where; a nose without a gradient barely knows front from back.
+export const VIS_BEARING_RES_DEG  = 0;
+export const VIB_BEARING_RES_DEG  = 90;
+export const CHEM_BEARING_RES_DEG = 180;
+
 // Own footfalls in the listening channel. A body's ground-vibration
 // transducers hear its own steps as they would a neighbour of the same weight
 // at this many tiles (every sensor on a 5-200 kg body is within a stride of

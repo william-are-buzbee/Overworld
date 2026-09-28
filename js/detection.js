@@ -23,6 +23,8 @@ import { getBodyMap,
          OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS,
          MOTION_ANCHOR_SPEED, MOTION_RADIAL_WEIGHT, SELF_FOOTFALL_DISTANCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
+         VIS_RESOLVE_SNR, VIB_RESOLVE_SNR, CHEM_RESOLVE_SNR,
+         VIS_BEARING_RES_DEG, VIB_BEARING_RES_DEG, CHEM_BEARING_RES_DEG,
          // Visual Detection Pass 1 — motion and contrast
          MOTION_SIGNAL_MOVING, MOTION_SIGNAL_STILL,
          CONTRAST_FLOOR, BRIGHTNESS_CONTRAST_WEIGHT, HUE_MISMATCH_PENALTY,
@@ -507,8 +509,13 @@ function _visualDetection(detector, target) {
   if (d > effectiveVisRange) return null;
   const snr = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
   const rel = _motionRelativeTo(detector, target);
+  // How many eyes are on it: the player's field says binocular or monocular
+  // per tile (fov.js); an NPC's comes from its eye coverage
+  const eyes = detector.isPlayer
+    ? (state.fovSet && state.fovSet.has(`${target.x},${target.y}`) ? 2 : 1)
+    : coverage.eyes;
   return { zone: _bestEyeZone(detector), channel: 'visual', quality: getEffectiveVisual(detector), snr,
-           moving: _isTargetMoving(target), closing: rel ? rel.closing : 0 };
+           moving: _isTargetMoving(target), closing: rel ? rel.closing : 0, eyes };
 }
 
 // ==================== MASTER DETECTION (Prompt P) ====================
@@ -645,12 +652,66 @@ function _hasDestroyedLocomotionZone(target) {
 // lands on whatever is actually on the tile; canMoveTo will not step onto an
 // occupied one). The player's display draws from percepts too.
 
-/** The tile an observer perceives a detected source on. PLACEHOLDER: the true
- *  tile, until perception pass 6 infers it from the received signal (bearing
- *  resolution from sensor geometry, distance confounded with size). This is
- *  the one place that changes when it does. */
-function _perceivedTile(observer, target, detections) {
-  return { x: target.x, y: target.y };
+// ── Received-signal inference (perception pass 6) ──
+// What the channels say about a source, from what arrived at them
+// (sensory-constants.js, "Received-signal inference"): its size and the tile
+// that size puts it on. The channel with the most resolved structure sets the
+// size (and so the distance); the channel with the finest bearing sets the
+// direction. Systematic, never random: the same geometry reads the same way.
+const _RESOLVE_SNR = {
+  visual: VIS_RESOLVE_SNR, vibrationGround: VIB_RESOLVE_SNR,
+  vibrationAir: VIB_RESOLVE_SNR, chemicalAirborne: CHEM_RESOLVE_SNR,
+};
+const _BEARING_RES_DEG = {
+  visual: VIS_BEARING_RES_DEG, vibrationGround: VIB_BEARING_RES_DEG,
+  vibrationAir: VIB_BEARING_RES_DEG, chemicalAirborne: CHEM_BEARING_RES_DEG,
+};
+
+/** The percept of one source: { x, y, mass, sizeChannel, resolved }, where
+ *  mass is the size estimate, (x, y) the tile it is perceived on, resolved
+ *  the weight the signal's structure carried (0: only the yardstick of its
+ *  own body; 1: the signal's own size). */
+function _inferPercept(observer, target, detections) {
+  const selfMass = getCreatureMass(observer);
+  let sizeDet = null, w = -1, bearRes = Infinity;
+  for (const det of detections) {
+    // Two eyes on it add parallax to the eyes' distance cues
+    const snr = (det.channel === 'visual' && det.eyes >= 2) ? det.snr * BINOCULAR_DEPTH_BONUS : det.snr;
+    const R = _RESOLVE_SNR[det.channel] || VIB_RESOLVE_SNR;
+    const dw = Math.max(0, Math.min(1, (snr - 1) / (R - 1)));
+    if (dw > w || (dw === w && det.snr > sizeDet.snr)) { w = dw; sizeDet = det; }
+    const res = (_BEARING_RES_DEG[det.channel] ?? VIB_BEARING_RES_DEG) / Math.max(1, det.snr);
+    if (res < bearRes) bearRes = res;
+  }
+  if (!sizeDet) return { x: target.x, y: target.y, mass: getCreatureMass(target), sizeChannel: null, resolved: 1 };
+
+  // Size, and the distance the received signal implies for it
+  const apparent = estimateMassFromSignal(target, observer, sizeDet.channel);
+  const mass = Math.pow(selfMass, 1 - w) * Math.pow(apparent, w);
+  const dTrue = dist(observer.x, observer.y, target.x, target.y);
+  const dEst = apparent > 0 ? dTrue * Math.cbrt(mass / apparent) : dTrue;
+
+  // Bearing, to the centre of its resolution bin laid out from the facing
+  let ang = Math.atan2(target.y - observer.y, target.x - observer.x);
+  if (bearRes > 0) {
+    const facing = observer.isPlayer ? state.facing : observer.facing;
+    const face = facing ? Math.atan2(facing.dy, facing.dx) : 0;
+    const bin = bearRes * Math.PI / 180;
+    let rel = ang - face;
+    while (rel > Math.PI) rel -= 2 * Math.PI;
+    while (rel < -Math.PI) rel += 2 * Math.PI;
+    ang = face + Math.round(rel / bin) * bin;
+  }
+
+  let x = Math.round(observer.x + Math.cos(ang) * dEst);
+  let y = Math.round(observer.y + Math.sin(ang) * dEst);
+  if (x === observer.x && y === observer.y) {
+    // Perceived on top of itself: it is at least on the next tile that way
+    x = observer.x + Math.round(Math.cos(ang));
+    y = observer.y + Math.round(Math.sin(ang));
+    if (x === observer.x && y === observer.y) x += Math.cos(ang) >= 0 ? 1 : -1;
+  }
+  return { x, y, mass, sizeChannel: sizeDet.channel, resolved: w };
 }
 
 /** This observer's percept of an entity on its current action, or null if no
@@ -677,7 +738,7 @@ function perceivedPosition(observer, entity) {
 /** Build continuous-uncertainty detection info from per-zone detections.
  *  Produces narrowing size ranges and confidence curves instead of binary flags. */
 function buildDetectionInfo(observer, target, detections) {
-  const tile = _perceivedTile(observer, target, detections);
+  const tile = _inferPercept(observer, target, detections);
   const info = {
     detected: true,
     // Perceived tile, and distance and bearing to it
@@ -763,10 +824,11 @@ function buildDetectionInfo(observer, target, detections) {
   info.visualSNR    = bestVisSNR;
   info.chemicalSNR  = bestChemSNR;
 
-  // Size estimate: uncertainty narrows with best SNR from any channel
+  // Size estimate: the inferred size (pass 6), its bracket narrowing with
+  // the best SNR from any channel
   if (bestSNR > 0) {
     const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
-    const rawEstimate = estimateMassFromSignal(target, observer, bestChannel);
+    const rawEstimate = tile.mass;
     info.sizeEstimate = {
       estimated: rawEstimate,
       lower: rawEstimate / (1 + uncertaintyFactor),
@@ -1215,7 +1277,7 @@ function computePlayerPerception() {
       const vis = _visualDetection(player, creature);
       if (vis) {
         const visSNR = vis.snr;
-        const tile = _perceivedTile(player, creature, [vis]);
+        const tile = _inferPercept(player, creature, [vis]);
         let speciesConfidence = 0;
         if (visSNR > SPECIES_CONF_MIN) {
           speciesConfidence = Math.min(1.0,
@@ -1229,7 +1291,7 @@ function computePlayerPerception() {
         } else {
           // Low confidence — route through sensedCreatures for blob rendering
           const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / visSNR;
-          const rawEstimate = estimateMassFromSignal(creature, player, 'visual');
+          const rawEstimate = tile.mass;
           const sizeEstimate = {
             estimated: rawEstimate,
             lower: rawEstimate / (1 + uncertaintyFactor),
@@ -1266,15 +1328,16 @@ function computePlayerPerception() {
         (bestSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
     }
 
+    // Smell is the scent field's (scent.js), not a marker: infer from the rest
+    const tile = _inferPercept(player, creature, detections.filter(d => d.channel !== 'chemicalAirborne'));
     const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
-    const rawEstimate = estimateMassFromSignal(creature, player, bestChannel);
+    const rawEstimate = tile.mass;
     const sizeEstimate = {
       estimated: rawEstimate,
       lower: rawEstimate / (1 + uncertaintyFactor),
       upper: rawEstimate * (1 + uncertaintyFactor),
     };
 
-    const tile = _perceivedTile(player, creature, detections);
     player.sensedCreatures.push({ creature, x: tile.x, y: tile.y, bestSNR, speciesConfidence, sizeEstimate });
   }
 }
