@@ -63,7 +63,7 @@ function combatCapability(creature) {
   for (const atk of attacks) {
     const zone = bodyMap.find(z => z.key === atk.sourceZone);
     if (zone) {
-      const dmg = computeStrikeDamage(creature, zone);
+      const dmg = computeStrikeDamage(creature, zone, atk);
       if (dmg > maxDamage) maxDamage = dmg;
     }
   }
