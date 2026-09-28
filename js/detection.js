@@ -243,27 +243,25 @@ function _computeContrastFactor(target) {
   return contrast;
 }
 
+// How far this eye can pick this body out. Vision is not a spreading signal:
+// nothing of the target thins out with distance, its angular size does, and
+// that falls linearly. So the range is linear in everything that sets how
+// big and how distinct the silhouette is: its linear dimension (the cube
+// root of mass, signals.js), motion (the eye's change detection fires at a
+// far lower contrast than its pattern recognition), and contrast against the
+// tile. Light enters as the square root: the eye's contrast threshold rises
+// as photon noise does, with the root of the luminance. The old form took
+// the cube root of the whole product, the law for smell and footfalls, and
+// squashed a moving animal against a still one to 2× and a conspicuous one
+// against a matched one to 2.3×.
 function getVisualRange(detector, target) {
-  let detectability = target.signals ? target.signals.visual : 0;
+  const size = target.signals ? target.signals.visual : 0;
   const sensitivity = getEffectiveVisual(detector);
   const light = getLightLevel(state.player.layer);   // every active creature is on the player's layer
-  if (detectability <= 0 || sensitivity <= 0 || light <= 0) return 0;
-
-  // ── Motion factor (Visual Detection Pass 1) ──
-  // Motion is now handled entirely here. The base signal from signals.js is
-  // the creature's passive visual profile (size only, no motion multiplier).
-  // Moving creatures fire temporal change detection (fast, involuntary).
-  // Stationary creatures require spatial pattern recognition (slow, effortful).
-  if (_isTargetMoving(target)) {
-    detectability *= MOTION_SIGNAL_MOVING;
-  } else {
-    detectability *= MOTION_SIGNAL_STILL;
-  }
-
-  // ── Background contrast factor (Visual Detection Pass 1) ──
-  detectability *= _computeContrastFactor(target);
-
-  return Math.cbrt(detectability * light) * sensitivity * VIS_RANGE_COEFF;
+  if (size <= 0 || sensitivity <= 0 || light <= 0) return 0;
+  const motion = _isTargetMoving(target) ? MOTION_SIGNAL_MOVING : MOTION_SIGNAL_STILL;
+  const contrast = _computeContrastFactor(target);
+  return size * motion * contrast * Math.sqrt(light) * sensitivity * VIS_RANGE_COEFF;
 }
 
 function facingToAngle(facing) {
@@ -379,7 +377,8 @@ function hasLineOfSight(detector, target) {
 // The visual channel for any detector: the eye's range on this target (size,
 // motion, contrast, light), line of sight, the eyes' field (or an actively
 // tracked threat, for NPCs), then the cover on the target's tile, which
-// shrinks the effective range by the cube root of what it hides. Returns
+// shrinks the effective range by the fraction of the body it hides
+// (Visual-Occlusion-Design: the visible silhouette is what is left). Returns
 // a detection entry { zone: null, channel: 'visual', quality, snr } or null.
 // canDetect (NPCs) and computePlayerPerception (the player) both use this,
 // so the SNR the ganglia see is the SNR that decided the detection.
@@ -390,7 +389,7 @@ function _visualDetection(detector, target) {
   if (!hasLineOfSight(detector, target)) return null;
   if (!isInVisionCone(detector, target) && !(!detector.isPlayer && _isActivelyTracking(detector, target))) return null;
   const concealment = computeEffectiveConcealment(target);
-  const effectiveVisRange = concealment > 0 ? visRange * Math.cbrt(1.0 - concealment) : visRange;
+  const effectiveVisRange = concealment > 0 ? visRange * (1.0 - concealment) : visRange;
   if (d > effectiveVisRange) return null;
   const snr = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
   return { zone: null, channel: 'visual', quality: getEffectiveVisual(detector), snr };
@@ -466,7 +465,7 @@ function getDetectionRange(creature) {
   const chemR  = bestChem > 0 ? Math.cbrt(2.0) * bestChem * CHEM_RANGE_COEFF : 0;
   const vibGR  = bestVibG > 0 ? Math.cbrt(1.0) * bestVibG * VIB_GROUND_RANGE_COEFF : 0;
   const vibAR  = bestVibA > 0 ? Math.cbrt(0.5) * bestVibA * VIB_AIR_RANGE_COEFF : 0;
-  const visR   = bestVis > 0 ? Math.cbrt(3.0) * bestVis * VIS_RANGE_COEFF : 0;
+  const visR   = bestVis > 0 ? 2.8 * MOTION_SIGNAL_MOVING * 0.6 * bestVis * VIS_RANGE_COEFF : 0;   // a moving 22 kg body at contrast 0.6
   return Math.max(chemR, vibGR, vibAR, visR);
 }
 
