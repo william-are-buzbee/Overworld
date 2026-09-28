@@ -4,7 +4,7 @@
 // Split from enemy-ai.js — zero behavior change.
 
 import { state } from './state.js';
-import { getBodyMap, getAvailableAttacks, computeStrikeDamage,
+import { getBodyMap,
          getNeuralArchitecture,
          DRIVE_COMPARE_THRESHOLD, PLANNING_THRESHOLD,
          SAFETY_THRESHOLD, HUNGER_THRESHOLD, REST_THRESHOLD,
@@ -23,7 +23,7 @@ import { getBodyMap, getAvailableAttacks, computeStrikeDamage,
 import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
 import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
-         tileIsFood, getCorpseAt, directionAwayFrom, directionToward } from './ai-utils.js';
+         tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
 import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey } from './detection.js';
 
 // ==================== COGNITIVE TIER SYSTEM (Prompt M-A1) ====================
@@ -54,21 +54,6 @@ function getTier(integrationCapacity) {
 // Universal helpers called by reactive rules. Each reads from body map,
 // detection results, and game state. No per-species profiles.
 
-/** What weapons does this body have? */
-function combatCapability(creature) {
-  const bodyMap = getBodyMap(creature);
-  if (!bodyMap) return { canFight: false, maxDamage: 0, attackCount: 0 };
-  const attacks = getAvailableAttacks(bodyMap);
-  let maxDamage = 0;
-  for (const atk of attacks) {
-    const zone = bodyMap.find(z => z.key === atk.sourceZone);
-    if (zone) {
-      const dmg = computeStrikeDamage(creature, zone, atk);
-      if (dmg > maxDamage) maxDamage = dmg;
-    }
-  }
-  return { canFight: attacks.length > 0, maxDamage, attackCount: attacks.length };
-}
 
 /** Does movement compromise the creature's dominant sense? */
 function movementCompromisesSense(creature) {
@@ -929,7 +914,7 @@ function _ruleLabel(action) {
 
 export {
   computeIntegrationCapacity, getTier,
-  combatCapability, movementCompromisesSense, findRefuge,
+  movementCompromisesSense, findRefuge,
   isReactivelyHungry, getBloodState,
   getDominantDrive,
   evaluateReactiveRules,

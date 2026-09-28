@@ -15,7 +15,8 @@ import { attemptMove, restAction, turnInPlace, setGroundModalCallbacks, eatActio
 import { T, terrainName, terrainInfo } from './terrain.js';
 import { inBounds, getCover, monsterAt as worldMonsterAt } from './world-state.js';
 import { getItems } from './ground-items.js';
-import { setOnPlayerDeathCallback, debugEcology, debugForceHunger, debugCognition, debugSubstrate } from './enemy-ai.js';
+import { setOnPlayerDeathCallback } from './turn-loop.js';
+import { debugEcology, debugForceHunger, debugCognition, debugSubstrate } from './debug.js';
 import { debugScentAt, debugScentStats, performSniff } from './scent.js';
 window.debugEcology = debugEcology;
 window.debugForceHunger = debugForceHunger;

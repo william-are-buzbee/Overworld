@@ -303,7 +303,7 @@ Files: `mutations.js`
 
 When the player's centralization score crosses a tier boundary due to Clade B mutations redistributing neural mass, gameplay changes. Tier 3 → Tier 2 transition: reduced examine depth, reduced targeted attack accuracy, reduced episodic memory (the player's log messages about remembering past events become vaguer or stop). Tier 2 gains: reflexive defense from limbs, pattern matching in familiar territory.
 
-Files: `mutations.js`, `enemy-ai.js` (reflexive defense), `interactions.js` (examine depth), `combat.js` (targeted attacks), `ui.js` (status display)
+Files: `mutations.js`, `ai.js` (reflexive defense), `interactions.js` (examine depth), `combat.js` (targeted attacks), `ui.js` (status display)
 
 ### Phase 5 — Visual Mutations (Future)
 
