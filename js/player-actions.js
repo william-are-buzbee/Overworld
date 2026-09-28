@@ -7,17 +7,8 @@ import { inBounds, monsterAt, getFeature, isImpassable, getCover } from './world
 import { log, LOG_CATEGORIES } from './log.js';
 import { updateUI } from './ui.js';
 import { playerAttack } from './combat.js';
-import { endPlayerTurn } from './enemy-ai.js';
+import { endPlayerTurn } from './turn-loop.js';
 import { applyTurningCost, getEntityTotalMass } from './physiology.js';
-
-function fedDrainFor(action){
-  if (action === 'rest') return 2;
-  if (action === 'move') return 0.5625;
-  if (action === 'attack') return 5.4;
-  if (action === 'miss') return 5.4;
-  if (action === 'turn') return 0.5625;
-  return 1;
-}
 
 function dirName(dx, dy){
   if (dx === 0 && dy === -1) return 'north';
@@ -171,4 +162,4 @@ function wireGroundCorpseEatButtons(corpses, layer, px, py){
   });
 }
 
-export { attemptMove, restAction, fedDrainFor, dirName, turnInPlace, setGroundModalCallbacks, eatAction };
+export { attemptMove, restAction, dirName, turnInPlace, setGroundModalCallbacks, eatAction };
