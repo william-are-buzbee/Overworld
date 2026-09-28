@@ -50,8 +50,6 @@ function strikeVerb(usedAttack){
 /** The player bump-attacks `mon`. Returns true on a hit (a turn's 'attack'), false on a miss. */
 function playerAttack(mon){
   const player = state.player;
-  if (player.stealth) endStealth('You strike from concealment.');
-
   // Zone destruction can leave nothing to strike with (same gate as monsterMelee).
   const playerBodyMap = getBodyMap(player);
   const availAtks = playerBodyMap ? getAvailableAttacks(playerBodyMap) : [];
@@ -210,24 +208,18 @@ function killMonster(mon){
 }
 
 // ==================== STEALTH ====================
-function inCombatProximity(){
-  const player = state.player;
-  for (const m of monstersHere()){
-    if (m.hp <= 0) continue;
-    if (!m.alerted) continue;
-    if (chebyshev(m.x, m.y, player.x, player.y) <= 1) return true;
-  }
-  return false;
-}
+// The F key: creep. A gait, not a concealment state — the body is driven at
+// CREEP_INTENSITY (player-actions.js), so each step drops less energy into
+// the ground (signals.js) and is felt from less far. It ends when the player
+// sprints or presses F again; being struck or striking does not change a gait.
 function toggleStealth(){
   const player = state.player;
-  if (player.stealth){ endStealth('You step into the open.'); return; }
-  if (inCombatProximity()){ log('Too close to alerted creatures.', LOG_CATEGORIES.COMBAT); return; }
+  if (player.stealth){ endStealth('You stop creeping.'); return; }
   player.stealth = true;
   if (!player.effects.find(e => e.type === 'stealth')){
     player.effects.push({ type: 'stealth', turns: 999 });
   }
-  log('You lower your profile.', LOG_CATEGORIES.COMBAT);
+  log('You creep.', LOG_CATEGORIES.MOVEMENT);
   render();
 }
 function endStealth(msg){
@@ -238,4 +230,4 @@ function endStealth(msg){
 }
 
 export { rollHit, accuracyOf, playerAttack, alertNearby, killMonster,
-         inCombatProximity, toggleStealth, endStealth };
+         toggleStealth, endStealth };

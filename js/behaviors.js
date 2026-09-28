@@ -16,7 +16,7 @@ import { rand, randi } from './rng.js';
 import { DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
-import { endStealth, rollHit } from './combat.js';
+import { rollHit } from './combat.js';
 import { placeItem, generateItemId } from './ground-items.js';
 import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          canMoveTo, moveInDirection, isNearWater, findNearestWaterTile,
@@ -910,7 +910,6 @@ function monsterMelee(mon){
 
   // (No poison status: venom is not modelled until there is a chemistry to
   // carry it.)
-  if (state.player.stealth) endStealth('Your cover is blown.');
 }
 
 // ==================== BONUS MOVE (DEPRECATED) ====================

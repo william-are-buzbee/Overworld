@@ -281,7 +281,7 @@ function endPlayerTurn(action){
   //                     how often creatures act relative to the player.
   //   World-time:       reference-speed-based — determines how fast the
   //                     day/night cycle and time-scaled effects advance.
-  const playerIntensity = state.player._lastMovementIntensity || 0.25;
+  const playerIntensity = getMovementIntensity(state.player);
   const playerPTW = getBodyPTW(player, playerIntensity);
   // Apply mass-dependent acceleration scalar
   const playerTotalMass = getEntityTotalMass(player);
@@ -359,7 +359,7 @@ function endPlayerTurn(action){
   if (state.player.movedThisTurn) {
     const playerBodyMap = getBodyMap(state.player);
     if (playerBodyMap) {
-      const intensity = state.player._lastMovementIntensity || 0.25;
+      const intensity = getMovementIntensity(state.player);
       // Only deplete if intensity exceeds fast-twitch recruitment threshold
       if (intensity >= FAST_TWITCH_RECRUIT_THRESHOLD) {
         const excessIntensity = intensity - FAST_TWITCH_RECRUIT_THRESHOLD;
@@ -378,7 +378,7 @@ function endPlayerTurn(action){
     const playerBodyMap = getBodyMap(state.player);
     if (playerBodyMap) {
       const circRegenEff = _getCirculatoryRegenEfficiency(state.player);
-      const playerIntensity = state.player._lastMovementIntensity || 0.25;
+      const playerIntensity = getMovementIntensity(state.player);
       for (const zone of playerBodyMap) {
         if (zone.destroyed || zone.fiberRatio == null) continue;
         if (zone.substrateMax == null || zone.substrateMax <= 0) continue;

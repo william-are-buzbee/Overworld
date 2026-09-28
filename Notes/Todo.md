@@ -162,7 +162,7 @@ Prompt queue and task tracker. Check things off as they're done.
 - [ ] Legacy elemental damage and name cleanup
 - [ ] Restore ecological creature density after detection optimization
 - [ ] Chemical workspace / scent gradient system
-- [ ] Player movement intensity expansion (creep/stalk mode)
+- [x] Player movement intensity expansion (creep/stalk mode) — F key creeps, footfalls scale with gait; no time cost until motor step 4
 - [ ] Visual rethinking (16x16 palettes as color reference for 32x32 sprites)
 - [ ] Visual customization (settings menu with texture/resource pack option)
 

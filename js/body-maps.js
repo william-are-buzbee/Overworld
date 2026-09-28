@@ -32,6 +32,13 @@ export const SUBSTRATE_PER_KG_MUSCLE = 5.0;
 export const SUBSTRATE_DEPLETION_HIGH = 0.12;   // fraction of zone's fast-contracting mass consumed per turn at max intensity
 export const SUBSTRATE_DEPLETION_MOD  = 0.03;   // fraction consumed per turn at moderate intensity (wander, forage)
 export const FAST_TWITCH_RECRUIT_THRESHOLD = 0.4; // intensity below this is fully aerobic — no substrate depletion
+// Locomotion intensities (0-1) of the three gaits a body under player
+// control can be driven at; NPC ganglia emit their own. A creep recruits the
+// least muscle and so drops the least mass on the substrate each step
+// (signals.js); a sprint recruits fast-contracting fibres (the threshold above).
+export const CREEP_INTENSITY  = 0.1;
+export const WALK_INTENSITY   = 0.25;
+export const SPRINT_INTENSITY = 1.0;
 export const CIRC_EFFICIENCY_CLOSED   = 1.0;    // circulatory efficiency for closed systems (aerobic force output)
 export const CIRC_EFFICIENCY_OPEN     = 0.65;   // circulatory efficiency for open systems (aerobic force output)
 export const CIRC_EFFICIENCY_HYBRID   = 0.85;   // circulatory efficiency for hybrid systems (aerobic force output)

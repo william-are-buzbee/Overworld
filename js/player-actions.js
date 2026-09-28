@@ -1,12 +1,12 @@
 // ==================== PLAYER ACTIONS ====================
 import { state, worlds, covers } from './state.js';
-import { FED_MAX, facingSteps } from './constants.js';
+import { FED_MAX, facingSteps, CREEP_INTENSITY, WALK_INTENSITY, SPRINT_INTENSITY } from './constants.js';
 import { isWalkable, terrainName } from './terrain.js';
 import { getItems, removeItem } from './ground-items.js';
 import { inBounds, monsterAt, getFeature, isImpassable, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { updateUI } from './ui.js';
-import { playerAttack } from './combat.js';
+import { playerAttack, endStealth } from './combat.js';
 import { endPlayerTurn } from './turn-loop.js';
 import { applyTurningCost, getEntityTotalMass } from './physiology.js';
 
@@ -41,8 +41,11 @@ function attemptMove(dx, dy){
     applyTurningCost(state.player, stepsChanged);
   }
 
-  // Set movement intensity based on sprint mode
-  state.player._lastMovementIntensity = state.player.sprintMode ? 1.0 : 0.25;
+  // The gait sets the locomotion intensity (body-maps.js): a sprint, a creep
+  // (the F key), or a walk. A body cannot creep and sprint at once.
+  if (state.player.sprintMode && state.player.stealth) endStealth('You break into a run.');
+  state.player._lastMovementIntensity = state.player.sprintMode ? SPRINT_INTENSITY
+    : state.player.stealth ? CREEP_INTENSITY : WALK_INTENSITY;
 
   const mon = monsterAt(nx, ny, state.player.layer);
   if (mon){

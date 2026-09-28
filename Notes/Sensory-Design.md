@@ -215,7 +215,13 @@ correct for: a moving predator smells like a heavier animal to a resting grazer.
 chemical channel whatever sense had detected the target, and ground emission was mass over foot contact, which cancelled to
 a gait ratio (a 200 kg wader put less into the ground than a wolf) and contradicted the ranges below. The visual SNR the
 ganglia read is the one that decided the detection, cover and light included (`_visualDetection`, one path for NPCs and
-the player).
+the player). Ground emission is also scaled by the square of the emitter's locomotion intensity over a walk
+(`signals.js`, Motor-System-Design step 6): impact energy goes with the square of the speed the foot comes down at, so a
+creep (the player's F key, `CREEP_INTENSITY` 0.1) puts 16% of a walk into the ground and is felt from about half as far
+(a 22 kg prowler at ~5 tiles by a hare instead of ~10), a flee or sprint at 1.0 sixteen times a walk. The observer's
+reference is still its own walk, so a bolting hare reads to another hare as something far heavier walking: hares now
+freeze and run more when other hares run. Cadence, which would tell a light fast gait from a heavy slow one, is the
+gait-signature work under Future.
 
 **Movement state — vibration channel only, resolves quickly:**
 
