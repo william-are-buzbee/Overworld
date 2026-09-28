@@ -174,7 +174,13 @@ function renderInventory(container) {
   container.innerHTML = html;
 
   // Wire up item action buttons inside the overlay
-  container.addEventListener('click', handleInventoryClick);
+  // Attach once: overlayBody persists across renders and innerHTML='' does
+  // not remove listeners, so attaching per render stacked one listener per
+  // action and each click then fired N times.
+  if (!container._invClickBound) {
+    container.addEventListener('click', handleInventoryClick);
+    container._invClickBound = true;
+  }
 }
 
 function buildOverlayItemRow(it, idx, player) {

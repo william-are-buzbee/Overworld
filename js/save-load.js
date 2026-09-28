@@ -9,14 +9,7 @@ import { findWeapon, findArmor } from './items.js';
 import { WANDER_PROFILES, DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { render } from './rendering.js';
 import { textureConfig, rebuildSpriteCache, SPRITE_LIBRARY } from './sprites.js';
-import { log as _rawLog, LOG_CATEGORIES } from './log.js';
-
-// Wrap log() to tag DOM elements with categories for log tab/mute filtering.
-// See index.html inline script for the MutationObserver that reads the queue.
-function log(text, category) {
-  if (window._pendingLogCatQueue) window._pendingLogCatQueue.push(category || 'system');
-  _rawLog(text, category);
-}
+import { log, LOG_CATEGORIES } from './log.js';
 import { updatePlayerFOV } from './fov.js';
 import { resetScent } from './scent.js';
 import { rand, getRngState, setRngState } from './rng.js';
