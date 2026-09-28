@@ -91,6 +91,8 @@ The motor system (see Motor-System-Design.md) sends activation signals through p
 
 *Status (Sep 2026):* `getBodyPTW(entity, intensity)` in physiology.js is the one implementation, for NPCs and the player alike. Fast-contracting fibres contribute only when the movement intensity of the last action is at or above `FAST_TWITCH_RECRUIT_THRESHOLD`; NPC intensity comes from `getMovementIntensity` (ganglion output where it exists, otherwise the behaviour label as a marked placeholder for the motor layer).
 
+*Status (Sep 2026, perception pass 3):* intensity also sets how much of the slow-contracting pool fires. Motor units are recruited slow-first (the size principle): below `WALK_INTENSITY` only `intensity / WALK_INTENSITY` of the slow pool works, so the slow term below is multiplied by that share; from a walk up, all of it works, and above the fast-twitch threshold the fast term adds. A creep at 0.1 produces 40% of a walk's force and covers ground at 40% of the pace. A body that is not moving (intensity null or 0) is rated at its walk, which is the rate the action economy runs a standing body at (a placeholder until Motor-System-Design step 10 separates acting from locomoting).
+
 When locomotion zones are activated at high intensity, each zone produces force based on:
 
 ```

@@ -29,10 +29,17 @@ import { log, LOG_CATEGORIES } from './log.js';
  * to static locomotion muscle / total mass.
  *
  * @param {object} entity — creature or player
- * @param {number} [intensity] — movement intensity (0-1). Controls fast-twitch recruitment.
- *   Below FAST_TWITCH_RECRUIT_THRESHOLD: fast-twitch not recruited (walking — slow-twitch only).
- *   At or above threshold: fast-twitch contributes proportional to substrate.
- *   null/undefined: treated as below threshold (at rest / walking — slow-twitch only).
+ * @param {number} [intensity] — movement intensity (0-1). Sets how much of the
+ *   locomotion muscle the motor neurons recruit (Motor-System-Design, How Tissue
+ *   Responds; step 4). Slow-contracting units come first, by the size principle:
+ *   below WALK_INTENSITY only that fraction of them fire, so a creep at 0.1
+ *   produces 40% of a walk's force and covers ground at 40% of the pace. At a walk
+ *   the whole slow pool is working. At or above FAST_TWITCH_RECRUIT_THRESHOLD the
+ *   fast-contracting fibres add their force, in proportion to their substrate.
+ *   null/undefined/0: the body is not moving; the rate returned is its walk, the
+ *   rate the action economy (turn-loop.js) runs a standing body at. PLACEHOLDER
+ *   until the action-point system (Motor-System-Design step 10) separates acting
+ *   from locomoting.
  *   NPC callers pass getMovementIntensity(creature) so the same body under NPC
  *   and player control produces the same force-to-weight at the same intensity.
  */
@@ -47,6 +54,10 @@ function getBodyPTW(entity, intensity) {
   // Determine circulatory efficiency
   const circEff = _getCirculatoryEfficiency(entity);
 
+  // Share of the slow-contracting pool the activation reaches
+  const slowRecruited = (intensity == null || intensity <= 0)
+    ? 1 : Math.min(1, intensity / WALK_INTENSITY);
+
   for (const zone of bodyMap) {
     if (zone.destroyed) continue;
     totalMass += zone.mass || 0;
@@ -57,8 +68,8 @@ function getBodyPTW(entity, intensity) {
         const fastMass = zone.muscle * zone.fiberRatio;
         const slowMass = zone.muscle * (1 - zone.fiberRatio);
 
-        // Slow-twitch always contributes (aerobic baseline)
-        const slowForce = slowMass * circEff;
+        // Slow-twitch: the recruited share of the aerobic pool
+        const slowForce = slowMass * circEff * slowRecruited;
 
         // Fast-twitch only contributes when recruited (intensity above threshold)
         let fastForce = 0;
@@ -75,7 +86,7 @@ function getBodyPTW(entity, intensity) {
         totalLocoForce += fastForce + slowForce;
       } else {
         // No fiber data — static fallback (locomotion muscle as-is)
-        totalLocoForce += zone.muscle;
+        totalLocoForce += zone.muscle * slowRecruited;
       }
     }
   }

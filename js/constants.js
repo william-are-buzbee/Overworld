@@ -276,7 +276,15 @@ export const SPAWN_VIABILITY_MIN    = 6;  // need at least this many habitat til
 //   AP accumulation:  ratio-based (creaturePTW / playerPTW) — no world-ticks involved.
 //   World-time:       BASE_TICKS_PER_ACTION × (REFERENCE_SPEED / playerPTW) per player input.
 export const BASE_AP_COST          = 1000;  // AP required to take one action
-export const MAX_ACTIONS_PER_INPUT = 3;     // cap on creature actions per player input
+// Cap on creature actions per player input. A guard against runaway loops
+// (the player's rate is floored at 0.001), not a speed limit, so it should sit
+// above the ratios real bodies reach: a sprinting hare is ~5.3 against a
+// creeping prowler, ~4.2 against a prowler's first (half-speed) step from
+// standing. At 3 it clipped both, so fleeing creatures lost ground whenever the
+// player crept or started from a stop. A heavy player creeping from a standing
+// start can still exceed 8; those steps clip. Bursts after dormancy are held by
+// the AP carry cap in turn-loop.js, not by this.
+export const MAX_ACTIONS_PER_INPUT = 8;
 export const DAY_CYCLE_TICKS       = 1200;  // ticks per full day/night cycle (was 600)
 export const DAWN_TICKS            = Math.floor(DAY_CYCLE_TICKS * 0.15);  // dawn length; a new run starts at its end (sunrise)
 export const REFERENCE_SPEED       = 0.26;  // baseline PTW for "normal" walking speed (prowler at full substrate)
