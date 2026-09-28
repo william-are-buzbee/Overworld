@@ -8,7 +8,7 @@ import { tileSize, viewW, viewH, zoom, getSpritePack } from './display.js';
 import { T, terrainInfo } from './terrain.js';
 import { spriteCache, tintedSprite, tintedMonsterSprite, COLOR_PALETTES, textureConfig } from './sprites.js';
 import { spriteCache32, tintedSprite32, tintedMonsterSprite32 } from './sprites-32.js';
-import { inBounds, isTownCell, monsterAt, getCover } from './world-state.js';
+import { inBounds, monsterAt, getCover } from './world-state.js';
 import { updateUI } from './ui.js';
 import { drawTimeTint } from './time-cycle.js';
 import { getGroundScentNear, MOLECULAR_CLASSES } from './scent.js';
@@ -604,8 +604,6 @@ function render(){
   }
 
   canvas.classList.toggle('stealth', state.player.stealth);
-  const logEl = document.getElementById('log');
-  if (logEl) logEl.scrollTop = logEl.scrollHeight;
   updateUI();
 }
 
@@ -779,7 +777,6 @@ function drawEntityAtTile(wx, wy, px, py, layer){
     if (mon.hitFlash > 0){
       ctx.fillStyle = 'rgba(255,255,255,0.28)';
       ctx.fillRect(px, py, TILE, TILE);
-      mon.hitFlash--;
     }
     // Prompt G.3: enemy health bars removed — player assesses condition via examine
     if (mon.alerted){
@@ -802,7 +799,6 @@ function drawEntityAtTile(wx, wy, px, py, layer){
     if (state.player.hitFlash > 0){
       ctx.fillStyle = 'rgba(255,255,255,0.28)';
       ctx.fillRect(px, py, TILE, TILE);
-      state.player.hitFlash--;
     }
   }
 }

@@ -42,7 +42,6 @@ export function inBounds(layer, x, y){
   const [w,h] = worldDims(layer);
   return x>=0 && y>=0 && x<w && y<h;
 }
-export function isTownCell(layer){ return layer >= 2; }
 
 // ==================== COVER ACCESS ====================
 /** Get the cover type at (x,y) on the given layer. Returns 0 if none. */

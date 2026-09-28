@@ -840,7 +840,13 @@ function handleTitleKeys(ev) {
   }
 }
 
+let _titleBusy = false;   // a second Enter while CONTINUE is still loading used to start a second resume
 async function selectTitleOption() {
+  if (_titleBusy) return;
+  _titleBusy = true;
+  try { await _selectTitleOption(); } finally { _titleBusy = false; }
+}
+async function _selectTitleOption() {
   const option = _titleMenuOptions[_titleMenuIndex];
   if (option === 'CONTINUE') {
     // Same logic as the old DOM title-continue button

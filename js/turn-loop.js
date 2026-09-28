@@ -16,7 +16,7 @@ import { getBodyMap, getNeuralArchitecture,
 import { computeIntegrationCapacity, getTier } from './cognition.js';
 import { computePlayerPerception } from './detection.js';
 import { isWalkable, terrainInfo } from './terrain.js';
-import { inBounds, monsterAt, isTownCell, getCover } from './world-state.js';
+import { inBounds, monsterAt, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { render } from './rendering.js';
 import { advanceTick } from './time-cycle.js';
@@ -459,8 +459,8 @@ function endPlayerTurn(action){
   }
   state.prevLayer = currentLayer;
 
-  // Enemies act — only on current layer, town cells are safe
-  if (!isTownCell(state.player.layer)){
+  // Enemies act — on the current layer
+  {
     const mons = monstersHere();
 
     // Prompt S: classify creatures as active or dormant
@@ -567,6 +567,10 @@ function endPlayerTurn(action){
   updateAmbientSensing();  // ambient terrain sensing — extends explored set (no entities)
   updateScentSystem(state.activeLayer);  // scent emission, transport, and player detection (log after vision)
   computePlayerPerception();  // Prompt N: detect creatures through non-visual senses
+  // Hit flashes count down per turn here, not per frame in render(), so a
+  // zoom or resize no longer eats them.
+  if (state.player.hitFlash > 0) state.player.hitFlash--;
+  for (const m of monstersHere()) if (m.hitFlash > 0) m.hitFlash--;
   render();
   state.player.movedThisTurn = false;  // set again by the next move action
   saveGame().catch(err => console.error('[Save] Auto-save failed:', err));  // Async fire-and-forget
