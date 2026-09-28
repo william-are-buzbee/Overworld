@@ -39,7 +39,7 @@ export const VIS_SIZE_COEFF    = 1.0;   // visual detectability per cube-root-kg
 export const CHEM_RANGE_COEFF        = 1.3;   // chemical airborne range coefficient
 export const VIB_GROUND_RANGE_COEFF  = 1.75;  // ground vibration range coefficient
 export const VIB_AIR_RANGE_COEFF     = 1.15;  // air vibration range coefficient
-export const VIS_RANGE_COEFF         = 1.9;   // visual range = cbrt(detectability × light) × sensitivity × coeff
+export const VIS_RANGE_COEFF         = 2.2;   // visual range = cbrt(mass) × motion × contrast × sqrt(light) × sensitivity × coeff (linear: vision does not spread)
 export const MAX_DETECTION_DISTANCE  = 40;    // absolute ceiling — nothing detected beyond this
 
 // ── Ambient terrain sensing ──
@@ -97,7 +97,8 @@ export const MARKER_MASS_MAX   = 250;    // kg — at or above this → maximum 
 // A stationary creature requires spatial pattern recognition (slow, effortful).
 // The asymmetry is compressed from biological reality (~10-100× on Earth)
 // for playability, but must remain dramatic enough that stillness is a
-// meaningful survival strategy.
+// meaningful survival strategy. The ratio below (7.8×) is the ratio of
+// ranges: the visual range is linear in it (detection.js getVisualRange).
 export const MOTION_SIGNAL_MOVING        = 3.5;    // moving creature signal multiplier
 export const MOTION_SIGNAL_STILL         = 0.45;   // stationary creature signal multiplier (was 0.25 — too harsh at short range)
 
