@@ -1,30 +1,41 @@
 // ==================== COMBAT + STEALTH ====================
-// The player's strike, the stealth toggle, and the monster-side helpers
-// that read them. A player attack resolves exactly like an NPC's
-// (behaviors.js monsterMelee): one of the body map's available attacks is
-// chosen, damage comes from the striking zone's tissue (computeStrikeDamage),
-// the footprint from the attack's damage type, armor from the target zone's
-// structural mass, and every hit goes through applyZoneDamage. There are no
-// weapons, no armor items, no XP or levels: the body is the character.
+// The one hit roll, the player's strike, and the stealth toggle. A player
+// attack resolves exactly like an NPC's (behaviors.js monsterMelee): one of
+// the body map's available attacks is chosen, damage comes from the striking
+// zone's tissue (computeStrikeDamage), the footprint from the attack's damage
+// type, armor from the target zone's structural mass, and every hit goes
+// through applyZoneDamage. There are no weapons, no armor items, no XP or
+// levels, no stats: the body is the character.
 import { render } from './rendering.js';
 import { monsterMelee, applySafetyFromDamage } from './enemy-ai.js';
-import { state, worlds, monsters } from './state.js';
+import { state, monsters } from './state.js';
 import { getBodyMap, selectHitZone, getAvailableAttacks, ARMOR_PER_STRUCTURAL_KG,
          getAttackDirection, getExposedZones, selectContactedZones,
-         computeStrikeDamage } from './constants.js';
-import { coverBonus } from './terrain.js';
+         computeStrikeDamage, dodgeChance,
+         BASE_ACCURACY, ACCURACY_PER_SNR, ACCURACY_SNR_CAP } from './constants.js';
 import { randi, roll100 } from './rng.js';
-import { playerAcc, playerCritChance, playerCritMult, stealthBonus } from './player.js';
-import { monDodge } from './monsters.js';
-import { chebyshev, getCover } from './world-state.js';
+import { canDetect } from './detection.js';
+import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { applyZoneDamage } from './physiology.js';
 import { placeItem, generateItemId } from './ground-items.js';
 
 function monstersHere(){ return monsters[state.player.layer]; }
 
-function rollHit(acc, dodge){
-  const c = Math.max(5, Math.min(95, acc - dodge));
+// Accuracy is how well the attacker senses the target right now: the best
+// signal-to-noise ratio any of its zones has on the target, on any channel
+// (Stat-System-Design "Accuracy"). Something it cannot sense at all is struck
+// blind at BASE_ACCURACY.
+function accuracyOf(attacker, target){
+  const det = canDetect(attacker, target);
+  const snr = det && det.detected ? Math.min(det.bestSNR || 0, ACCURACY_SNR_CAP) : 0;
+  return BASE_ACCURACY + ACCURACY_PER_SNR * snr;
+}
+
+// The one hit roll for every strike: attacker's accuracy against the
+// defender's mass-derived dodge, clamped to 5..95%.
+function rollHit(attacker, defender){
+  const c = Math.max(5, Math.min(95, accuracyOf(attacker, defender) - dodgeChance(defender)));
   return roll100() <= c;
 }
 
@@ -50,7 +61,7 @@ function playerAttack(mon){
     return false;
   }
 
-  if (!rollHit(playerAcc(player), monDodge(mon))){
+  if (!rollHit(player, mon)){
     log(`You miss ${mon.name}.`, LOG_CATEGORIES.COMBAT);
     mon.wasAttacked = true;
     mon.alerted = true;
@@ -64,10 +75,7 @@ function playerAttack(mon){
     usedAttack = availAtks[randi(availAtks.length)];
     attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
-  let base = computeStrikeDamage(player, attackingZone) + randi(3);
-  const crit = roll100() <= playerCritChance(player);
-  if (crit) base = Math.floor(base * playerCritMult(player));
-  const dmg = Math.max(1, Math.round(base));
+  const dmg = Math.max(1, computeStrikeDamage(player, attackingZone) + randi(3));
 
   // ─── Footprint-based zone resolution on the defender ───
   const monBodyMap = getBodyMap(mon);
@@ -94,18 +102,17 @@ function playerAttack(mon){
 
   // Naturalistic log line, no numbers.
   const verb = strikeVerb(usedAttack);
-  const hard = crit ? ' hard' : '';
   if (contactedZones.length === 1){
-    log(`You ${verb} ${mon.name}'s ${contactedZones[0].name}${hard}.`, LOG_CATEGORIES.COMBAT);
+    log(`You ${verb} ${mon.name}'s ${contactedZones[0].name}.`, LOG_CATEGORIES.COMBAT);
   } else if (contactedZones.length === 2){
     const names = contactedZones.map(z => z.name).join(' and ');
-    log(`You ${verb} across ${mon.name}'s ${names}${hard}.`, LOG_CATEGORIES.COMBAT);
+    log(`You ${verb} across ${mon.name}'s ${names}.`, LOG_CATEGORIES.COMBAT);
   } else if (contactedZones.length >= 3){
     const last = contactedZones[contactedZones.length - 1].name;
     const rest = contactedZones.slice(0, -1).map(z => z.name).join(', ');
-    log(`Your ${verb} catches ${mon.name}'s ${rest}, and ${last}${hard}.`, LOG_CATEGORIES.COMBAT);
+    log(`Your ${verb} catches ${mon.name}'s ${rest}, and ${last}.`, LOG_CATEGORIES.COMBAT);
   } else {
-    log(`You ${verb} ${mon.name}${hard}.`, LOG_CATEGORIES.COMBAT);
+    log(`You ${verb} ${mon.name}.`, LOG_CATEGORIES.COMBAT);
   }
 
   // ─── Distribute damage across contacted zones ───
@@ -123,18 +130,18 @@ function playerAttack(mon){
   // Prompt I-B: spike safety drive from damage taken
   if (!died) applySafetyFromDamage(mon, dmg, player);
 
-  // Enemy bleed feedback. PLACEHOLDER: gated by the player's aggregate
-  // `central` stat (see player.js header); the ≥60 branch is unreachable
-  // for every species until the readers move to the zone.
+  // Enemy bleed feedback, read at the depth the player's cognition allows:
+  // tier 3 (planning) reads how badly, tier 2 that it bleeds, tier 1 only
+  // that it is hurt. (player.tier is set each turn from integration capacity.)
   if (!died && mon.blood != null && mon.bloodMax > 0){
     const bloodRatio = mon.blood / mon.bloodMax;
     if (bloodRatio < 0.75){
-      const cent = player.central || 0;
-      if (cent >= 60){
+      const tier = player.tier || 1;
+      if (tier >= 3){
         if (bloodRatio < 0.25) log(`${mon.name}'s movements are sluggish. Blood loss.`, LOG_CATEGORIES.COMBAT);
         else if (bloodRatio < 0.50) log(`${mon.name} is bleeding heavily. It weakens.`, LOG_CATEGORIES.COMBAT);
         else log(`${mon.name} bleeds from its wounds.`, LOG_CATEGORIES.COMBAT);
-      } else if (cent >= 30){
+      } else if (tier === 2){
         log(`${mon.name} bleeds from its wounds.`, LOG_CATEGORIES.COMBAT);
       } else {
         log(`The creature is wounded.`, LOG_CATEGORIES.COMBAT);
@@ -198,8 +205,7 @@ function killMonster(mon){
     weight:   2,
     quantity: 1,
     source:   mon.key,
-    nutrition: mon.hpMax,
-    mass:     mon.totalMass || 1,  // I-C: total mass for predator eating
+    mass:     mon.totalMass || 1,  // what there is to eat, in kg
   });
   log(`${mon.name} falls.`, LOG_CATEGORIES.COMBAT);
 }
@@ -232,16 +238,5 @@ function endStealth(msg){
   if (msg) log(msg, LOG_CATEGORIES.COMBAT);
 }
 
-// Monster stealth-detection chance (lower = harder to spot player)
-function stealthDetectChance(mon){
-  const player = state.player;
-  const ground = worlds[player.layer][player.y][player.x];
-  const cover = getCover(player.layer, player.x, player.y);
-  const cov = coverBonus(ground, cover);
-  const d = chebyshev(mon.x, mon.y, player.x, player.y);
-  const chance = mon.percept - cov - stealthBonus(player) - d * 5;
-  return Math.max(0, Math.min(95, chance));
-}
-
-export { rollHit, playerAttack, alertNearby, killMonster,
-         inCombatProximity, toggleStealth, endStealth, stealthDetectChance, monsterMelee };
+export { rollHit, accuracyOf, playerAttack, alertNearby, killMonster,
+         inCombatProximity, toggleStealth, endStealth, monsterMelee };

@@ -1103,6 +1103,22 @@ export function getVisualAcuity(zone) {
 }
 
 /**
+ * Best visual acuity across an entity's surviving zones (0 if it has no eyes
+ * left). The one number the view-radius formula wants.
+ */
+export function getBestVisualAcuity(entity) {
+  const bodyMap = getBodyMap(entity);
+  if (!bodyMap) return 0;
+  let best = 0;
+  for (const zone of bodyMap) {
+    if (zone.destroyed) continue;
+    const a = getVisualAcuity(zone);
+    if (a > best) best = a;
+  }
+  return best;
+}
+
+/**
  * Read the full visual transducer config from a zone.
  * Returns { acuity, placement, fieldAngle } or null if no visual transducer.
  * Handles the legacy flat-number format by returning a forward/120° default.

@@ -1,5 +1,5 @@
 // ==================== COMBAT CONSTANTS ====================
-// Damage formulas, damage types, tag-based resistance, and blood system constants.
+// Damage formulas, derived combat values (dodge, stealth, accuracy), and blood system constants.
 // Split from constants.js — self-contained, no imports from project modules.
 
 // ==================== PHYSICS-BASED DAMAGE ====================
@@ -34,40 +34,29 @@ export function computeStrikeDamage(attacker, atkZone) {
   return Math.max(1, Math.round(damage));
 }
 
-// ==================== DAMAGE TYPES ====================
-export const DMG = {
-  BLADE:'blade', BLUNT:'blunt', FIRE:'fire', COLD:'cold', ELEC:'electric', POISON:'poison'
-};
+// ==================== DERIVED COMBAT VALUES ====================
+// Stat-System-Design "Derived Combat Values". Dodge and stealth are read from
+// total mass: there is physically less of a small creature to connect with or
+// to notice. Accuracy is read from the attacker's detection of the target at
+// the moment of the strike (combat.js accuracyOf): the better it senses the
+// target, the better it aims. There is no crit; damage noise is the randi(3)
+// on the strike.
+export const DODGE_REFERENCE_MASS   = 250;  // kg at which dodge reaches 0% (the design doc floats 2500; see Stat-System-Design)
+export const MAX_DODGE_PERCENT      = 30;   // a weightless creature's dodge
+export const STEALTH_REFERENCE_MASS = 250;  // kg at which the stealth profile reaches 0
+export const MAX_STEALTH_PERCENT    = 40;
+export const BASE_ACCURACY          = 70;   // hit chance with no sense of the target beyond contact
+export const ACCURACY_PER_SNR       = 3;    // added per unit of the attacker's best SNR on the target
+export const ACCURACY_SNR_CAP       = 10;   // SNR beyond this aims no better
 
-export const TAG_RESIST = {
-  flesh:    {blade:1.2, blunt:0.9, fire:1.1, cold:1.0, electric:1.0, poison:1.2},
-  bone:     {blade:0.35,blunt:1.7, fire:1.0, cold:0,   electric:0.9, poison:0},
-  armored:  {blade:0.4, blunt:1.6, fire:0.8, cold:0.8, electric:1.1, poison:0.6},
-  plant:    {blade:1.1, blunt:0.8, fire:2.0, cold:0.7, electric:1.1, poison:0.5},
-  insect:   {blade:0.85,blunt:1.4, fire:1.4, cold:1.2, electric:1.1, poison:0.8},
-  undead:   {blade:0.9, blunt:1.1, fire:1.3, cold:0,   electric:1.0, poison:0},
-  fire:     {blade:1.0, blunt:1.0, fire:0,   cold:1.9, electric:1.2, poison:0},
-  ice:      {blade:1.0, blunt:1.1, fire:1.9, cold:0,   electric:1.0, poison:0},
-  aquatic:  {blade:1.0, blunt:1.0, fire:0.8, cold:1.0, electric:2.0, poison:1.0},
-  stone:    {blade:0.3, blunt:1.6, fire:0.8, cold:1.0, electric:0.7, poison:0},
-  cursed:   {blade:0.75,blunt:0.85,fire:1.5, cold:0,   electric:1.2, poison:0},
-  beast:    {blade:1.1, blunt:1.0, fire:1.2, cold:1.0, electric:1.2, poison:1.1},
-  scaled:   {blade:0.5, blunt:1.3, fire:1.0, cold:1.0, electric:1.0, poison:0.8},
-  shelled:  {blade:0.4, blunt:1.5, fire:0.9, cold:0.9, electric:1.0, poison:0.7},
-  fungal:   {blade:1.0, blunt:1.2, fire:1.5, cold:0.8, electric:1.0, poison:0},
-  rockite:  {blade:0,   blunt:2.0, fire:0,   cold:0,   electric:0.8, poison:0},
-};
+export function dodgeChance(entity){
+  const mass = entity.totalMass || 0;
+  return Math.max(0, (DODGE_REFERENCE_MASS - mass) / DODGE_REFERENCE_MASS) * MAX_DODGE_PERCENT;
+}
 
-export function resistMult(tags, dmgType){
-  let m = 1;
-  for (const t of tags){
-    const r = TAG_RESIST[t];
-    if (r && r[dmgType] != null){
-      if (r[dmgType] === 0) return 0;
-      m *= r[dmgType];
-    }
-  }
-  return m;
+export function stealthProfile(entity){
+  const mass = entity.totalMass || 0;
+  return Math.max(0, (STEALTH_REFERENCE_MASS - mass) / STEALTH_REFERENCE_MASS) * MAX_STEALTH_PERCENT;
 }
 
 // ==================== BLOOD SYSTEM CONSTANTS ====================

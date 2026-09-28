@@ -109,7 +109,7 @@ zone.maxHp = Math.floor(zone.mass * HP_PER_KG)
 
 HP is proportional to total zone mass. A heavier zone has more stuff to destroy. HP_PER_KG is a tuning constant. The specific tissue composition (more structural = tougher, more muscle = softer) could modify this with a multiplier in future, but zone mass is the primary input.
 
-Creature-level HP displayed to the player is the sum of all zone HPs.
+There is no creature-level HP (see "Creature Global HP" below).
 
 ### Dodge
 
@@ -117,9 +117,9 @@ Creature-level HP displayed to the player is the sum of all zone HPs.
 dodgeChance = ((DODGE_REFERENCE_MASS - totalMass) / DODGE_REFERENCE_MASS) * MAX_DODGE_PERCENT
 ```
 
-DODGE_REFERENCE_MASS is the mass at which dodge reaches 0% (the largest thing on the planet — maybe 2500 kg). Smaller creatures have more dodge because there's physically less of them to connect with. A 5 kg creature dodges frequently. A 200 kg creature almost never dodges.
+DODGE_REFERENCE_MASS is the mass at which dodge reaches 0% (250 kg in code; the largest current creature is the 200 kg wader). Smaller creatures have more dodge because there's physically less of them to connect with. A 5 kg creature dodges frequently. A 200 kg creature almost never dodges.
 
-Clamp to 0 minimum. Armor penalties still apply as flat subtractions.
+Clamp to 0 minimum. There are no armor items; the target zone's structural mass is the armor.
 
 ### Stealth
 

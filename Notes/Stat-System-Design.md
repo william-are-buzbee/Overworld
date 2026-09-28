@@ -4,6 +4,17 @@ All gameplay-relevant values derive from the body map. There are no independent 
 
 Include this alongside Body-Sim-Design.md, Mutation-Design.md, and Ecology-Foundations.md when implementing.
 
+**Status (Sep 2026): the seven-stat table is gone from the code.** Neither the player nor any creature carries
+`siz/strength/chem/vib/vis/central/distributed`, `weaponAtk`, `def`, `xp`, `gold`, `percept` or `hpMax`; `monsters.js` holds
+species records only (name, sprite, habitat, territory, clade, wander profile). What is implemented from "Derived Combat
+Values" below: dodge and stealth from total mass (`combat-constants.js dodgeChance/stealthProfile`, reference mass 250 kg,
+not the 2500 floated below, so that a 200 kg wader dodges about 6% and a 5 kg grazer 29%); accuracy as the bridge, from the
+attacker's best signal-to-noise ratio on the target at the moment of the strike (`combat.js accuracyOf`, via `canDetect`);
+damage from the striking zone; one hit roll for every strike (`combat.js rollHit`). There is no critical hit. View radius
+reads the best surviving eye's acuity. The examine-depth gating reads the player's cognitive tier. The legacy
+`canSeePlayer` vision path and the stealth-detection roll it carried were dead code and are deleted; the F key's "lower your
+profile" is cosmetic until movement intensity gives it a physical meaning.
+
 ---
 
 ## Why No Independent Stats
@@ -219,7 +230,7 @@ This is the biologically impossible signal. No native organism transitions betwe
 dodgeChance = ((DODGE_REFERENCE_MASS - totalMass) / DODGE_REFERENCE_MASS) * MAX_DODGE_PERCENT
 ```
 
-Smaller creatures dodge more because there's physically less of them to hit. DODGE_REFERENCE_MASS is the mass at which dodge reaches 0%. Armor penalties still apply as flat subtractions.
+Smaller creatures dodge more because there's physically less of them to hit. DODGE_REFERENCE_MASS is the mass at which dodge reaches 0% (250 kg in code; MAX_DODGE_PERCENT 30). There are no armor items, so no flat subtractions.
 
 Dodge is resolved. It's total-mass-inverted, nothing else. No separate dodge stat, no Distributed contribution. The clade difference in combat comes from reflexive defense (Clade B limbs strike back when you attack from outside their attention arc), not from an abstract dodge modifier.
 
@@ -253,7 +264,9 @@ Each attack derives damage from the zone housing it. Muscle provides force, zone
 accuracy = BASE_ACCURACY + (zoneDetectionQuality * SENSE_ACCURACY_COEFF)
 ```
 
-Bridge formula — reads the detecting zone's transducer quality or best SNR for the channel that led to detection, not a creature-level aggregated sense value. The attacker uses the sense that led to detection (airborne chemical for scent-tracking Clade A, ground vibration for ground-sensing Clade B, visual for sight-based attacks). Exact implementation deferred — the correct input is the SNR or zone quality from the specific detection event that initiated engagement.
+Bridge formula — reads the detecting zone's transducer quality or best SNR for the channel that led to detection, not a creature-level aggregated sense value. The attacker uses the sense that led to detection (airborne chemical for scent-tracking Clade A, ground vibration for ground-sensing Clade B, visual for sight-based attacks).
+
+Implemented (Sep 2026) as `BASE_ACCURACY (70) + ACCURACY_PER_SNR (3) × min(bestSNR, 10)`, where bestSNR is the attacker's best SNR on the target across all zones and channels right now (`canDetect`). A target the attacker cannot sense at all is struck at the base chance.
 
 ### Stealth
 
@@ -261,7 +274,7 @@ Bridge formula — reads the detecting zone's transducer quality or best SNR for
 stealthProfile = totalMass * STEALTH_MASS_COEFF
 ```
 
-Stealth is primarily about being physically small enough to not be noticed. Future expansion: stealth effectiveness against specific senses depends on understanding what the detector can perceive. Sneaking past a Chemical-dominant creature means staying downwind. Sneaking past a Vibration-dominant creature means moving slowly. The player's knowledge of enemy sensory capabilities (from the examine system, gated by their own centralization score) feeds into stealth strategy.
+Stealth is primarily about being physically small enough to not be noticed. (In code: `stealthProfile`, reference mass 250 kg, max 40. Nothing reads it yet; the legacy stealth-detection roll it would have fed was dead code and is gone.) Future expansion: stealth effectiveness against specific senses depends on understanding what the detector can perceive. Sneaking past a Chemical-dominant creature means staying downwind. Sneaking past a Vibration-dominant creature means moving slowly. The player's knowledge of enemy sensory capabilities (from the examine system, gated by their own centralization score) feeds into stealth strategy.
 
 ### Turn Agility
 

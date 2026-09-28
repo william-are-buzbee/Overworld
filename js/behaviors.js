@@ -4,7 +4,7 @@
 // Split from enemy-ai.js — zero behavior change.
 
 import { state, groundItems } from './state.js';
-import { DMG, getBodyMap, getAvailableAttacks, selectHitZone,
+import { getBodyMap, getAvailableAttacks, selectHitZone,
          computeStrikeDamage,
          ARMOR_PER_STRUCTURAL_KG, getAttackDirection, getExposedZones, selectContactedZones,
          CHASE_LEASH_BASE, CHASE_LEASH_HUNGER_MULT, MEAL_HUNGER_REDUCTION,
@@ -12,13 +12,12 @@ import { DMG, getBodyMap, getAvailableAttacks, selectHitZone,
          REST_RECOVERY_NORMAL, REST_RECOVERY_WEAKENED, REST_RECOVERY_CRITICAL,
          REST_EATING_BONUS,
          SAFETY_DECAY_RATE, facingSteps } from './constants.js';
-import { rand, randi, roll100 } from './rng.js';
-import { monAcc, monDodge, monDamage, monCritChance, monCritMult, DEFAULT_WANDER_PROFILE } from './monsters.js';
+import { rand, randi } from './rng.js';
+import { DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
-import { endStealth, stealthDetectChance, rollHit } from './combat.js';
+import { endStealth, rollHit } from './combat.js';
 import { placeItem, generateItemId } from './ground-items.js';
-import { playerDodge } from './player.js';
 import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          canMoveTo, moveInDirection, isNearWater, findNearestWaterTile,
          getCreatureMass, weightedRandomChoice, movesCloserTo,
@@ -465,7 +464,7 @@ function removeGroundItem(layer, x, y, item) {
 /** Eat a corpse — reduces hunger and depletes corpse mass. */
 function eatCorpse(creature, corpse, cx, cy) {
   const creatureMass = getCreatureMass(creature);
-  const corpseMass = corpse.mass || corpse.nutrition || 1;
+  const corpseMass = corpse.mass || 1;
 
   // Hunger reduction proportional to corpse mass relative to predator mass
   const mealValue = (corpseMass / creatureMass) * MEAL_HUNGER_REDUCTION;
@@ -513,10 +512,7 @@ function performNPCAttack(attacker, defender) {
   // Compute damage from physics
   const dmg = computeStrikeDamage(attacker, atkZone);
 
-  // Simple hit check based on stats
-  const acc = monAcc(attacker);
-  const dodge = monDodge(defender);
-  if (!rollHit(acc, dodge)) return; // miss
+  if (!rollHit(attacker, defender)) return; // miss
 
   // Select hit zone on defender
   const defBodyMap = getBodyMap(defender);
@@ -535,7 +531,6 @@ function performNPCAttack(attacker, defender) {
         weight:   2,
         quantity: 1,
         source:   defender.key,
-        nutrition: defender.hpMax,
         mass:     defender.totalMass || 1,
       });
     }
@@ -568,7 +563,6 @@ function performNPCAttack(attacker, defender) {
       weight:   2,
       quantity: 1,
       source:   defender.key,
-      nutrition: defender.hpMax,
       mass:     defender.totalMass || 1,
     });
   }
@@ -835,15 +829,11 @@ function monsterMelee(mon){
   mon.inCombatThisTurn = true;
   player.inCombatThisTurn = true;
 
-  const acc = monAcc(mon);
-  const dodge = playerDodge(player);
-  if (!rollHit(acc, dodge)){
+  if (!rollHit(mon, player)){
     log(`${mon.name} misses.`, LOG_CATEGORIES.COMBAT);
     return;
   }
   // Pick the attack first so damage comes from the zone that actually strikes.
-  // (monDamage(mon) with no zone used attacks[0], so a rear-leg kick was
-  // resolved with the front limb's shove damage and vice versa.)
   const playerBodyMap = getBodyMap(player);
   let contactedZones = null;
   let usedAttack = null;
@@ -853,10 +843,7 @@ function monsterMelee(mon){
     attackingZone = monBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
 
-  let base = monDamage(mon, attackingZone) + randi(3);
-  const crit = roll100() <= monCritChance(mon);
-  if (crit) base = Math.floor(base * monCritMult(mon));
-  const dmg = Math.max(1, base);   // no armor items; zone structural mass is the armor (below)
+  const dmg = Math.max(1, computeStrikeDamage(mon, attackingZone) + randi(3));   // zone structural mass is the armor (below)
 
   // ─── Footprint-based zone resolution on player ───
   if (playerBodyMap && usedAttack) {
@@ -886,31 +873,24 @@ function monsterMelee(mon){
 
   state.player.hitFlash = 3;
 
-  // Build log message with attack verb
+  // Log line from the attack that lands: its name and damage type, no numbers.
   const atkName = usedAttack ? usedAttack.name.toLowerCase() : null;
-  const dmgType = usedAttack ? usedAttack.damageType : (mon.dmgType || 'blunt');
+  const dmgType = usedAttack ? usedAttack.damageType : 'blunt';
   const verb = dmgType === 'puncture' ? (atkName === 'bite' ? 'bites' : atkName === 'hook' ? 'hooks' : 'pierces') :
                dmgType === 'slashing' ? (atkName === 'claw' ? 'claws' : 'rakes') :
-               mon.dmgType === DMG.BLUNT ? 'crushes' :
-               mon.dmgType === DMG.BLADE ? 'strikes' :
-               mon.dmgType === DMG.POISON ? 'stings' : 'hits';
+               'strikes';
 
   if (contactedZones.length === 1) {
-    const zn = contactedZones[0].name;
-    if (crit) log(`${mon.name} ${verb} your ${zn} hard. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
-    else log(`${mon.name} ${verb} your ${zn}. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
+    log(`${mon.name} ${verb} your ${contactedZones[0].name}.`, LOG_CATEGORIES.COMBAT);
   } else if (contactedZones.length === 2) {
     const names = contactedZones.map(z => z.name).join(' and ');
-    if (crit) log(`${mon.name} ${verb} deep into your ${names}. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
-    else log(`${mon.name}'s attack catches your ${names}. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
+    log(`${mon.name}'s attack catches your ${names}.`, LOG_CATEGORIES.COMBAT);
   } else if (contactedZones.length >= 3) {
     const last = contactedZones[contactedZones.length - 1].name;
     const rest = contactedZones.slice(0, -1).map(z => z.name).join(', ');
-    if (crit) log(`${mon.name} drives into your ${rest}, and ${last}. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
-    else log(`${mon.name} crashes into your ${rest}, and ${last}. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
+    log(`${mon.name} crashes into your ${rest}, and ${last}.`, LOG_CATEGORIES.COMBAT);
   } else {
-    if (crit) log(`${mon.name} ${verb} with full force. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
-    else log(`${mon.name} ${verb}. ${dmg} ${mon.dmgType}.`, LOG_CATEGORIES.COMBAT);
+    log(`${mon.name} ${verb}.`, LOG_CATEGORIES.COMBAT);
   }
 
   // ─── Distribute damage across contacted zones ───
@@ -929,7 +909,7 @@ function monsterMelee(mon){
   }
 
   // (No poison status: venom is not modelled until there is a chemistry to
-  // carry it. DMG.POISON attackers just do their tissue damage.)
+  // carry it.)
   if (state.player.stealth) endStealth('Your cover is blown.');
 }
 

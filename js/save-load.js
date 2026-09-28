@@ -15,8 +15,8 @@ import { rand, getRngState, setRngState } from './rng.js';
 
 const SAVE_KEY = 'overworld_zero_save';
 const BACKUP_KEY = 'overworld_zero_save_backup';   // a save that failed to load, kept rather than deleted
-const SAVE_VERSION = 5;   // v5: no player HP pool, inventory, equipment, XP, gold or chargen attributes
-const ACCEPTED_VERSIONS = [4, SAVE_VERSION];   // v4 is migrated on load; older saves are kept as a backup and not loaded
+const SAVE_VERSION = 6;   // v6: no stat table on the player or creatures (v5 dropped the player's HP pool, inventory, equipment, XP, gold)
+const ACCEPTED_VERSIONS = [4, 5, SAVE_VERSION];   // v4 and v5 are migrated on load; older saves are kept as a backup and not loaded
 let _saveFailWarned = false;
 
 // ==================== INDEXEDDB STORAGE BACKEND ====================
@@ -262,6 +262,10 @@ function deserializeExplored(raw) {
   return out;
 }
 
+// Fields of the retired stat table (save v5 and earlier), dropped on load.
+const LEGACY_STAT_FIELDS = ['siz', 'strength', 'chem', 'vib', 'vis', 'central', 'distributed',
+                            'weaponAtk', 'def', 'xp', 'goldRange', 'dmgType', 'percept', 'mods', 'hpMax'];
+
 // ==================== ZONE STATE PERSISTENCE ====================
 // Restore saved zone HP and destroyed state onto a freshly-initialized body map.
 // Matches by zone key. If a saved zone doesn't exist in the template (e.g. body
@@ -339,20 +343,15 @@ function serializePlayer(p) {
 function deserializePlayer(raw) {
   if (!raw) return null;
   const p = { ...raw };
-  // v4 → v5: the fantasy layer is gone. Drop its fields; hp is an alive flag.
+  // v4 → v5: the fantasy layer is gone. v5 → v6: so is the stat table.
+  // Drop their fields; hp is an alive flag. Everything else is derived from
+  // the body map on load.
   for (const k of ['hpMax', 'inventory', 'gold', 'xp', 'xpNext', 'level', 'perks',
                    'restTurns', 'regenProgress', 'weapon', 'armor', 'npcsMet', 'booksRead',
-                   '_weaponKey', '_armorKey', '_npcsMet', '_booksRead']) delete p[k];
+                   '_weaponKey', '_armorKey', '_npcsMet', '_booksRead',
+                   ...LEGACY_STAT_FIELDS]) delete p[k];
   p.hp = p.hp > 0 ? 1 : 0;
   p.effects = (p.effects || []).filter(e => e && e.type === 'stealth');
-  // Backwards compat: ensure all stats have defaults
-  if (p.siz == null) p.siz = 1;
-  if (p.strength == null) p.strength = 1;
-  if (p.chem == null) p.chem = 1;
-  if (p.vib == null) p.vib = 0;
-  if (p.vis == null) p.vis = 1;
-  if (p.central == null) p.central = 1;
-  if (p.distributed == null) p.distributed = 0;
   // Backwards compat: colorPalette added post-launch
   if (p.colorPalette == null) p.colorPalette = 'meso_predator';
   // Backwards compat: species added in Prompt F
@@ -497,6 +496,8 @@ function deserializeMonsters(allLayers) {
       if (mon) {
         delete mon._bondRef;
         if (!mon.bondPartner) mon.bondPartner = null;
+        for (const k of LEGACY_STAT_FIELDS) delete mon[k];
+        mon.hp = mon.hp > 0 ? 1 : 0;
         // Ensure immobilized flag exists
         if (mon.immobilized == null) mon.immobilized = false;
         // Restore body map from template, then apply saved zone state
@@ -740,8 +741,8 @@ export async function loadGame() {
       return false;
     }
 
-    if (data.version === 4) {
-      console.log('[Save] Migrating v4 save to v5 (player HP pool, inventory, equipment, XP and gold dropped).');
+    if (data.version < SAVE_VERSION) {
+      console.log(`[Save] Migrating v${data.version} save to v${SAVE_VERSION} (legacy player fields and the stat table dropped).`);
     }
 
     // Validate critical data

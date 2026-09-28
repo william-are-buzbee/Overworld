@@ -8,7 +8,7 @@ import { log, LOG_CATEGORIES } from './log.js';
 import { updateUI } from './ui.js';
 import { playerAttack } from './combat.js';
 import { endPlayerTurn } from './enemy-ai.js';
-import { applyTurningCost } from './physiology.js';
+import { applyTurningCost, getEntityTotalMass } from './physiology.js';
 
 function fedDrainFor(action){
   if (action === 'rest') return 2;
@@ -107,14 +107,16 @@ function setGroundModalCallbacks(openFn, closeFn){
 }
 
 // ==================== EAT ACTION (R key) ====================
-// Priority: ground corpses → inventory food/corpses → nothing.
-// Eating from the ground consumes the corpse in place (never enters inventory).
+// Eats the corpse underfoot, whole, in one turn. PLACEHOLDER until there is
+// a gut: the food reserve (0-100) rises by the corpse's mass as a share of
+// the eater's own mass, so a 5 kg grazer is a quarter-meal for a 22 kg
+// prowler and a mouthful for a 200 kg wader. NPCs eat by bites (behaviors.js).
 
 function eatAction(){
   const px = state.player.x, py = state.player.y;
   const layer = state.player.layer;
   const items = getItems(layer, px, py);
-  const corpses = items.filter(it => it.kind === 'corpse' && (it.nutrition || 0) > 0);
+  const corpses = items.filter(it => it.kind === 'corpse' && (it.mass || 0) > 0);
 
   if (corpses.length === 1){
     eatCorpseFromGround(corpses[0], layer, px, py);
@@ -128,11 +130,10 @@ function eatAction(){
 }
 
 function eatCorpseFromGround(groundItem, layer, x, y){
-  const before = state.player.fed;
-  state.player.fed = Math.min(FED_MAX, state.player.fed + (groundItem.nutrition || 0));
-  const gained = state.player.fed - before;
+  const share = (groundItem.mass || 0) / Math.max(1, getEntityTotalMass(state.player));
+  state.player.fed = Math.min(FED_MAX, state.player.fed + share * FED_MAX);
   removeItem(layer, x, y, groundItem.id);
-  log(`You eat the ${groundItem.name}. [+${gained} FED]`, LOG_CATEGORIES.INTERACTION);
+  log(`You eat the ${groundItem.name}.`, LOG_CATEGORIES.INTERACTION);
   endPlayerTurn('rest');
 }
 
@@ -141,9 +142,8 @@ function showGroundCorpseEatPanel(corpses, layer, px, py){
   html += `<div class="dialogue" style="font-style:normal;font-size:10px;">Corpses at your feet:</div>`;
   for (let i = 0; i < corpses.length; i++){
     const it = corpses[i];
-    const nutri = it.nutrition || 0;
     html += `<div class="row">`;
-    html += `<div class="lbl"><b>${it.name}</b><div class="sub">+${nutri} FED · wt ${it.weight||2}</div></div>`;
+    html += `<div class="lbl"><b>${it.name}</b><div class="sub">${(it.mass || 0).toFixed(1)} kg</div></div>`;
     html += `<button class="btn" data-geat="${i}">EAT</button>`;
     html += `</div>`;
   }

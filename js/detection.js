@@ -29,9 +29,6 @@ import { getBodyMap,
 import { currentTimePhase } from './time-cycle.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
-import { stealthDetectChance, rollHit } from './combat.js';
-import { roll100 } from './rng.js';
-import { creatureViewRadius } from './player.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
 import { dist, directionToward, getCreatureMass, getPlayerDiet, WATER_TILES, isWaterTile,
          getNearbyCreatures } from './ai-utils.js';
@@ -473,64 +470,6 @@ function getDetectionRange(creature) {
   return Math.max(chemR, vibGR, vibAR, visR);
 }
 
-// ==================== LEGACY VISION ====================
-
-function monsterViewRadius(mon){
-  if (mon.mods && mon.mods.blindsight != null) return 0;
-  const nightVision = !!(mon.mods && mon.mods.nightVision);
-  return creatureViewRadius(mon.vis, state.player.layer, { nightVision });
-}
-
-function canSeePlayerTile(mon){
-  const d = chebyshev(mon.x, mon.y, state.player.x, state.player.y);
-  if (mon.mods && mon.mods.blindsight != null){
-    return d <= mon.mods.blindsight;
-  }
-  const vr = monsterViewRadius(mon);
-  if (d > vr) return false;
-  return hasLOS(state.player.layer, mon.x, mon.y, state.player.x, state.player.y, mon.vis);
-}
-
-function canSeePlayer(mon){
-  const player = state.player;
-  if (!player || player.hp <= 0) return false;
-
-  const d = chebyshev(mon.x, mon.y, player.x, player.y);
-
-  // Blindsight: vibration sense, unaffected by motion/contrast
-  if (mon.mods && mon.mods.blindsight != null){
-    return d <= mon.mods.blindsight;
-  }
-
-  // Line of sight required
-  if (!hasLOS(player.layer, mon.x, mon.y, player.x, player.y, mon.vis)){
-    return false;
-  }
-
-  // Base view radius
-  const vr = monsterViewRadius(mon);
-  if (d > vr) return false;
-
-  // ── Motion × contrast × concealment (Visual Detection Pass 1) ──
-  const isMoving = _isTargetMoving(player);
-  const motionFactor = isMoving ? 1.0 : MOTION_SIGNAL_STILL;
-  const contrastFactor = _computeContrastFactor(player);
-  const concealment = computeEffectiveConcealment(player);
-  const concealmentFactor = Math.max(0, 1.0 - concealment);
-
-  const effectiveVR = vr * Math.cbrt(motionFactor * contrastFactor * concealmentFactor);
-  if (d > effectiveVR) return false;
-
-  // Legacy stealth check
-  if (player.stealth){
-    if (d > 1){
-      const chance = stealthDetectChance(mon);
-      return roll100() <= chance;
-    }
-  }
-  return true;
-}
-
 // ==================== SNR AND UNCERTAINTY (Prompt P) ====================
 
 /** Estimate target mass from signal — uses chemical emission as primary mass proxy.
@@ -913,13 +852,13 @@ function applySafetyFromDamage(creature, damageAmount, attacker) {
   creature.inCombatThisTurn = true;
   // Compute total max HP from surviving body map zones
   const bodyMap = getBodyMap(creature);
-  let totalMaxHp = creature.hpMax || 1;
+  let totalMaxHp = 1;
   if (bodyMap) {
     totalMaxHp = 0;
     for (const zone of bodyMap) {
       totalMaxHp += zone.maxHp || 0;
     }
-    if (totalMaxHp <= 0) totalMaxHp = creature.hpMax || 1;
+    if (totalMaxHp <= 0) totalMaxHp = 1;
   }
   const hpFraction = damageAmount / totalMaxHp;
   let spike = hpFraction * SAFETY_DAMAGE_COEFF;
@@ -1079,7 +1018,7 @@ function detectCorpses(creature) {
       if (d > MAX_DETECTION_DISTANCE) continue;
 
       // Estimate corpse chemical emission from its mass
-      const corpseMass = item.mass || item.nutrition || 1;
+      const corpseMass = item.mass || 1;
       const corpseEmission = corpseMass * CHEM_MASS_COEFF;
       const range = Math.cbrt(corpseEmission) * bestChemQuality * CHEM_RANGE_COEFF;
 
@@ -1227,8 +1166,6 @@ export {
   _isTargetMoving, _computeContrastFactor,
   // Master detection
   canDetect, getDetectionRange,
-  // Legacy vision
-  monsterViewRadius, canSeePlayerTile, canSeePlayer,
   // SNR and uncertainty
   estimateMassFromSignal, relativeMagnitude, buildDetectionInfo, assessFightOutcome,
   // Detection aggregators
