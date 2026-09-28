@@ -14,8 +14,6 @@ import { updatePlayerFOV } from './fov.js';
 const SPECIES_ORDER = ['prowler', 'ravager', 'grazer', 'shaleback', 'lurker'];
 
 function openCharGen(){
-  document.getElementById('title').style.display = 'none';
-  document.getElementById('chargen-screen').style.display = 'none';
   document.getElementById('species-screen').style.display = 'flex';
   state.selectedSpecies = null;
   state.selectedColorPalette = null;
@@ -140,26 +138,11 @@ function speciesKeyNav(direction) {
   if (selected) selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-// ==================== LEGACY COMPAT ====================
-// These functions are exported so existing call sites don't break.
-// openCharGen now opens species selection directly.
-function renderCharGen(){ renderSpeciesSelect(); }
-function randomizeAttrs(){} // no-op — no stats to randomize
-function openBodyTypeSelect(){ openCharGen(); } // redirect to species select
-function renderBodyTypeSelect(){ renderSpeciesSelect(); }
-
-// ==================== DEATH / VICTORY ====================
-// Canvas-rendered in main.js — these just set state.
-// main.js callbacks handle save deletion and canvas rendering.
+// ==================== DEATH ====================
+// Canvas-rendered in main.js — this just sets state; the main.js callback
+// handles save deletion and drawing.
 function onPlayerDeath(){
   state.gameState = 'death';
-  // DOM element hidden via CSS — canvas overlay rendered by main.js callback
-}
-function onVictory(){
-  state.gameState = 'victory';
-  // DOM element hidden via CSS — canvas overlay rendered by main.js callback
 }
 
-export { openCharGen, renderCharGen, randomizeAttrs, beginGame,
-         openBodyTypeSelect, renderBodyTypeSelect,
-         onPlayerDeath, onVictory, speciesKeyNav };
+export { openCharGen, beginGame, onPlayerDeath, speciesKeyNav };

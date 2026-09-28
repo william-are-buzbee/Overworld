@@ -19,8 +19,6 @@ import { log, LOG_CATEGORIES } from './log.js';
 import { placeItem, generateItemId } from './ground-items.js';
 
 // Forward reference — set by main.js to break circular dep
-let _onVictoryCallback = null;
-export function setOnVictoryCallback(fn){ _onVictoryCallback = fn; }
 
 function monstersHere(){ return monsters[state.player.layer]; }
 
@@ -413,10 +411,6 @@ function killMonster(mon){
   state.player.xp += xp;
   state.player.gold += gold;
   log(`${mon.name} falls.`, LOG_CATEGORIES.COMBAT);
-  if (mon.isBoss){
-    state.player.defeatedBoss = true;
-    setTimeout(() => { if (_onVictoryCallback) _onVictoryCallback(); }, 500);
-  }
   checkLevelUp();
 }
 
