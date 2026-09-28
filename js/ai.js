@@ -7,7 +7,7 @@ import { state } from './state.js';
 import { getBodyMap, getNeuralArchitecture,
          MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, SAFETY_DECAY_RATE, REST_BASE_RATE,
          REST_BLOOD_IMPAIRED, REST_BLOOD_WEAKENED, REST_BLOOD_CRITICAL, REST_WOUND_COEFF,
-         HUNGER_THRESHOLD, STRESS_MAX, STRESS_RELEASE_AMOUNT,
+         HUNGER_THRESHOLD, REST_THRESHOLD, STRESS_MAX, STRESS_RELEASE_AMOUNT,
          OVERRIDE_SCALE, STIMULUS_RESISTANCE, CRITICAL_MAGNITUDE } from './constants.js';
 import { computeIntegrationCapacity, getTier, evaluateReactiveRules,
          processGanglionSystem,
@@ -134,7 +134,13 @@ function _ganglionOutputToAction(output, creature) {
         direction: output.direction,
       };
     }
-    return { behavior: 'hold', magnitude: 0.1 };
+    if (output.type === 'freeze') return { behavior: 'hold', magnitude: 0.1 };
+    // Nothing fired. The locomotion ganglion's normal gait (its
+    // alternating_variable pattern) runs the ambient motor program, the
+    // wander profile, unless the body's rest drive holds it down. Before
+    // this the hare held still, and held-still was scored as resting.
+    if (creature.drives && creature.drives.rest > REST_THRESHOLD) return { behavior: 'rest', magnitude: 0.1 };
+    return { behavior: 'wander', magnitude: 0.1 };
   }
 
   // Locomotion signal present
@@ -247,7 +253,7 @@ function runCreatureAI(creature) {
       reactiveRule: 'GANGLION ' + (ganglionOutput ? ganglionOutput.type : 'null'),
       reactiveBehavior: action.behavior,
       reactiveMagnitude: action.magnitude || 0,
-      overrideProbability: 0,
+      overrideRatio: 0,
       overrideAttempted: false,
       overrideSucceeded: false,
       finalBehavior: action.behavior,
@@ -266,8 +272,8 @@ function runCreatureAI(creature) {
     let overrideSucceeded = false;
     const overrideCapacity = creature.integrationCapacity * OVERRIDE_SCALE;
     const overrideThreshold = reactiveAction.magnitude * STIMULUS_RESISTANCE;
-    const overrideProbability = (reactiveAction.magnitude >= CRITICAL_MAGNITUDE) ? 0
-      : (overrideThreshold > 0 ? Math.min(1, overrideCapacity / overrideThreshold) : 1);
+    const overrideRatio = (reactiveAction.magnitude >= CRITICAL_MAGNITUDE) ? 0
+      : (overrideThreshold > 0 ? overrideCapacity / overrideThreshold : Infinity);
 
     if (canOverrideReactive(creature, reactiveAction.magnitude)) {
       overrideAttempted = true;
@@ -283,7 +289,7 @@ function runCreatureAI(creature) {
       reactiveRule: _ruleLabel(reactiveAction),
       reactiveBehavior: reactiveAction.behavior,
       reactiveMagnitude: reactiveAction.magnitude,
-      overrideProbability: overrideProbability,
+      overrideRatio: overrideRatio,
       overrideAttempted: overrideAttempted,
       overrideSucceeded: overrideSucceeded,
       finalBehavior: action.behavior,

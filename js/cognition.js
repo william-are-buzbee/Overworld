@@ -21,10 +21,10 @@ import { getBodyMap,
          THREAT_CONF_SIZE_LARGER, THREAT_CONF_SIZE_AMBIGUOUS,
          STRESS_NEURAL_SENSITIVITY, STRESS_MAX } from './constants.js';
 import { chebyshev } from './world-state.js';
-import { rand, randi } from './rng.js';
+import { randi } from './rng.js';
 import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
-import { getDominantSenseChannel, getAdjacentPrey } from './detection.js';
+import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey } from './detection.js';
 
 // ==================== COGNITIVE TIER SYSTEM (Prompt M-A1) ====================
 // Integration capacity = total mass of integration-dedicated neural tissue across
@@ -461,6 +461,25 @@ function _computeEffectiveThresholds(neural, stress) {
  * The bolt is fast and crude — direction is estimated from the strongest
  * vibration bearing if available, otherwise random.
  */
+// What the wired threat templates return low-threat for: "light rapid
+// vibration + small visual" activates nothing, and neither does a signal the
+// channels have fully resolved as this creature's own kind. Read by the
+// threat template (it accumulates no confidence from these) and by the bolt
+// reflex (the template suppresses the arc for them, per canSuppress).
+// How heavy a signal reads against this body: 0 at its own mass or below,
+// 1 at three times its mass and beyond. An unsized signal counts in full.
+function _massWeight(det, selfMass) {
+  const est = det.sizeEstimate && det.sizeEstimate.estimated;
+  if (!est || !(selfMass > 0)) return 1;
+  return Math.max(0, Math.min(1, (est / selfMass - 1) / 2));
+}
+
+function _isLowThreat(det, ownSpecies) {
+  if (det.sizeRelative === 'smaller' || det.sizeRelative === 'much_smaller' || det.sizeRelative === 'similar') return true;
+  if (det.species && det.speciesConfidence >= 1.0 && det.species === ownSpecies) return true;
+  return false;
+}
+
 function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
   // Find the bolt reflex structures
   const boltStructures = neural.structures.filter(s =>
@@ -472,6 +491,7 @@ function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
   // Bolt fires on raw signal magnitude, not template confidence
   let strongestMagnitude = 0;
   let strongestSource = null;
+  let strongestDet = null;
 
   for (const det of detectionInfo) {
     // Check vibration channels specifically (bolt is vibration-triggered)
@@ -482,6 +502,7 @@ function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
       if (magnitude > strongestMagnitude) {
         strongestMagnitude = magnitude;
         strongestSource = det.entity;
+        strongestDet = det;
       }
     }
     // No other channel reaches this arc. The reflex structure is wired to
@@ -490,6 +511,15 @@ function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
   }
 
   if (strongestMagnitude < thresholds.bolt) return null;
+
+  // The threat-classification region can suppress the fore-limb reflex arcs
+  // (CREATURE_NEURAL.hare canSuppress): when its templates return low-threat
+  // for the source of the spike, the arc does not fire. Without this every
+  // hare bolted from every other hare's footfalls.
+  const threatRegion = neural.structures.find(s => s.templates === 'threat');
+  const suppressible = threatRegion && Array.isArray(threatRegion.canSuppress) &&
+    boltStructures.every(b => threatRegion.canSuppress.includes(b.id + '.reflexArcs'));
+  if (suppressible && strongestDet && _isLowThreat(strongestDet, getSpeciesKey(creature))) return null;
 
   // Bolt fires. Direction: crude bearing away from source, or random if unknown
   let direction = null;
@@ -532,12 +562,27 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
   let threatSource = null;
   let threatBearing = null;
 
+  const ownSpecies = getSpeciesKey(creature);
+  const selfMass = getCreatureMass(creature);
   for (const det of detectionInfo) {
-    // Skip things we know are small/harmless
-    if (det.sizeRelative === 'smaller' || det.sizeRelative === 'much_smaller') continue;
+    // The wired templates (CREATURE_NEURAL.hare threat_classification) are
+    // "heavy rhythmic vibration + large moving visual" and "heavy single
+    // impact"; "light rapid vibration + small visual" returns low-threat and
+    // activates nothing. So anything smaller than or about the size of this
+    // body does not reach the template, and neither does something the
+    // channels have resolved as its own kind (a hare beside a hare). Before
+    // this any adjacent creature at high SNR froze a hare, hares included.
+    if (_isLowThreat(det, ownSpecies)) continue;
 
-    // Accumulate confidence from each available channel
+    // Accumulate confidence from each available channel. The templates are
+    // "heavy rhythmic vibration" and "large moving visual": a channel's
+    // confidence is its SNR scaled by how heavy the signal reads against this
+    // body (the size estimate the channel produced). A footfall that reads
+    // hare-sized contributes nothing to a hare; one that reads four times its
+    // mass contributes in full. Before this any vibration at all was worth
+    // the channel cap, so a hare three tiles from another hare froze.
     let confidence = 0;
+    const heavy = _massWeight(det, selfMass);
 
     // Vibration contribution
     // FIRST PASS — transducer output scaled by fixed normalization constant,
@@ -545,13 +590,13 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
     // curves, adaptation, and channel-specific scaling.
     if (det.vibrationSNR && det.vibrationSNR > 0) {
       const vibConf = Math.min(det.vibrationSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
-      confidence += vibConf;
+      confidence += vibConf * heavy;
     }
 
     // Visual contribution
     if (det.visualSNR && det.visualSNR > 0) {
       const visConf = Math.min(det.visualSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
-      confidence += visConf;
+      confidence += visConf * heavy;
     }
 
     // Size contribution — larger things relative to self are more threatening
@@ -591,6 +636,13 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
 function _matchFoodTemplates(creature, neural, detectionInfo) {
   const foodRegion = neural.structures.find(s => s.templates === 'food_visual');
   if (!foodRegion) return null;
+
+  // The food-identification region only drives the locomotion ganglion when
+  // the body is hungry: its gain rides on the hunger chemistry. PLACEHOLDER
+  // for the hormonal gain in Endocrine-Design; the hunger drive is the
+  // signal for now. A fed hare on grass used to approach food, arrive, and
+  // hold there for good (resting, at triple healing) instead of moving on.
+  if (!creature.drives || creature.drives.hunger <= HUNGER_THRESHOLD) return null;
 
   // Check for food tiles visible from current position
   // This reads from the existing food-detection system
@@ -709,16 +761,16 @@ function canOverrideReactive(creature, reactiveMagnitude) {
   const threshold = reactiveMagnitude * STIMULUS_RESISTANCE;
   if (threshold <= 0) return true;
 
-  // Probabilistic override: ratio of capacity to threshold = probability of success.
-  // This models the signal race: higher integration = faster suppression signal,
-  // but even low-integration creatures occasionally manage it for weaker stimuli.
-  const ratio = overrideCapacity / threshold;
-  if (ratio >= 1.0) return true;
-  if (ratio <= 0) return false;
-  return rand() < ratio;
+  // Deterministic, as Cognition-Design writes it: the suppression signal
+  // either completes its round trip before the reactive output executes or
+  // it does not. (It was rand() < capacity/threshold, so a wolf beside a
+  // much larger predator had a 75% chance to talk itself out of fleeing.)
+  return overrideCapacity > threshold;
 }
 
-/** Run deliberative evaluation when override succeeds. */
+/** Run deliberative evaluation when override succeeds. Returns null when
+ *  deliberation has nothing to add and the reactive recommendation stands;
+ *  it never invents a wander. */
 function deliberativeEvaluation(creature) {
   // Compare drive urgencies (existing drive comparison)
   const dominant = getDominantDrive(creature);
@@ -737,7 +789,7 @@ function deliberativeEvaluation(creature) {
           return { behavior: 'wander', fromDeliberate: true };
         }
       }
-      return { behavior: 'flee', fromDeliberate: true };
+      return null;   // nothing to add: the reactive layer's flee stands
     }
     case 'hunger': {
       if (creature.diet === 'predator') {
@@ -770,8 +822,7 @@ function deliberativeEvaluation(creature) {
             return { behavior: 'hunt_chase', target: prey.target, fromDeliberate: true };
           }
         }
-        // No viable prey — wander
-        return { behavior: 'wander', fromDeliberate: true };
+        return null;   // no viable prey: nothing to add
       } else {
         // Deliberative foraging: seek food at range
         if (tileIsFood(creature.x, creature.y)) {
@@ -784,13 +835,13 @@ function deliberativeEvaluation(creature) {
             return { behavior: 'approach_food_tile', target: nearestFood, fromDeliberate: true };
           }
         }
-        return { behavior: 'wander', fromDeliberate: true };
+        return null;   // no food in reach: nothing to add
       }
     }
     case 'rest':
       return { behavior: 'rest', fromDeliberate: true };
     default:
-      return { behavior: 'wander', fromDeliberate: true };
+      return null;
   }
 }
 

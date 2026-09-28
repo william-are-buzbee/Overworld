@@ -303,6 +303,18 @@ For game design: a zone with small neural mass but high integration allocation a
 - Goal persistence scaled by integration
 - Critical override for extreme stimuli (unoverridable regardless of integration)
 
+*Status (Sep 2026, audit Phase 4):* the override is deterministic as written above (`canOverrideReactive`:
+overrideCapacity > reactiveMagnitude × STIMULUS_RESISTANCE, no dice), and `deliberativeEvaluation` returns null when it has
+nothing to add, so the reactive recommendation stands rather than being replaced by a wander. In the hare's ganglion
+slice: the food-identification region only drives the locomotion ganglion when the hunger drive is above threshold (a
+placeholder for the hormonal gain in Endocrine-Design); the threat template's channel confidence is scaled by how heavy
+the signal reads against the body (nothing at its own mass, full at three times it), it does not activate on anything
+smaller than or about the size of the body nor on something the channels have resolved as its own species, and the
+threat region suppresses the fore-limb bolt arcs for such sources as its `canSuppress` wiring says; when nothing fires the
+locomotion ganglion's normal gait runs the wander profile (or rest when the rest drive holds it down). Whether
+`_ganglionOutputToAction` in ai.js stays a shim onto the behaviour labels or becomes the seam for the motor layer is the
+open question (audit §6 Q4).
+
 **Designed, not yet implemented:**
 - Layer 2 signal compression and transmission timing (replaces override approximation with actual signal race)
 - Hormonal propagation delay (HORMONE_DELAY for open circulation)
