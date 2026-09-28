@@ -152,7 +152,8 @@ function getMovementIntensity(creature) {
   if (creature._lastGanglionIntensity != null) return creature._lastGanglionIntensity;
   const behavior = creature.currentBehavior;
   if (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt') return 1.0;
-  if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance') return WALK_INTENSITY;
+  if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance' ||
+      behavior === 'track' || behavior === 'follow_trail') return WALK_INTENSITY;
   return 0;
 }
 

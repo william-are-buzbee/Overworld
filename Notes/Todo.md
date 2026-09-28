@@ -158,7 +158,8 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] 4. Motion as velocity: angular and looming components per observer, looming into the threat template; self-noise (own footfalls raise own vibration floor). Own speed blurring own eyes deferred: needs background optic flow
 - [x] 5. Percept plumbing: every AI consumer reads a percept (perceived position, size, identity), not the entity; percept = truth at first; the display draws from percepts
 - [x] 6. Received-signal inference: size-distance confound per channel (resolved by the signal's structure as SNR rises, own body as the yardstick below it), binocular parallax as a distance cue, bearing resolution per channel; percepts and display at the perceived tile; strikes at a misplaced percept hit air
-- [ ] 6b. NPC smell read from the wind-driven scent field (molecular classes → diet and kind, concentration → confounded size and distance, upwind → bearing), with the "NPC scent tracking AI" item. Split from 6: it is a behaviour system of its own
+- [x] 6b-1. NPCs read ground trails: per-step deposits, nose-down reading of the tiles around, hungry predators follow the freshest herbivore trail; the hare's threat region matches intense meat-eater volatiles underfoot to fear
+- [ ] 6b-2. Airborne plumes replace the per-animal smell sphere: anonymous plume percepts, wind bearing from air-flow transducers, surge upwind / cast across the wind, odour bound to a seen animal only by integration tissue; calibrate plume reach first (Chemical-Scent-System-Design, decided)
 - [ ] 7. Identification by body-map features against wired templates; display and examine show the perceived species
 - [ ] 8. Persistence held in tissue: evidence summation and last-known position, scaled by integration mass
 - [ ] 9. Head facing separate from heading (orienting response)
@@ -168,7 +169,7 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
 - [ ] Second-pass over bleed/metabolism/healing
 - [ ] Fourth-pass over cognition/ganglia (actual pattern libraries/memory)
-- [ ] NPC scent tracking AI (plume following, trail following, search patterns)
+- [ ] NPC scent tracking AI (plume following, trail following, search patterns) — trail following done (perception 6b-1); plumes are 6b-2
 - [ ] Vibration ambient grounding (substrate-aware propagation)
 - [x] NPC vision update (per-eye body map computation) — cone test derives from body-map eyes; range still max-acuity
 - [ ] Creature 5 (colonial chemotroph) redesign

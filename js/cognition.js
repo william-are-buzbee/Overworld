@@ -20,13 +20,15 @@ import { getBodyMap,
          THREAT_CONF_CHANNEL_CAP, THREAT_CONF_SIZE_MUCH_LARGER,
          THREAT_CONF_SIZE_LARGER, THREAT_CONF_SIZE_AMBIGUOUS,
          STRESS_NEURAL_SENSITIVITY, STRESS_MAX,
-         LOOM_WINDOW_ACTIONS, REFERENCE_SPEED, BASE_TICKS_PER_ACTION } from './constants.js';
+         LOOM_WINDOW_ACTIONS, REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
+         GROUND_EMISSION_BASE } from './constants.js';
 import { getBodyPTW } from './physiology.js';
 import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
 import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
-import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition } from './detection.js';
+import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition,
+         readPreyTrailStep, meatEaterUnderfoot } from './detection.js';
 
 // ==================== COGNITIVE TIER SYSTEM (Prompt M-A1) ====================
 // Integration capacity = total mass of integration-dedicated neural tissue across
@@ -355,6 +357,19 @@ function evaluateReactiveRules(creature) {
     const nearFood = findNearestFoodTile(creature.x, creature.y);
     if (nearFood && dist(creature.x, creature.y, nearFood.x, nearFood.y) <= 3) {
       return { behavior: 'approach_food_tile', magnitude: 0.2, target: nearFood };
+    }
+  }
+
+  // RULE 6B — PREY TRAIL
+  // A hungry predator whose nose, put to the ground, reads plant-digestion
+  // volatiles on the tiles around it steps toward the freshest of them: it
+  // follows the trail the way the animal went (detection.js
+  // readPreyTrailStep). The trail names no animal; a grazer too big to take
+  // leaves one too, and is found at the end of it.
+  if (diet === 'predator' && cc.canFight && hungry) {
+    const step = readPreyTrailStep(creature);
+    if (step != null) {
+      return { behavior: 'follow_trail', magnitude: 0.15, direction: step };
     }
   }
 
@@ -700,6 +715,23 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
       threatBearing = det.entity ?
         directionAwayFrom(creature.x, creature.y, det.x, det.y) : null;
     }
+  }
+
+  // Meat-eater volatiles underfoot: the graze limbs' contact chemistry is
+  // wired to this region (their ganglia forward to it). Operationally a
+  // pattern match of intense meat-eater metabolism to fear, whatever put it
+  // there: a fresh trail, or a predator right beside it that the other
+  // senses missed. Read against what its own body leaves on the ground each
+  // step, as footfalls are read against its own weight: nothing at its own
+  // level, the channel cap at three times it. It names no source and gives
+  // no bearing: on its own it can alert or freeze, not aim a flight; with a
+  // detected source it adds to that source's confidence.
+  const contactInputs = inputs.filter(i => i.split('.')[1] === 'chemical' && i.endsWith('.contact'));
+  const meat = meatEaterUnderfoot(creature, contactInputs);
+  if (meat > 0) {
+    const ownDeposit = selfMass * GROUND_EMISSION_BASE;
+    const chemConf = THREAT_CONF_CHANNEL_CAP * Math.max(0, Math.min(1, (meat / ownDeposit - 1) / 2));
+    highestConfidence += chemConf;
   }
 
   if (highestConfidence <= 0) return null;

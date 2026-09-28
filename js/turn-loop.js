@@ -24,7 +24,7 @@ import { saveGame } from './save-load.js';
 import { rand } from './rng.js';
 import { updatePlayerFOV, updateAmbientSensing } from './fov.js';
 import { computeSignals } from './signals.js';
-import { updateScentSystem } from './scent.js';
+import { updateScentSystem, depositGroundScent } from './scent.js';
 import { getBodyPTW, processBleed, applyHealing,
          _getCirculatoryRegenEfficiency, _regenerateSubstrate,
          _clearStressChemistry,
@@ -547,6 +547,7 @@ function endPlayerTurn(action){
         if (m.movedThisTurn) movedAnyAction = true;
         _recordStep(m, x0, y0, m.movedThisTurn
           ? getBodyPTW(m, getMovementIntensity(m)) * creatureAccelScalar : 0);
+        depositGroundScent(m);   // feet on this tile: the trail is laid step by step
 
         if (state.player.hp <= 0){ _onPlayerDeathCallback && _onPlayerDeathCallback(); return; }
         if (m.hp <= 0) break;  // creature died during its action
