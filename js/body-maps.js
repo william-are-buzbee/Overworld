@@ -970,6 +970,8 @@ export const CREATURE_NEURAL = {
       //   heavy_rhythmic_vibration + large_moving_visual → high-confidence predator → flee
       //   heavy_single_impact + no_visual → ambiguous → moderate alert
       //   light_rapid_vibration + small_visual → low-threat → no motor activation
+      //   large_looming_visual (contact within a few of its own actions) → threat,
+      //     from a looming circuit on the head's eyes (cognition.js)
       // Can suppress fore-limb bolt reflexes when template returns low-threat.
       {
         id: 'threat_classification',

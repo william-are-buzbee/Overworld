@@ -19,7 +19,9 @@ import { getBodyMap,
          CONFIDENCE_NORMALIZATION,
          THREAT_CONF_CHANNEL_CAP, THREAT_CONF_SIZE_MUCH_LARGER,
          THREAT_CONF_SIZE_LARGER, THREAT_CONF_SIZE_AMBIGUOUS,
-         STRESS_NEURAL_SENSITIVITY, STRESS_MAX } from './constants.js';
+         STRESS_NEURAL_SENSITIVITY, STRESS_MAX,
+         LOOM_WINDOW_ACTIONS, REFERENCE_SPEED, BASE_TICKS_PER_ACTION } from './constants.js';
+import { getBodyPTW } from './physiology.js';
 import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
 import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
@@ -58,7 +60,9 @@ function getTier(integrationCapacity) {
 /** Does movement compromise the creature's dominant sense? */
 function movementCompromisesSense(creature) {
   const dominant = getDominantSenseChannel(creature);
-  // Ground vibration: own footsteps create noise in the listening channel AND emit detectable signal
+  // Ground vibration: own footsteps raise the listening channel's noise floor
+  // (detection.js detectTargetPerZone, SELF_FOOTFALL_DISTANCE) AND emit
+  // detectable signal
   return dominant.type === 'groundVibration';
 }
 
@@ -657,6 +661,19 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
     if (visSNR > 0) {
       const visConf = Math.min(visSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
       confidence += visConf * heavy;
+    }
+
+    // Looming: the wired looming circuit on the head's eyes fires as a seen
+    // body closes on this one, harder the sooner contact would come (in the
+    // hare's own actions: the time it has to get out of the way), full at
+    // contact and nothing beyond LOOM_WINDOW_ACTIONS. Something walking
+    // straight in is barely moving across the view (little change detection)
+    // but it looms.
+    if (visSNR > 0 && det.closingSpeed > 0) {
+      const ownActionsPerTick = getBodyPTW(creature, null) / (REFERENCE_SPEED * BASE_TICKS_PER_ACTION);
+      const contactActions = (det.distance / det.closingSpeed) * ownActionsPerTick;
+      const loom = Math.max(0, 1 - contactActions / LOOM_WINDOW_ACTIONS);
+      confidence += THREAT_CONF_CHANNEL_CAP * loom * heavy;
     }
 
     // Size contribution — larger things relative to self are more threatening

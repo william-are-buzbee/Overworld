@@ -21,6 +21,8 @@ import { getBodyMap,
          selectHitZone,
          MOTION_CONCEALMENT_REDUCTION, BODY_PLAN_HEIGHT_COEFF,
          OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS,
+         MOTION_ANCHOR_SPEED, MOTION_RADIAL_WEIGHT, SELF_FOOTFALL_DISTANCE,
+         REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          // Visual Detection Pass 1 — motion and contrast
          MOTION_SIGNAL_MOVING, MOTION_SIGNAL_STILL,
          CONTRAST_FLOOR, BRIGHTNESS_CONTRAST_WEIGHT, HUE_MISMATCH_PENALTY,
@@ -108,6 +110,18 @@ function detectTargetPerZone(observer, target) {
 
   const detections = [];
 
+  // Own footfalls in the listening channel: the observer's last steps reach
+  // its own ground transducers as a neighbour's would from
+  // SELF_FOOTFALL_DISTANCE, and add to the noise floor the target's signal
+  // has to clear. Received signal goes as emission / d³ (the range law below:
+  // range = cbrt(emission) × quality × coeff means the floor is
+  // 1 / (quality × coeff)³), so the floor becomes floor + own / r³. A still
+  // body listens at full range; a walking one is nearly deaf through the
+  // ground. This is why animals stop to listen.
+  const ownFootfalls = observer.signals && observer.signals.vibration
+    ? (observer.signals.vibration.ground || 0) : 0;
+  const selfNoise = ownFootfalls / (SELF_FOOTFALL_DISTANCE * SELF_FOOTFALL_DISTANCE * SELF_FOOTFALL_DISTANCE);
+
   for (const zone of bodyMap) {
     if (zone.destroyed) continue;
 
@@ -116,7 +130,10 @@ function detectTargetPerZone(observer, target) {
       if (emission <= 0) continue;
 
       const coeff = _CHANNEL_COEFF[channel];
-      const zoneRange = Math.cbrt(emission) * quality * coeff;
+      const k = quality * coeff;
+      const zoneRange = (channel === 'vibrationGround' && selfNoise > 0)
+        ? Math.cbrt(emission / (1 / (k * k * k) + selfNoise))
+        : Math.cbrt(emission) * k;
       if (d <= zoneRange) {
         const snr = d > 0 ? zoneRange / d : zoneRange * 10; // adjacent = very high SNR
         detections.push({ zone, channel, quality, snr });
@@ -236,6 +253,45 @@ function _isTargetMoving(target) {
   return false;
 }
 
+// ── Motion as velocity (perception pass 4) ──
+// A body's velocity over its last action, in tiles per world tick: the step
+// it took (turn-loop.js records it) times its speed, which is its
+// force-to-weight at that gait times its acceleration: the same number that
+// sets how many actions it gets per unit of world time. A tile per action at
+// REFERENCE_SPEED takes BASE_TICKS_PER_ACTION ticks, so tiles per tick is
+// speed / (REFERENCE_SPEED × BASE_TICKS_PER_ACTION). A diagonal step covers
+// √2 tiles in the same time.
+function _velocity(target) {
+  if (!_isTargetMoving(target) || !target._step || !(target._speed > 0)) return null;
+  const s = target._speed / (REFERENCE_SPEED * BASE_TICKS_PER_ACTION);
+  return { vx: target._step.dx * s, vy: target._step.dy * s };
+}
+
+/** A target's velocity as this observer sees it: across the line of sight
+ *  (the eye's angular motion) and closing along it (positive = approaching),
+ *  both in tiles per world tick. Null if the target did not move. */
+function _motionRelativeTo(detector, target) {
+  const v = _velocity(target);
+  if (!v) return null;
+  const dx = target.x - detector.x, dy = target.y - detector.y;
+  const d = Math.hypot(dx, dy);
+  if (d === 0) return { across: Math.hypot(v.vx, v.vy), closing: 0 };
+  const ux = dx / d, uy = dy / d;
+  return { across: Math.abs(v.vx * uy - v.vy * ux), closing: -(v.vx * ux + v.vy * uy) };
+}
+
+/** How strongly this eye's change detection and pattern recognition together
+ *  pick the target out (sensory-constants.js, "Motion as velocity"). A body
+ *  that moved without a recorded step (should not happen) reads as a walker
+ *  crossing the view, the old binary value. */
+function _motionFactor(detector, target) {
+  if (!_isTargetMoving(target)) return MOTION_SIGNAL_STILL;
+  const m = _motionRelativeTo(detector, target);
+  if (!m) return MOTION_SIGNAL_MOVING;
+  return MOTION_SIGNAL_STILL + (MOTION_SIGNAL_MOVING - MOTION_SIGNAL_STILL) *
+         (m.across + MOTION_RADIAL_WEIGHT * Math.abs(m.closing)) / MOTION_ANCHOR_SPEED;
+}
+
 /**
  * Compute background contrast factor for a target on its current tile.
  * Returns a multiplier: ~0.1 (perfect match) to ~1.0+ (maximum contrast).
@@ -272,7 +328,8 @@ function _computeContrastFactor(target) {
 // that falls linearly. So the range is linear in everything that sets how
 // big and how distinct the silhouette is: its linear dimension (the cube
 // root of mass, signals.js), motion (the eye's change detection fires at a
-// far lower contrast than its pattern recognition), and contrast against the
+// far lower contrast than its pattern recognition, and harder the faster the
+// target moves across the view: _motionFactor), and contrast against the
 // tile. Light enters as the square root: the eye's contrast threshold rises
 // as photon noise does, with the root of the luminance. The old form took
 // the cube root of the whole product, the law for smell and footfalls, and
@@ -283,7 +340,7 @@ function getVisualRange(detector, target) {
   const sensitivity = getEffectiveVisual(detector);
   const light = getLightLevel(state.player.layer);   // every active creature is on the player's layer
   if (size <= 0 || sensitivity <= 0 || light <= 0) return 0;
-  const motion = _isTargetMoving(target) ? MOTION_SIGNAL_MOVING : MOTION_SIGNAL_STILL;
+  const motion = _motionFactor(detector, target);
   const contrast = _computeContrastFactor(target);
   return size * motion * contrast * Math.sqrt(light) * sensitivity * VIS_RANGE_COEFF;
 }
@@ -415,7 +472,8 @@ function hasLineOfSight(detector, target) {
 // tracked threat, for NPCs), then the cover on the target's tile, which
 // shrinks the effective range by the fraction of the body it hides
 // (Visual-Occlusion-Design: the visible silhouette is what is left). Returns
-// a detection entry { zone, channel: 'visual', quality, snr, moving } or null:
+// a detection entry { zone, channel: 'visual', quality, snr, moving, closing }
+// or null (closing: how fast it approaches, tiles per world tick):
 // zone is the eye zone credited with the sighting, moving whether the eye's
 // change detection fired (the motion factor in the range) or only its
 // pattern recognition did.
@@ -448,8 +506,9 @@ function _visualDetection(detector, target) {
   const effectiveVisRange = concealment > 0 ? visRange * (1.0 - concealment) : visRange;
   if (d > effectiveVisRange) return null;
   const snr = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
+  const rel = _motionRelativeTo(detector, target);
   return { zone: _bestEyeZone(detector), channel: 'visual', quality: getEffectiveVisual(detector), snr,
-           moving: _isTargetMoving(target) };
+           moving: _isTargetMoving(target), closing: rel ? rel.closing : 0 };
 }
 
 // ==================== MASTER DETECTION (Prompt P) ====================
@@ -593,6 +652,10 @@ function buildDetectionInfo(observer, target, detections) {
     // detection; a sighting by pattern recognition alone reads as still
     isMoving: null,
 
+    // How fast a seen body closes on the observer (tiles per world tick,
+    // positive = approaching); only the eyes resolve it
+    closingSpeed: 0,
+
     // Best SNR per zone and channel, keyed as the neural wiring names its
     // inputs ('fore_l.vibration.ground', 'head.visual'), so a ganglion reads
     // only the transducers it is wired to
@@ -640,6 +703,7 @@ function buildDetectionInfo(observer, target, detections) {
       info.isMoving = true;
     }
     if (det.channel === 'visual' && det.moving) info.isMoving = true;
+    if (det.channel === 'visual' && det.closing > info.closingSpeed) info.closingSpeed = det.closing;
 
     if (det.zone) {
       const key = `${det.zone.key}.${_WIRING_PATH[det.channel]}`;

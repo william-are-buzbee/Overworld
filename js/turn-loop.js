@@ -351,6 +351,15 @@ function endPlayerTurn(action){
   state.player.currentBehavior = action === 'rest' ? 'rest' : action;
   applyHealing(state.player);
 
+  // The step the player just took and how fast, for other eyes (detection.js
+  // _velocity). Measured against where the last turn ended.
+  if (state.player._lastPos && state.player._lastPos.layer === state.player.layer) {
+    _recordStep(state.player, state.player._lastPos.x, state.player._lastPos.y,
+                state.player.movedThisTurn ? playerAPRate : 0);
+  } else {
+    state.player._step = null; state.player._speed = 0;
+  }
+
   // ── Player signal emission (Prompt L-A) ──
   // Update water state and compute player signals before NPC turns,
   // so NPCs see current player emission values.
@@ -533,8 +542,11 @@ function endPlayerTurn(action){
         m._ganglionTriggeredStress = false;
 
         // Run the creature's full AI cycle
+        const x0 = m.x, y0 = m.y;
         runCreatureAI(m);
         if (m.movedThisTurn) movedAnyAction = true;
+        _recordStep(m, x0, y0, m.movedThisTurn
+          ? getBodyPTW(m, getMovementIntensity(m)) * creatureAccelScalar : 0);
 
         if (state.player.hp <= 0){ _onPlayerDeathCallback && _onPlayerDeathCallback(); return; }
         if (m.hp <= 0) break;  // creature died during its action
@@ -575,7 +587,22 @@ function endPlayerTurn(action){
   for (const m of monstersHere()) if (m.hitFlash > 0) m.hitFlash--;
   render();
   state.player.movedThisTurn = false;  // set again by the next move action
+  state.player._lastPos = { x: state.player.x, y: state.player.y, layer: state.player.layer };
   saveGame().catch(err => console.error('[Save] Auto-save failed:', err));  // Async fire-and-forget
+}
+
+// A body's last step and the speed it was taken at (force-to-weight at the
+// gait × acceleration: the rate the action economy runs it at). What another
+// eye's change detection sees (detection.js _velocity). A still action records
+// speed 0; a step of more than one tile (a stair, a knock) is not a step.
+function _recordStep(entity, x0, y0, speed) {
+  const dx = entity.x - x0, dy = entity.y - y0;
+  if (speed > 0 && (dx || dy) && Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+    entity._step = { dx, dy };
+    entity._speed = speed;
+  } else {
+    entity._speed = 0;
+  }
 }
 
 // ==================== EXPORTS ====================
