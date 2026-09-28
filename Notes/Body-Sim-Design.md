@@ -706,7 +706,7 @@ When implementing, include:
 - This document
 - `combat.js` (hit/damage resolution)
 - `monsters.js` (creature definitions and body map templates)
-- `enemy-ai.js` (behavior reading body sim outputs)
+- `ai.js`, `behaviors.js` (behavior reading body sim outputs)
 - `state.js` (creature state storage)
 - `player.js` (player body map)
 - `constants.js` (tuning values — HP_PER_KG, MUSCLE_FORCE_COEFF, MOMENTUM_COEFF, COORDINATION_MULT, REFLEX_NEURAL_THRESHOLD, NEURAL_DEATH_THRESHOLD, TARGETED_ATTACK_THRESHOLD, ARMOR_PER_STRUCTURAL_KG, DODGE_REFERENCE_MASS, STEALTH_REFERENCE_MASS, etc.)

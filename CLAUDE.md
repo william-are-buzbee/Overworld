@@ -20,7 +20,7 @@ shared mutable state every module imports. Each file's first lines say what it o
 |---|---|
 | entry, state, turns | main.js, state.js, turn-loop.js, save-load.js (IndexedDB, saved every turn), rng.js (seeded) |
 | the body | body-maps.js (body maps, species templates, neural architecture), physiology.js, monsters.js (species records, spawning, personalities) |
-| senses and minds | detection.js, signals.js, scent.js, sensory-constants.js, fov.js, cognition.js, ai.js, ai-utils.js, behaviors.js, enemy-ai.js |
+| senses and minds | detection.js, signals.js, scent.js, sensory-constants.js, fov.js, cognition.js, ai.js, ai-utils.js, behaviors.js |
 | combat | combat.js, combat-constants.js |
 | the world | world-gen.js (coordination), surface-gen.js, underground-gen.js, terrain.js, ecology-data.js, gen-utils.js, world-logic.js, world-state.js, time-cycle.js |
 | player | player.js, player-actions.js, chargen.js (species selection), ground-items.js (corpses on the ground), interactions.js (the help screen) |

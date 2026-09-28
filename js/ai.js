@@ -12,12 +12,12 @@ import { getBodyMap, getNeuralArchitecture,
 import { computeIntegrationCapacity, getTier, evaluateReactiveRules,
          processGanglionSystem,
          canOverrideReactive, deliberativeEvaluation, updateGoalPersistence,
-         _ruleLabel, getDominantDrive, combatCapability } from './cognition.js';
+         _ruleLabel, getDominantDrive } from './cognition.js';
 import { buildAllDetectionInfo, detectThreats, applySafetyFromThreats,
          detectPrey, detectCorpses } from './detection.js';
 import { executeAction, adjacencyCombatCheck, monsterMelee, executeWander,
          executeFlee } from './behaviors.js';
-import { isWaterTile, canMoveTo, getCorpseAt } from './ai-utils.js';
+import { isWaterTile, canMoveTo, getCorpseAt, combatCapability } from './ai-utils.js';
 import { computeSignals } from './signals.js';
 import { _depleteLocomotionSubstrate, _releaseStressChemistry } from './physiology.js';
 
