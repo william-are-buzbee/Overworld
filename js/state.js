@@ -1,4 +1,5 @@
 // ==================== SHARED MUTABLE STATE ====================
+import { DAWN_TICKS } from './constants.js';
 // Every module that needs to read or write game state imports from here.
 // This avoids circular dependencies and keeps mutation centralized.
 
@@ -10,8 +11,9 @@ export const state = {
 
   // ---- Day/night cycle ----
   // Global tick counter — incremented every player action.
-  // Persists across layer transitions. A full cycle is 200 ticks.
-  worldTick: 0,
+  // Persists across layer transitions. A full cycle is DAY_CYCLE_TICKS.
+  // A run starts at sunrise (tick 0 is the start of dawn, light 0.1).
+  worldTick: DAWN_TICKS,
 
   // ---- Look mode ----
   // When true the game waits for a direction key to examine a tile.
@@ -72,7 +74,7 @@ export const state = {
  */
 export function resetRunState() {
   state.turnCount = 0;
-  state.worldTick = 0;
+  state.worldTick = DAWN_TICKS;
   state.lookMode = false;
   state.facing = { dx: 0, dy: 1 };
   state.exploredCells = new Set();

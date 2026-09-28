@@ -10,14 +10,14 @@
 //   Night : 25%
 
 import { state } from './state.js';
-import { DAY_CYCLE_TICKS, LAYER_META, LAYER_SURFACE } from './constants.js';
+import { DAY_CYCLE_TICKS, DAWN_TICKS, LAYER_META, LAYER_SURFACE } from './constants.js';
 
 export const CYCLE_LENGTH = DAY_CYCLE_TICKS;
 
 // Phase lengths derived from CYCLE_LENGTH so they stay proportional if the
 // constant changes.  Rounding uses floor to avoid overlaps; any remainder
 // ticks are absorbed into the final phase (night).
-const _dawnLen  = Math.floor(CYCLE_LENGTH * 0.15);
+const _dawnLen  = DAWN_TICKS;
 const _dayLen   = Math.floor(CYCLE_LENGTH * 0.45);
 const _duskLen  = Math.floor(CYCLE_LENGTH * 0.15);
 const _nightLen = CYCLE_LENGTH - _dawnLen - _dayLen - _duskLen;  // absorbs rounding remainder
