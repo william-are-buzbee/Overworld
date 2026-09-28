@@ -48,6 +48,8 @@ This invents a persistence mechanism on neural tissue that doesn't have one. Sim
 
 If a behavior persists after the stimulus is gone, find the physical mechanism. Stress hormones? Sustained sensory detection through a different channel? The creature is still close enough to detect through low-SNR channels? Don't bolt a decay timer onto neural tissue.
 
+**Persistence needs tissue that can hold it.** Neural tissue can hold a representation — short-term memory is exactly that: sustained activity in integration or memory tissue. What is wrong is persistence on tissue that has no capacity for it. A simple ganglion holds nothing: it fires while stimulated and stops. An integration workspace or episodic-memory allocation can hold a last-known position or a building suspicion for as long as its mass allows, and loses it when that zone is destroyed. So the question is never "may this persist?" but "which zone's tissue holds it, and how much of it is there?"
+
 ### "Named programs selected from a vocabulary"
 
 Wrong framing: "The creature selects the 'burst_sprint' motor program from its available programs."

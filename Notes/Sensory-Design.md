@@ -230,7 +230,9 @@ reference is still its own walk, so a bolting hare reads to another hare as some
 freeze and run more when other hares run. Cadence, which would tell a light fast gait from a heavy slow one, is the
 gait-signature work under Future.
 
-**Movement state — vibration channel only, resolves quickly:**
+**Movement state — vibration, and the eye's change detection:**
+
+*Status (Sep 2026, perception pass 1):* vision sets `isMoving` too. A visual detection records whether it came through the eye's change detection (the target moved: the ×3.5 motion factor) or pattern recognition alone; the first sets `isMoving = true`, and a target seen but not felt, with only pattern recognition firing, reads as still (`isMoving = false`). Before, a creature seen walking but not felt had `isMoving = null`, and reactive Rule 3's "moving or predator" branch ignored what the eyes saw. Visible wounds come from the eyes only (visual SNR above `CONDITION_CONF_MIN`), not from a nose or a footfall. The species label is the key a creature knows itself by (`getSpeciesKey`), so a prowler-bodied player and a wolf identify as kin. Prey choice goes through perception: `isViablePrey(predator, info)` reads the size estimate and rules a target out as kin only once the channels have identified it as such, and `getAdjacentPrey` picks among this action's detections; both used to read the target's true mass and species, and an adjacent animal the senses missed could still be attacked.
 
 Ground vibration emission is zero for still creatures and nonzero for moving creatures. If a zone detected something through ground vibration, the target was moving — this is inherent in the physics, not a threshold. The movement information is binary and comes for free from the channel itself.
 
@@ -454,6 +456,8 @@ An apex predator's head (quality 3) should be slightly better — roughly 4-6 ti
 - Coefficient retuning for per-zone quality values
 - Removal of sum-with-soft-cap, cacheEffectiveSenses, computePlayerSensoryProfile
 - Removal of old SNR threshold constants, replaced by confidence curve constants
+
+**Perception honesty (planned Sep 2026, passes in `Todo.md`):** perception becomes inference from received signal rather than the truth with error bars. Decided with the person: error is systematic, never dice (a quiet near thing reads as a small far thing; look-alike species collide at the margin); the player is not exempt, and the display lies (a creature is drawn on its single perceived tile, as its perceived species); identification starts from wired (crystallized) templates for the species a creature shares its spawn table with, learned templates later; retune after the passes land.
 
 **Designed, not yet implementable:**
 - Sensitivity windows with per-receptor tuning curves

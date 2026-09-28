@@ -391,8 +391,9 @@ function evaluateReactiveRules(creature) {
  * food-identification approach, and default hold.
  */
 function processGanglionSystem(creature) {
-  const neural = getNeuralArchitecture(creature);
-  if (!neural) return null; // fallback to reactive rules
+  const architecture = getNeuralArchitecture(creature);
+  if (!architecture) return null; // fallback to reactive rules
+  const neural = _livingArchitecture(creature, architecture);
 
   const detectionInfo = creature.detectionInfo || [];
   const stress = creature.stressLevel || 0;
@@ -436,6 +437,57 @@ function processGanglionSystem(creature) {
   // threat signals are physically stronger because threat-classification
   // produces higher-intensity output than food-identification.
   return _resolveLocomotionOutput(creature, threatResult, foodResult, thresholds);
+}
+
+// ── Wiring ──
+// The body map's neural architecture names what each structure is wired to
+// ('fore_l.vibration.ground', 'fore_ganglion_l.processed', 'head.visual').
+// These are the only signals a structure receives, and a structure housed in
+// a destroyed zone is gone with it: destroy both fore-limbs and the bolt
+// reflex has no ganglion left to fire; destroy the head and the food region
+// and the eyes feeding the threat region go too. (Before this the wiring was
+// documentation: every template read the best SNR from any zone.)
+
+/** The architecture with only the structures whose zone survives. */
+function _livingArchitecture(creature, architecture) {
+  const bodyMap = getBodyMap(creature);
+  if (!bodyMap) return architecture;
+  const intact = new Set(bodyMap.filter(z => !z.destroyed).map(z => z.key));
+  return { ...architecture, intact,
+           structures: architecture.structures.filter(s => !s.zone || intact.has(s.zone)) };
+}
+
+/** Transducer inputs reaching a structure: its own sensoryInputs, followed
+ *  through every living structure it lists as '<id>.processed' or that
+ *  forwards to it. A transducer on a destroyed zone delivers nothing. */
+function _wiredInputs(neural, structure, seen = new Set()) {
+  if (seen.has(structure.id)) return [];
+  seen.add(structure.id);
+  const out = [];
+  for (const input of structure.sensoryInputs || []) {
+    if (input.endsWith('.processed')) {
+      const src = neural.structures.find(s => s.id === input.slice(0, -'.processed'.length));
+      if (src) out.push(..._wiredInputs(neural, src, seen));
+    } else if (!neural.intact || neural.intact.has(input.split('.')[0])) {
+      out.push(input);
+    }
+  }
+  for (const s of neural.structures) {
+    if (s.forwardsTo && s.forwardsTo.includes(structure.id)) out.push(..._wiredInputs(neural, s, seen));
+  }
+  return out;
+}
+
+/** Best SNR a detection delivers on the wired inputs of one modality
+ *  ('vibration', 'visual', 'chemical'). */
+function _wiredSNR(det, inputs, modality) {
+  let best = 0;
+  for (const input of inputs) {
+    if (input.split('.')[1] !== modality) continue;
+    const snr = det.zoneSNR ? det.zoneSNR[input] : 0;
+    if (snr > best) best = snr;
+  }
+  return best;
 }
 
 /**
@@ -493,21 +545,19 @@ function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
   let strongestSource = null;
   let strongestDet = null;
 
+  // Each arc hears only its own ganglion's transducers (the fore-limb
+  // ganglia: that limb's ground vibration). No other channel reaches it: a
+  // large stationary object in view is a high visual SNR, not a bolt trigger.
+  const arcInputs = boltStructures.flatMap(b => (b.sensoryInputs || [])
+    .filter(i => !neural.intact || neural.intact.has(i.split('.')[0])));
   for (const det of detectionInfo) {
-    // Check vibration channels specifically (bolt is vibration-triggered)
-    if (det.vibrationSNR && det.vibrationSNR > 0) {
-      // Use the vibration signal magnitude relative to distance
-      // Closer + stronger = higher magnitude
-      const magnitude = det.vibrationSNR;
-      if (magnitude > strongestMagnitude) {
-        strongestMagnitude = magnitude;
-        strongestSource = det.entity;
-        strongestDet = det;
-      }
+    // Closer + stronger = higher magnitude
+    const magnitude = _wiredSNR(det, arcInputs, 'vibration');
+    if (magnitude > strongestMagnitude) {
+      strongestMagnitude = magnitude;
+      strongestSource = det.entity;
+      strongestDet = det;
     }
-    // No other channel reaches this arc. The reflex structure is wired to
-    // vibration_magnitude_spike only (see CREATURE_NEURAL.hare); a large
-    // stationary object in view is a high visual SNR, not a bolt trigger.
   }
 
   if (strongestMagnitude < thresholds.bolt) return null;
@@ -564,6 +614,7 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
 
   const ownSpecies = getSpeciesKey(creature);
   const selfMass = getCreatureMass(creature);
+  const inputs = _wiredInputs(neural, threatRegion);
   for (const det of detectionInfo) {
     // The wired templates (CREATURE_NEURAL.hare threat_classification) are
     // "heavy rhythmic vibration + large moving visual" and "heavy single
@@ -581,6 +632,13 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
     // hare-sized contributes nothing to a hare; one that reads four times its
     // mass contributes in full. Before this any vibration at all was worth
     // the channel cap, so a hare three tiles from another hare froze.
+    // The region learns of a source only through its wiring. A detection
+    // that reaches none of its inputs (felt only through the unwired rear
+    // limbs, say) never arrives here, size and all.
+    const vibSNR = _wiredSNR(det, inputs, 'vibration');
+    const visSNR = _wiredSNR(det, inputs, 'visual');
+    if (vibSNR <= 0 && visSNR <= 0) continue;
+
     let confidence = 0;
     const heavy = _massWeight(det, selfMass);
 
@@ -588,14 +646,16 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
     // FIRST PASS — transducer output scaled by fixed normalization constant,
     // not by ganglion threshold. Real transducers have nonlinear response
     // curves, adaptation, and channel-specific scaling.
-    if (det.vibrationSNR && det.vibrationSNR > 0) {
-      const vibConf = Math.min(det.vibrationSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
+    // Only what the region's wiring delivers: the fore-limb (and graze-limb)
+    // ganglia's vibration and the head's eyes.
+    if (vibSNR > 0) {
+      const vibConf = Math.min(vibSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
       confidence += vibConf * heavy;
     }
 
     // Visual contribution
-    if (det.visualSNR && det.visualSNR > 0) {
-      const visConf = Math.min(det.visualSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
+    if (visSNR > 0) {
+      const visConf = Math.min(visSNR / (CONFIDENCE_NORMALIZATION * 2), THREAT_CONF_CHANNEL_CAP);
       confidence += visConf * heavy;
     }
 

@@ -161,7 +161,7 @@ Zone destruction has motor consequences beyond losing muscle mass. If a destroye
 
 The severity depends on pathway topology. A nervous system with multiple pathways from a coordinating center to the same effector zone (routed through different intermediate zones) degrades gracefully — losing one route still leaves alternatives, though bandwidth is reduced. A nervous system where each zone has a single pathway to its coordinating center is fragile — destroying one zone along the route disconnects everything downstream.
 
-This connects to the existing clade architecture patterns. Clade A's distributed nervous system with pathway redundancy is more resilient to motor pathway disruption. Clade B's more centralized architecture with fewer redundant paths is more vulnerable — a single well-placed injury can disconnect entire limb groups from their coordinating centers.
+This connects to the existing clade architecture patterns (Body-Sim-Design, Pathways). Ancestral Clade B's distributed mesh, with limb-to-limb bypasses, is more resilient to motor pathway disruption. Ancestral Clade A's centralized star topology, where every limb routes through the torso, is more vulnerable — a single well-placed injury can disconnect entire limb groups from their coordinating center. (This paragraph had the two clades the wrong way round until Sep 2026.)
 
 ## Relationship to Other Systems
 

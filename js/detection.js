@@ -48,6 +48,14 @@ const _CHANNEL_COEFF = {
   vibrationAir:     VIB_AIR_RANGE_COEFF,
 };
 
+// Detection channel → the transducer path the body map's neural wiring uses
+const _WIRING_PATH = {
+  chemicalAirborne: 'chemical.airborne',
+  vibrationGround:  'vibration.ground',
+  vibrationAir:     'vibration.air',
+  visual:           'visual',
+};
+
 // Emission map: extract target emission for a given channel
 function _getTargetEmission(target, channel) {
   if (!target.signals) return 0;
@@ -153,6 +161,21 @@ function getEffectiveVisual(creature) {
     // or an object { acuity, placement, fieldAngle } on zones with eyes.
     const val = (raw && typeof raw === 'object') ? (raw.acuity || 0) : (raw || 0);
     if (val > best) best = val;
+  }
+  return best;
+}
+
+/** The surviving zone carrying the sharpest eyes, or null. The visual
+ *  detection is credited to it, so the wiring that reads 'head.visual' reads
+ *  the eyes that actually saw. */
+function _bestEyeZone(creature) {
+  const bodyMap = getBodyMap(creature);
+  if (!bodyMap) return null;
+  let best = null, bestAcuity = 0;
+  for (const zone of bodyMap) {
+    if (zone.destroyed) continue;
+    const a = getVisualAcuity(zone);
+    if (a > bestAcuity) { bestAcuity = a; best = zone; }
   }
   return best;
 }
@@ -379,7 +402,10 @@ function hasLineOfSight(detector, target) {
 // tracked threat, for NPCs), then the cover on the target's tile, which
 // shrinks the effective range by the fraction of the body it hides
 // (Visual-Occlusion-Design: the visible silhouette is what is left). Returns
-// a detection entry { zone: null, channel: 'visual', quality, snr } or null.
+// a detection entry { zone, channel: 'visual', quality, snr, moving } or null:
+// zone is the eye zone credited with the sighting, moving whether the eye's
+// change detection fired (the motion factor in the range) or only its
+// pattern recognition did.
 // canDetect (NPCs) and computePlayerPerception (the player) both use this,
 // so the SNR the ganglia see is the SNR that decided the detection.
 function _visualDetection(detector, target) {
@@ -392,7 +418,8 @@ function _visualDetection(detector, target) {
   const effectiveVisRange = concealment > 0 ? visRange * (1.0 - concealment) : visRange;
   if (d > effectiveVisRange) return null;
   const snr = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
-  return { zone: null, channel: 'visual', quality: getEffectiveVisual(detector), snr };
+  return { zone: _bestEyeZone(detector), channel: 'visual', quality: getEffectiveVisual(detector), snr,
+           moving: _isTargetMoving(target) };
 }
 
 // ==================== MASTER DETECTION (Prompt P) ====================
@@ -532,8 +559,14 @@ function buildDetectionInfo(observer, target, detections) {
     sizeEstimate: null,  // { lower, upper, estimated }
     sizeRelative: null,  // category for reactive rules compatibility
 
-    // Movement: from vibration detections
+    // Movement: vibration (a footfall is movement) or the eye's change
+    // detection; a sighting by pattern recognition alone reads as still
     isMoving: null,
+
+    // Best SNR per zone and channel, keyed as the neural wiring names its
+    // inputs ('fore_l.vibration.ground', 'head.visual'), so a ganglion reads
+    // only the transducers it is wired to
+    zoneSNR: {},
 
     // Diet: confidence curve from chemical airborne
     dietConfidence: 0,
@@ -576,7 +609,15 @@ function buildDetectionInfo(observer, target, detections) {
     if (det.channel === 'vibrationGround' || det.channel === 'vibrationAir') {
       info.isMoving = true;
     }
+    if (det.channel === 'visual' && det.moving) info.isMoving = true;
+
+    if (det.zone) {
+      const key = `${det.zone.key}.${_WIRING_PATH[det.channel]}`;
+      if (!(info.zoneSNR[key] >= det.snr)) info.zoneSNR[key] = det.snr;
+    }
   }
+  // Seen, not felt, and the eye's change detection did not fire: still.
+  if (info.isMoving === null && bestVisSNR > 0) info.isMoving = false;
 
   info.bestSNR = bestSNR;
 
@@ -609,7 +650,7 @@ function buildDetectionInfo(observer, target, detections) {
   if (bestSNR > SPECIES_CONF_MIN) {
     info.speciesConfidence = Math.min(1.0,
       (bestSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
-    info.species = target.key || target.species || null;
+    info.species = getSpeciesKey(target);   // the same key a creature knows itself by
   }
 
   // Condition: requires high SNR
@@ -627,8 +668,9 @@ function buildDetectionInfo(observer, target, detections) {
     }
     info.gaitAnomaly = _hasDestroyedLocomotionZone(target);
   }
-  // Visual wounds (still uses visual detection if present — check via FOV/visual sense)
-  if (bestSNR > CONDITION_CONF_MIN) {
+  // Visible wounds: the eyes, at condition-level SNR. (Was any channel, so a
+  // nose or a footfall could "see" a missing limb.)
+  if (bestVisSNR > CONDITION_CONF_MIN) {
     const targetBodyMap = getBodyMap(target);
     if (targetBodyMap) {
       info.visibleWounds = targetBodyMap.some(z => z.destroyed);
@@ -778,8 +820,9 @@ function detectThreats(creature) {
 
   // The threat source is whatever the transducers are delivering now. If the
   // entity that set it is no longer among the detected threats and no pain
-  // signal arrived this action, it is gone. There is no persistence on neural
-  // tissue: any lingering jumpiness comes from the stress chemistry. (Before
+  // signal arrived this action, it is gone. The reactive ganglia have no
+  // tissue that holds a representation, so nothing persists here: any
+  // lingering jumpiness comes from the stress chemistry. (Before
   // this, threatSource was never cleared, so the territory leash in
   // ai-utils.canMoveTo stayed off for good after a creature's first scare.)
   if (creature.threatSource && !creature.tookDamageThisTurn &&
@@ -866,11 +909,15 @@ function getSpeciesKey(entity) {
   return entity.key || '__unknown__';
 }
 
-/** Check if a target is viable prey for a predator. */
-function isViablePrey(predator, target) {
+/** Is a detected entity prey to this predator, as the predator perceives it?
+ *  Reads the detection, not the target: the size is the estimate the channels
+ *  produced, and it is ruled out as its own kind only once the channels have
+ *  identified it as such. Anything prey-sized and not recognised as kin reads
+ *  as prey. (It used to read the target's true mass and species key.) */
+function isViablePrey(predator, info) {
+  if (!info || !info.sizeEstimate) return false;
   const predMass = getCreatureMass(predator);
-  const targetMass = getCreatureMass(target);
-  const massRatio = targetMass / predMass;
+  const massRatio = info.sizeEstimate.estimated / predMass;
 
   // Too big to hunt — don't try to eat something 1.5x+ your mass
   if (massRatio > 1.5) return false;
@@ -879,39 +926,26 @@ function isViablePrey(predator, target) {
   const minRatio = predator.drives.hunger > 0.85 ? 0.02 : 0.05;
   if (massRatio < minRatio) return false;
 
-  // Don't hunt your own species
-  if (getSpeciesKey(target) === getSpeciesKey(predator)) return false;
+  // Don't hunt what the channels have resolved as your own species
+  if (info.species && info.speciesConfidence >= 1.0 && info.species === getSpeciesKey(predator)) return false;
 
   return true;
 }
 
-/** Get adjacent prey (within 1 tile). Returns the smallest viable prey or null. */
+/** Get adjacent prey (within 1 tile) among what this creature detects this
+ *  action. Returns the smallest-seeming viable prey or null. An adjacent
+ *  animal the senses miss is not attacked. */
 function getAdjacentPrey(creature) {
   let best = null;
   let bestMass = Infinity;
-
-  // Check NPC creatures (Prompt R: spatial grid narrows candidates)
-  const nearby = getNearbyCreatures(creature.x, creature.y);
-  for (const other of nearby) {
-    if (other === creature) continue;
-    if (other.hp <= 0) continue;
+  for (const info of (creature.detectionInfo || [])) {
+    const other = info.entity;
+    if (!other || other.hp <= 0) continue;
     if (chebyshev(creature.x, creature.y, other.x, other.y) > 1) continue;
-    if (!isViablePrey(creature, other)) continue;
-    const m = getCreatureMass(other);
+    if (!isViablePrey(creature, info)) continue;
+    const m = info.sizeEstimate.estimated;
     if (m < bestMass) { bestMass = m; best = other; }
   }
-
-  // Check player
-  const player = state.player;
-  if (player && player.hp > 0) {
-    if (chebyshev(creature.x, creature.y, player.x, player.y) <= 1) {
-      if (isViablePrey(creature, player)) {
-        const m = getCreatureMass(player);
-        if (m < bestMass) { best = player; }
-      }
-    }
-  }
-
   return best;
 }
 
@@ -925,7 +959,7 @@ function detectPrey(creature) {
   for (const info of (creature.detectionInfo || [])) {
     const target = info.entity;
     if (!target || target.hp <= 0) continue;
-    if (!isViablePrey(creature, target)) continue;
+    if (!isViablePrey(creature, info)) continue;
 
     creature.detectedPrey.push({
       target: target,
