@@ -1008,7 +1008,7 @@ export const CREATURE_NEURAL = {
         type: 'local_ganglion',
         zone: 'mid_graze_l',
         neuralMass: 0.003,
-        sensoryInputs: ['mid_graze_l.chemical.contact'],
+        sensoryInputs: ['mid_graze_l.chemical.contact', 'mid_graze_l.vibration.ground'],
         reflexArcs: [
           { trigger: 'edible_contact', output: 'mid_graze_l', intensity: 'low_sustained' }
         ],
@@ -1019,7 +1019,7 @@ export const CREATURE_NEURAL = {
         type: 'local_ganglion',
         zone: 'mid_graze_r',
         neuralMass: 0.003,
-        sensoryInputs: ['mid_graze_r.chemical.contact'],
+        sensoryInputs: ['mid_graze_r.chemical.contact', 'mid_graze_r.vibration.ground'],
         reflexArcs: [
           { trigger: 'edible_contact', output: 'mid_graze_r', intensity: 'low_sustained' }
         ],
