@@ -493,6 +493,9 @@ function eatCorpse(creature, corpse, cx, cy) {
 
 /** Perform a hunt attack on a target (player or NPC). */
 function performHuntAttack(creature, target) {
+  // The strike goes where the prey is perceived; it lands only if the prey is
+  // actually on the next tile. A lunge at a misplaced percept hits air.
+  if (chebyshev(creature.x, creature.y, target.x, target.y) > 1) return;
   if (target.isPlayer) {
     // Attack the player via existing monsterMelee
     monsterMelee(creature);
