@@ -48,10 +48,15 @@ function _emptyScent() {
   };
 }
 
-/** A fresh zeroed ground entry — scent vector plus an age counter. */
+/** A fresh zeroed ground entry — scent vector plus an age counter and the
+ *  sequence number of its latest deposit (freshness, finer than age: several
+ *  deposits can land within one player input). */
 function _emptyGroundScent() {
-  return { ..._emptyScent(), age: 0 };
+  return { ..._emptyScent(), age: 0, seq: 0 };
 }
+
+// Monotonic count of ground deposits: the later deposit is the fresher one.
+let _depositSeq = 0;
 
 // ==================== DATA STRUCTURES ====================
 // Scent maps are module-level, transient (not saved).
@@ -213,7 +218,7 @@ function _getScentProfile(creature) {
  * the total emission across molecular classes via the species profile. Blood
  * (hemolymph) is added separately when the creature is wounded.
  */
-function _emitCreatureScent(creature, layer) {
+function _emitCreatureScent(creature, layer, parts = { ground: true, air: true }) {
   if (!creature || creature.hp <= 0) return;
   const x = creature.x, y = creature.y;
   if (!inBounds(layer, x, y)) return;
@@ -253,18 +258,22 @@ function _emitCreatureScent(creature, layer) {
   const key = `${x},${y}`;
 
   // ── Ground deposit ──
-  const gMap = _getGroundMap(layer);
-  let gEntry = gMap.get(key);
-  if (!gEntry) {
-    gEntry = _emptyGroundScent();
-    gMap.set(key, gEntry);
+  if (parts.ground) {
+    const gMap = _getGroundMap(layer);
+    let gEntry = gMap.get(key);
+    if (!gEntry) {
+      gEntry = _emptyGroundScent();
+      gMap.set(key, gEntry);
+    }
+    for (const cls of MOLECULAR_CLASSES) {
+      const frac = profile[cls] || 0;
+      if (frac > 0) gEntry[cls] += groundAmount * frac;
+    }
+    gEntry.hemolymph += bloodAmount;
+    gEntry.age = 0; // refresh age — most recent deposit
+    gEntry.seq = ++_depositSeq;
   }
-  for (const cls of MOLECULAR_CLASSES) {
-    const frac = profile[cls] || 0;
-    if (frac > 0) gEntry[cls] += groundAmount * frac;
-  }
-  gEntry.hemolymph += bloodAmount;
-  gEntry.age = 0; // refresh age — most recent deposit
+  if (!parts.air) return;
 
   // ── Airborne emission ──
   const aMap = _getAirborneMap(layer);
@@ -902,12 +911,28 @@ function _detectPlayerScent() {
  * Full scent system update. Call once per player turn.
  * @param {number} layer — active layer
  */
+/** Lay a creature's ground deposit on the tile it stands on: called after
+ *  each of its actions, so a trail is continuous however many steps it takes
+ *  per player input. */
+export function depositGroundScent(creature) {
+  const layer = creature.layer != null ? creature.layer : state.player.layer;
+  _emitCreatureScent(creature, layer, { ground: true, air: false });
+}
+
+/** The ground deposit on a tile, raw (no self-subtraction), or null. */
+export function groundScentAt(layer, x, y) {
+  return _getGroundMap(layer).get(`${x},${y}`) || null;
+}
+
 export function updateScentSystem(layer) {
   const mons = monsters[layer] || [];
 
-  // 1. Emit scent for all creatures on this layer
+  // 1. Emit scent for all creatures on this layer. Their ground deposits are
+  // laid step by step in the turn loop (depositGroundScent), where their feet
+  // touch; here only the air. The player takes one step per input, so the
+  // player deposits both here.
   for (const m of mons) {
-    if (m.hp > 0) _emitCreatureScent(m, layer);
+    if (m.hp > 0) _emitCreatureScent(m, layer, { ground: false, air: true });
   }
 
   // Also emit for the player

@@ -20,7 +20,7 @@ import { getBodyMap,
          BURST_COEFF, BLOOD_DEATH_THRESHOLD, ARMOR_PER_STRUCTURAL_KG,
          selectHitZone,
          MOTION_CONCEALMENT_REDUCTION, BODY_PLAN_HEIGHT_COEFF,
-         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS,
+         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS, SCENT_FLOOR,
          MOTION_ANCHOR_SPEED, MOTION_RADIAL_WEIGHT, SELF_FOOTFALL_DISTANCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          VIS_RESOLVE_SNR, VIB_RESOLVE_SNR, CHEM_RESOLVE_SNR,
@@ -33,6 +33,7 @@ import { getBodyMap,
        } from './constants.js';
 import { getLightLevel } from './time-cycle.js';
 import { referenceEmission } from './signals.js';
+import { groundScentAt } from './scent.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField, sightlineOpacity } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -640,6 +641,83 @@ function _hasDestroyedLocomotionZone(target) {
   const bodyMap = getBodyMap(target);
   if (!bodyMap) return false;
   return bodyMap.some(z => z.locomotion && z.destroyed);
+}
+
+// ==================== GROUND TRAILS (perception pass 6b) ====================
+// Deposits on the substrate (scent.js ground layer) read through chemical
+// transducers: contact ones on the tile underfoot, airborne ones on the
+// evaporation layer over the tiles around it, nose down
+// (Chemical-Scent-System-Design: 1-2 tiles; one here). A reading clears a
+// transducer when the classes it matches exceed SCENT_FLOOR / quality. A
+// trail names no animal: it is volatiles on the ground, read as kinds.
+const HERBIVORE_VOLATILES  = ['greenLeaf'];           // plant digestion
+const MEAT_EATER_VOLATILES = ['ketones', 'amines'];   // meat metabolism
+
+function _volatileSum(entry, classes) {
+  let s = 0;
+  for (const c of classes) s += entry[c] || 0;
+  return s;
+}
+
+/** Best surviving chemical transducer on a medium ('contact' | 'airborne'). */
+function _bestChemical(creature, medium) {
+  const bodyMap = getBodyMap(creature);
+  let best = 0;
+  if (bodyMap) for (const zone of bodyMap) {
+    if (zone.destroyed) continue;
+    const chem = zone.transducers && zone.transducers.chemical;
+    const q = (chem && typeof chem === 'object') ? (chem[medium] || 0) : 0;
+    if (q > best) best = q;
+  }
+  return best;
+}
+
+/** Where a prey trail leads from here: the direction (0-7) of the freshest
+ *  tile around this creature carrying herbivore volatiles above what its nose
+ *  resolves, or null. Freshness is the order of deposits, so the trail is
+ *  followed toward where the animal went. If the tile underfoot is fresher
+ *  than any around it, the trail ends here (water, or it went out of reach)
+ *  and there is no step. */
+function readPreyTrailStep(creature) {
+  const airQ = _bestChemical(creature, 'airborne');
+  if (airQ <= 0) return null;   // no nose to put to the ground around it
+  const layer = creature.layer != null ? creature.layer : state.player.layer;
+  const threshold = SCENT_FLOOR / airQ;
+  const here = groundScentAt(layer, creature.x, creature.y);
+  const hereSeq = (here && _volatileSum(here, HERBIVORE_VOLATILES) >= threshold) ? here.seq : -1;
+  let bestSeq = -1, bestDx = 0, bestDy = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const e = groundScentAt(layer, creature.x + dx, creature.y + dy);
+      if (!e || _volatileSum(e, HERBIVORE_VOLATILES) < threshold) continue;
+      if (e.seq > bestSeq) { bestSeq = e.seq; bestDx = dx; bestDy = dy; }
+    }
+  }
+  if (bestSeq < 0 || bestSeq < hereSeq) return null;
+  return directionToward(creature.x, creature.y, creature.x + bestDx, creature.y + bestDy);
+}
+
+/** Meat-eater volatiles on the tile underfoot as read by the given contact
+ *  transducers ('zone.chemical.contact' paths): the concentration, or 0 if
+ *  it is under what the best of them resolves. */
+function meatEaterUnderfoot(creature, contactInputs) {
+  const bodyMap = getBodyMap(creature);
+  if (!bodyMap || !contactInputs.length) return 0;
+  let q = 0;
+  for (const input of contactInputs) {
+    const zone = bodyMap.find(z => z.key === input.split('.')[0]);
+    if (!zone || zone.destroyed) continue;
+    const chem = zone.transducers && zone.transducers.chemical;
+    const zq = (chem && typeof chem === 'object') ? (chem.contact || 0) : 0;
+    if (zq > q) q = zq;
+  }
+  if (q <= 0) return 0;
+  const layer = creature.layer != null ? creature.layer : state.player.layer;
+  const e = groundScentAt(layer, creature.x, creature.y);
+  if (!e) return 0;
+  const c = _volatileSum(e, MEAT_EATER_VOLATILES);
+  return c >= SCENT_FLOOR / q ? c : 0;
 }
 
 // ==================== PERCEPTS (perception pass 5) ====================
@@ -1367,4 +1445,6 @@ export {
   computePlayerPerception,
   // Percepts
   perceptOf, perceivedPosition,
+  // Ground trails
+  readPreyTrailStep, meatEaterUnderfoot,
 };

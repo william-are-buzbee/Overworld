@@ -163,6 +163,8 @@ Goal persistence: if the target leaves all detection channels for more turns tha
 
 *Status (Sep 2026, perception pass 4):* the hare's threat region has a looming term on its head-eye input: a seen body closing on the hare adds up to the channel cap × heaviness, full at contact and nothing once contact is more than `LOOM_WINDOW_ACTIONS` (4) of the hare's own actions away. Seen but not felt, a prowler walking straight in takes a hare from 0.90 (crossing) to ~1.23 at 6 tiles, ~1.41 at 3, ~1.54 at 1 (flee at 1.5): the hare freezes, stops, and so can hear (own footfalls no longer masking its fore-limbs) and bolts on the footfalls. With footfalls felt it flees regardless.
 
+*Status (Sep 2026, perception pass 6b-1):* the threat region also reads meat-eater volatiles (ketones + amines) on the tile underfoot through the graze limbs' contact chemistry, already wired to it through their ganglia. Operationally a pattern match of intense meat-eater metabolism to fear, whatever deposited it: a fresh trail, or a predator beside the hare that its other senses missed. Read against what its own body leaves per step (nothing at its own level, the channel cap at three times it), it names no source and gives no bearing, so alone it alerts or freezes; with a detected source it adds to that source's confidence.
+
 ### Critical Override
 
 Some stimuli bypass deliberation regardless of integration. Ambush damage from an undetected source, blood crossing the critical threshold, massive torso trauma — these fire the reactive pathway before any deliberative signal can complete its round trip. Even the apex predator flinches from an ambush. The reactive circuitry is always running, and extreme stimuli produce signals too strong for the deliberative layer to override.
