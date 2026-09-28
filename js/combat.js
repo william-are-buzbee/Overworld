@@ -209,8 +209,9 @@ function killMonster(mon){
 
 // ==================== STEALTH ====================
 // The F key: creep. A gait, not a concealment state — the body is driven at
-// CREEP_INTENSITY (player-actions.js), so each step drops less energy into
-// the ground (signals.js) and is felt from less far. It ends when the player
+// CREEP_INTENSITY (player-actions.js), so each step recruits less muscle: it
+// covers ground at 40% of a walk's pace (physiology.js getBodyPTW) and drops
+// less energy into the ground (signals.js), felt from less far. It ends when the player
 // sprints or presses F again; being struck or striking does not change a gait.
 function toggleStealth(){
   const player = state.player;

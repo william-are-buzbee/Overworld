@@ -184,14 +184,15 @@ This connects to the existing clade architecture patterns (Body-Sim-Design, Path
 3. **Insert motor layer between behavior selection and physical execution.** `executeAction` in behaviors.js currently dispatches directly to movement/combat functions. Insert a translation step: behavioral signal → pathway activation → zone recruitment → force/speed output. Initially the translation maps current behavioral outputs to activation parameters through the pathway topology.
 
 4. **Derive speed from motor output.** Locomotion pathway activation at some intensity, locomotion zones respond with force based on tissue state, total force divided by total mass gives actual speed for that turn. Replaces static PTW computation. Speed becomes dynamic — it changes as substrate depletes across a chase.
+   *Status (Sep 2026):* partly done. `getBodyPTW` recruits the slow pool in proportion to intensity up to a walk (Muscle-Fiber-Design), so a creep is physically slower, and the player's rate sets how much world time and how many creature actions a step costs: a prowler's creep step costs 2.5× a walking step. A turn spent standing is charged at the walk rate, not the last gait. `MAX_ACTIONS_PER_INPUT` went from 3 to 8: at 3 it clipped a sprinting hare (5.3 actions against a creeping prowler, 4.2 against a prowler's half-speed first step from standing), so fleeing creatures lost ground whenever the player crept or started from a stop. Intensity is still carried on the creature, not on a pathway (step 3).
 
 5. **Derive strike damage from motor output.** Attack pathway activation at some intensity, attack zone responds with force based on tissue state. Replaces or augments the current flat damage formula. A fresh zone hits hard. A depleted zone hits with slow-contracting force only.
 
 6. **Connect signal emission to motor activation intensity.** Vibration emission proportional to locomotion activation intensity rather than the binary `movedThisTurn` flag. High-intensity locomotion emits full vibration. Low-intensity emits proportionally less. Stalking becomes physically quiet because the activation intensity is low, not because of a special flag.
    *Status (Sep 2026):* done for ground vibration: `signals.js` scales the footfall emission by (intensity / walk)²,
    reading `getMovementIntensity` (the player's gait, an NPC's ganglion output). The player's F key is a creep gait
-   (`CREEP_INTENSITY`); it costs no time yet, because step 4 has not happened and force-to-weight below the
-   fast-twitch threshold does not depend on intensity. Air vibration still uses the binary flag.
+   (`CREEP_INTENSITY`); since step 4 (partial) it also costs time, 2.5× a walking step. Air vibration still
+   uses the binary flag.
 
 7. **Zone occupation tracking.** Zones in sustained activation (grapple, bite hold) are marked as occupied and excluded from other pathway recruitment. Release frees the zone. This becomes the physical basis for action trade-offs.
 

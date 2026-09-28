@@ -281,7 +281,9 @@ function endPlayerTurn(action){
   //                     how often creatures act relative to the player.
   //   World-time:       reference-speed-based — determines how fast the
   //                     day/night cycle and time-scaled effects advance.
-  const playerIntensity = getMovementIntensity(state.player);
+  // A turn spent standing runs at the body's walking rate, whatever gait it
+  // last moved at: creeping costs time per step, not per wait.
+  const playerIntensity = state.player.movedThisTurn ? getMovementIntensity(state.player) : null;
   const playerPTW = getBodyPTW(player, playerIntensity);
   // Apply mass-dependent acceleration scalar
   const playerTotalMass = getEntityTotalMass(player);

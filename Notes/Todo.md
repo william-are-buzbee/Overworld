@@ -154,7 +154,7 @@ Prompt queue and task tracker. Check things off as they're done.
 Perception as inference from received signal, not truth with error bars. Decisions: systematic error only; the player is not exempt and the display lies (single perceived tile, perceived species); wired templates for co-occurring species first, learning later; retune after. One pull request per pass. See Sensory-Design "Perception honesty".
 - [x] 1. Groundwork: persistence-needs-tissue principle, Motor doc clade fix; vision sets isMoving; visible wounds from the eyes only; hare ganglia read only their wired inputs and die with their zone; prey chosen from perception
 - [x] 2. Parity: NPC sightlines charged per eye through trees (NPC smell from the scent field moved to pass 6: the field is anonymous molecules, so reading it needs percepts that point at no entity)
-- [ ] 3. Intensity recruits force (Motor step 4, part): a creep is physically slower than a walk
+- [x] 3. Intensity recruits force (Motor step 4, part): a creep is physically slower than a walk (2.5× the time per step); action cap 3 → 8 so fast creatures are not clipped
 - [ ] 4. Motion as velocity: angular and looming components per observer, looming into the threat template; self-noise (own footfalls raise own vibration floor, own speed blurs own eyes)
 - [ ] 5. Percept plumbing: every AI consumer reads a percept (perceived position, size, identity), not the entity; percept = truth at first
 - [ ] 6. Received-signal inference: size-distance confound per channel, distance cues (binocular parallax, limb amplitude spread), bearing resolution from sensor geometry; display at the perceived tile; NPC smell read from the wind-driven scent field (molecular classes → diet and kind, concentration → confounded size and distance, upwind → bearing), with the "NPC scent tracking AI" item
@@ -175,7 +175,7 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [ ] Legacy elemental damage and name cleanup
 - [ ] Restore ecological creature density after detection optimization
 - [ ] Chemical workspace / scent gradient system
-- [x] Player movement intensity expansion (creep/stalk mode) — F key creeps, footfalls scale with gait; no time cost until motor step 4
+- [x] Player movement intensity expansion (creep/stalk mode) — F key creeps, footfalls scale with gait; a creep step costs 2.5× a walk's time (perception pass 3)
 - [ ] Visual rethinking (16x16 palettes as color reference for 32x32 sprites)
 - [ ] Visual customization (settings menu with texture/resource pack option)
 
