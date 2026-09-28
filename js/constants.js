@@ -145,10 +145,24 @@ export const REST_THRESHOLD      = 0.7;       // above this → rest (I-D)
 export const GROUND_EMISSION_BASE   = 0.02;   // ground scent per kg body mass per turn
 export const AIRBORNE_EMISSION_BASE = 0.01;   // airborne scent per kg body mass per turn
 export const BLOOD_EMISSION_MULT    = 5.0;    // multiplier on blood channel when wounded
-export const AIRBORNE_DECAY_RATE    = 0.80;   // airborne scent retained per turn (20% loss)
+// Airborne loss per turn is vertical dilution out of the ground layer, not
+// chemistry (the volatiles last minutes, Chemical-Scent-System-Design). At
+// 0.80 a plume fell under a quality-6 nose within 3-7 tiles downwind, shorter
+// than the per-animal smell radius it replaced; at 0.93 a hare's plume reaches
+// a wolf's nose 6-14 tiles downwind in wind 1-3 and a wolf's reaches a
+// shaleback's 7-18, with 1-2 tiles upwind (perception pass 6b-2).
+export const AIRBORNE_DECAY_RATE    = 0.93;   // airborne scent retained per turn (20% loss)
 export const ADVECTION_RATE         = 0.35;   // fraction of scent moved downwind per unit wind speed
 export const SPREAD_RATE            = 0.12;   // fraction of scent spread to neighbors per turn (turbulent mixing)
-export const SCENT_FLOOR            = 0.002;  // below this, scent is removed (sparse cleanup)
+export const SCENT_FLOOR            = 0.002;  // detection base: a transducer of quality q resolves SCENT_FLOOR / q
+// Sparse cleanup: a class below this on a tile is dropped from the field. It
+// has to sit at what the most sensitive nose in the world resolves
+// (SCENT_FLOOR / q; the ravager's airborne 7 is the best), or the field throws
+// away what a good nose could smell. It was SCENT_FLOOR itself, which cut
+// plumes to 1-4 tiles for a quality-6 nose and trimmed ground trails short of
+// what a nose could follow. A sharper nose (mutation) needs this lowered.
+export const MOST_SENSITIVE_NOSE    = 7;
+export const SCENT_CLEANUP_FLOOR    = SCENT_FLOOR / MOST_SENSITIVE_NOSE;
 
 // ── Per-species emission profiles ──
 // Fractions of a creature's total metabolic emission distributed across the 8

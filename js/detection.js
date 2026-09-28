@@ -20,11 +20,11 @@ import { getBodyMap,
          BURST_COEFF, BLOOD_DEATH_THRESHOLD, ARMOR_PER_STRUCTURAL_KG,
          selectHitZone,
          MOTION_CONCEALMENT_REDUCTION, BODY_PLAN_HEIGHT_COEFF,
-         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS, SCENT_FLOOR,
+         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS, SCENT_FLOOR, SCENT_PROFILES,
          MOTION_ANCHOR_SPEED, MOTION_RADIAL_WEIGHT, SELF_FOOTFALL_DISTANCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          VIS_RESOLVE_SNR, VIB_RESOLVE_SNR, CHEM_RESOLVE_SNR,
-         VIS_BEARING_RES_DEG, VIB_BEARING_RES_DEG, CHEM_BEARING_RES_DEG,
+         VIS_BEARING_RES_DEG, VIB_BEARING_RES_DEG, CHEM_BEARING_RES_DEG, OLFACTORY_WEBER_FRACTION,
          // Visual Detection Pass 1 — motion and contrast
          MOTION_SIGNAL_MOVING, MOTION_SIGNAL_STILL,
          CONTRAST_FLOOR, BRIGHTNESS_CONTRAST_WEIGHT, HUE_MISMATCH_PENALTY,
@@ -33,7 +33,7 @@ import { getBodyMap,
        } from './constants.js';
 import { getLightLevel } from './time-cycle.js';
 import { referenceEmission } from './signals.js';
-import { groundScentAt } from './scent.js';
+import { groundScentAt, airborneScentAt, upwindStep, ownAirborneLevel } from './scent.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField, sightlineOpacity } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -82,12 +82,9 @@ function _getTargetEmission(target, channel) {
  */
 function* _iterZoneTransducers(zone) {
   if (!zone.transducers) return;
-  // Chemical airborne
-  const chem = zone.transducers.chemical;
-  if (chem) {
-    const airborne = (typeof chem === 'object') ? (chem.airborne || 0) : 0;
-    if (airborne > 0) yield ['chemicalAirborne', airborne];
-  }
+  // Smell is not here (perception pass 6b-2): airborne odour arrives as
+  // anonymous plume percepts read off the scent field (readPlume), and is
+  // tied to a detected animal only by integration (bindPlumes).
   // Vibration ground
   const vib = zone.transducers.vibration;
   if (vib) {
@@ -144,7 +141,37 @@ function detectTargetPerZone(observer, target) {
     }
   }
 
+  // Near-field smell (perception pass 6b-2): within a tile, odour is steep
+  // and localisable (the nose checks the tiles around it, as it does for
+  // trails), so a scent hotspot on the next tile is an animal right there.
+  // Its kind comes from the composition of that air, not from the animal.
+  if (chebyshev(observer.x, observer.y, target.x, target.y) <= 1) {
+    const near = _nearFieldSmell(observer, target, bodyMap);
+    if (near) detections.push(near);
+  }
+
   return detections.length > 0 ? detections : null;
+}
+
+function _nearFieldSmell(observer, target, bodyMap) {
+  let zone = null, q = 0;
+  for (const z of bodyMap) {
+    if (z.destroyed) continue;
+    const chem = z.transducers && z.transducers.chemical;
+    const zq = (chem && typeof chem === 'object') ? (chem.airborne || 0) : 0;
+    if (zq > q) { q = zq; zone = z; }
+  }
+  if (q <= 0) return null;
+  const layer = observer.layer != null ? observer.layer : state.player.layer;
+  const e = airborneScentAt(layer, target.x, target.y);
+  if (!e) return null;
+  const threshold = SCENT_FLOOR / q;
+  const herb = _volatileSum(e, HERBIVORE_VOLATILES);
+  const meat = Math.max(0, _volatileSum(e, MEAT_EATER_VOLATILES) - _PLANT_EATER_MEAT_RATIO * herb);
+  const snr = (herb + meat) / threshold;
+  if (snr < 1) return null;
+  return { zone, channel: 'chemicalAirborne', quality: q, snr,
+           kind: meat > herb ? 'predator' : 'herbivore', bloodSNR: (e.hemolymph || 0) / threshold };
 }
 
 // ==================== SENSE HELPERS ====================
@@ -720,6 +747,118 @@ function meatEaterUnderfoot(creature, contactInputs) {
   return c >= SCENT_FLOOR / q ? c : 0;
 }
 
+// ==================== AIRBORNE PLUMES (perception pass 6b-2) ====================
+// A nose reads the air on its own tile (the scent field, scent.js): what
+// kinds of volatiles, how strong. The strength is confounded with distance and
+// source size and names no animal. The bearing is not in the odour: it is the
+// wind, felt by the body's air-flow transducers (vibration.air), so a body
+// without them smells without knowing from where, and in still air nobody
+// knows. Kinds are read by composition against wired templates (crystallized,
+// Sensory-Design): plant digestion (greenLeaf) is herbivore; ketones + amines
+// beyond what plant-eaters carry with their plant volatiles is meat-eater.
+// The ratio plant-eaters carry comes from their emission profiles, which is
+// also why a herbivore's own odour, and its herd's, never reads as a
+// meat-eater.
+const _PLANT_EATER_MEAT_RATIO = (() => {
+  let r = 0;
+  for (const key of ['hare', 'cave_crab']) {
+    const p = SCENT_PROFILES[key];
+    if (p && p.greenLeaf > 0) r = Math.max(r, ((p.ketones || 0) + (p.amines || 0)) / p.greenLeaf);
+  }
+  return r;
+})();
+
+/** What this creature's nose reads in the air on its tile:
+ *  { herbSNR, meatSNR, bloodSNR, upwind } with each SNR = concentration over
+ *  the nose's threshold (SCENT_FLOOR / quality), and upwind a step {dx, dy}
+ *  or null; or null if nothing clears the nose. */
+function readPlume(creature) {
+  const q = _bestChemical(creature, 'airborne');
+  if (q <= 0) return null;
+  const layer = creature.layer != null ? creature.layer : state.player.layer;
+  const e = airborneScentAt(layer, creature.x, creature.y);
+  if (!e) return null;
+  const threshold = SCENT_FLOOR / q;
+  // The nose is adapted to its own odour (scent.js ownAirborneLevel): what
+  // it reads is the excess over its own background, and that excess has to
+  // clear a Weber fraction of the background as well as the nose's floor.
+  const own = ownAirborneLevel(creature);
+  const ownHerb = _volatileSum(own, HERBIVORE_VOLATILES), ownMeat = _volatileSum(own, MEAT_EATER_VOLATILES);
+  const herb = Math.max(0, _volatileSum(e, HERBIVORE_VOLATILES) - ownHerb);
+  const meatAll = Math.max(0, _volatileSum(e, MEAT_EATER_VOLATILES) - ownMeat);
+  const meat = Math.max(0, meatAll - _PLANT_EATER_MEAT_RATIO * herb);
+  const blood = Math.max(0, (e.hemolymph || 0) - (own.hemolymph || 0));
+  const herbSNR = herb / Math.max(threshold, OLFACTORY_WEBER_FRACTION * ownHerb);
+  const meatSNR = meat / Math.max(threshold, OLFACTORY_WEBER_FRACTION * ownMeat);
+  const bloodSNR = blood / Math.max(threshold, OLFACTORY_WEBER_FRACTION * (own.hemolymph || 0));
+  if (herbSNR < 1 && meatSNR < 1) return null;
+  // Bearing from the wind, if anything on the body feels air move
+  const feelsAir = _bestVibrationAir(creature) > 0;
+  return { herbSNR, meatSNR, bloodSNR, upwind: feelsAir ? upwindStep() : null };
+}
+
+function _bestVibrationAir(creature) {
+  const bodyMap = getBodyMap(creature);
+  let best = 0;
+  if (bodyMap) for (const zone of bodyMap) {
+    if (zone.destroyed) continue;
+    const v = zone.transducers && zone.transducers.vibration;
+    if (v && (v.air || 0) > best) best = v.air;
+  }
+  return best;
+}
+
+/** Which modalities this creature can bind an odour to: those processed in a
+ *  surviving zone that also holds integration tissue and chemical processing
+ *  (the cross-modal coincidence happens where the streams converge). A
+ *  meso-predator's head binds smell to sight; a lurker's head integrates
+ *  sight and vibration but no chemistry, and a hare has no integration
+ *  tissue: neither ties a smell to an animal. */
+function _bindableModalities(creature) {
+  const bodyMap = getBodyMap(creature);
+  const out = new Set();
+  if (bodyMap) for (const zone of bodyMap) {
+    if (zone.destroyed) continue;
+    const a = zone.neuralAllocation;
+    if (!a || !(a.integration > 0) || !(a.chemicalProcessing > 0)) continue;
+    if (a.visualProcessing > 0) out.add('visual');
+    if (a.vibrationProcessing > 0) { out.add('vibration_ground'); out.add('vibration_air'); }
+  }
+  return out;
+}
+
+/** Tie the plume to the detected animals it could be coming from: those
+ *  perceived within one compass step of upwind, through a modality this body
+ *  can bind (above). They take the plume's kind (the stronger reading) as
+ *  their diet, at the confidence its SNR gives, and blood in it as wound
+ *  chemistry. Nothing else learns an animal's diet by smell. */
+function bindPlumes(creature) {
+  const plume = creature.plume;
+  if (!plume || !plume.upwind) return;
+  const modalities = _bindableModalities(creature);
+  if (modalities.size === 0) return;
+  const upAng = Math.atan2(plume.upwind.dy, plume.upwind.dx);
+  const kind = plume.meatSNR >= plume.herbSNR ? 'predator' : 'herbivore';
+  const snr = Math.max(plume.meatSNR, plume.herbSNR);
+  for (const info of (creature.detectionInfo || [])) {
+    if (!(info.senses || []).some(s => modalities.has(s))) continue;
+    const ang = Math.atan2(info.y - creature.y, info.x - creature.x);
+    let diff = Math.abs(ang - upAng);
+    if (diff > Math.PI) diff = 2 * Math.PI - diff;
+    if (diff > Math.PI / 4 + 1e-9) continue;
+    if (snr > DIET_CONF_MIN) {
+      info.dietConfidence = Math.min(1.0, (snr - DIET_CONF_MIN) / (DIET_CONF_FULL - DIET_CONF_MIN));
+      info.dietType = kind;
+    }
+    if (plume.bloodSNR > CONDITION_CONF_MIN) info.woundChemistry = true;
+    // Fight assessment needs the diet it now has (buildDetectionInfo ran first)
+    if (creature.integrationCapacity >= ASSESS_INTEGRATION_THRESHOLD &&
+        info.sizeEstimate && info.dietConfidence > 0.5) {
+      info.threatAssessment = assessFightOutcome(creature, info.entity, info);
+    }
+  }
+}
+
 // ==================== PERCEPTS (perception pass 5) ====================
 // A percept is what an observer's senses deliver about one source on this
 // action: the detection info below (size estimate, species and diet
@@ -862,7 +1001,7 @@ function buildDetectionInfo(observer, target, detections) {
   };
 
   let bestSNR = 0, bestChannel = null;
-  let bestChemSNR = 0;
+  let bestChemSNR = 0, bestChemDet = null;
   let bestVibSNR = 0;
   let bestVisSNR = 0;
 
@@ -871,6 +1010,7 @@ function buildDetectionInfo(observer, target, detections) {
 
     if (det.channel === 'chemicalAirborne' && det.snr > bestChemSNR) {
       bestChemSNR = det.snr;
+      bestChemDet = det;
     }
     if ((det.channel === 'vibrationGround' || det.channel === 'vibrationAir')
         && det.snr > bestVibSNR) {
@@ -920,7 +1060,7 @@ function buildDetectionInfo(observer, target, detections) {
   if (bestChemSNR > DIET_CONF_MIN) {
     info.dietConfidence = Math.min(1.0,
       (bestChemSNR - DIET_CONF_MIN) / (DIET_CONF_FULL - DIET_CONF_MIN));
-    info.dietType = target.diet || null;
+    info.dietType = bestChemDet ? bestChemDet.kind : null;   // read off the air's composition
   }
 
   // Species: best SNR on any channel
@@ -934,8 +1074,7 @@ function buildDetectionInfo(observer, target, detections) {
   if (bestChemSNR > CONDITION_CONF_MIN) {
     info.conditionConfidence = Math.min(1.0,
       (bestChemSNR - CONDITION_CONF_MIN) / (CONDITION_CONF_FULL - CONDITION_CONF_MIN));
-    info.woundChemistry = target.blood != null && target.bloodMax != null &&
-                          target.blood < target.bloodMax * 0.7;
+    info.woundChemistry = !!bestChemDet && bestChemDet.bloodSNR > CONDITION_CONF_MIN;
   }
   if (bestVibSNR > CONDITION_CONF_MIN) {
     const vibCondConf = Math.min(1.0,
@@ -1019,6 +1158,10 @@ function buildAllDetectionInfo(creature) {
     info.senses = result.senses;
     creature.detectionInfo.push(info);
   }
+
+  // The air on its tile, and what integration can tie it to
+  creature.plume = readPlume(creature);
+  bindPlumes(creature);
 }
 
 /** Assess how threatening a target is to the creature. Returns 0 if not threatening. */
@@ -1445,6 +1588,6 @@ export {
   computePlayerPerception,
   // Percepts
   perceptOf, perceivedPosition,
-  // Ground trails
-  readPreyTrailStep, meatEaterUnderfoot,
+  // Ground trails and plumes
+  readPreyTrailStep, meatEaterUnderfoot, readPlume,
 };

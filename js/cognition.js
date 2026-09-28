@@ -25,7 +25,7 @@ import { getBodyMap,
 import { getBodyPTW } from './physiology.js';
 import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
-import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
+import { dist, dirFromDelta, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
 import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition,
          readPreyTrailStep, meatEaterUnderfoot } from './detection.js';
@@ -280,6 +280,11 @@ function evaluateReactiveRules(creature) {
         if (size === 'much_larger') {
           return { behavior: 'hold', magnitude: 0.5 };
         }
+        // Something known to eat plants (its odour bound to it, pass 6b-2)
+        // and not clearly bigger is no threat to a predator: no caution, as
+        // Rule 4B does not space from it either.
+        const knownHerbivore = det.dietConfidence > DIET_DECISION_THRESHOLD && det.dietType === 'herbivore';
+        if (knownHerbivore && size !== 'larger') continue;
         // Ambiguous or larger: orient cautiously, don't commit
         return { behavior: 'orient', magnitude: 0.5, target: det.entity };
       }
@@ -313,6 +318,16 @@ function evaluateReactiveRules(creature) {
         }
       }
     }
+  }
+
+  // RULE 4C — MEAT-EATER ON THE AIR
+  // A grazer whose nose reads meat-eater volatiles turns to face where the
+  // wind comes from, bringing its eyes to bear, and stops feeding; without a
+  // bearing (nothing feels the air move, or still air) it holds still.
+  if (diet === 'herbivore' && creature.plume && creature.plume.meatSNR >= 1) {
+    const up = creature.plume.upwind;
+    if (up) return { behavior: 'orient', magnitude: 0.3, direction: dirFromDelta(up.dx, up.dy) };
+    return { behavior: 'hold', magnitude: 0.3 };
   }
 
   // RULE 5 — ADJACENT PREY / FOOD
@@ -370,6 +385,32 @@ function evaluateReactiveRules(creature) {
     const step = readPreyTrailStep(creature);
     if (step != null) {
       return { behavior: 'follow_trail', magnitude: 0.15, direction: step };
+    }
+  }
+
+  // RULE 6C — PREY ON THE AIR: SURGE AND CAST
+  // A hungry predator whose nose reads plant-digestion volatiles heads
+  // upwind (surge). When it loses the odour it sweeps across the wind,
+  // alternating sides every two turns, to find the plume again (cast). The
+  // memory that it had the odour, and which way was upwind, is held in its
+  // integration tissue for integrationCapacity × PERSISTENCE_SCALE turns (the
+  // scale goal persistence uses): a meso-predator casts for about four turns,
+  // an apex predator for about eight, a body without integration not at all.
+  if (diet === 'predator' && cc.canFight && hungry) {
+    const plume = creature.plume;
+    if (plume && plume.herbSNR >= 1 && plume.upwind) {
+      const dir = dirFromDelta(plume.upwind.dx, plume.upwind.dy);
+      creature._scentTrace = { upwind: dir, turn: state.turnCount };
+      return { behavior: 'follow_scent', magnitude: 0.15, direction: dir };
+    }
+    const trace = creature._scentTrace;
+    if (trace) {
+      const age = state.turnCount - trace.turn;
+      if (age <= (creature.integrationCapacity || 0) * PERSISTENCE_SCALE) {
+        const side = Math.floor(age / 2) % 2 ? 2 : 6;   // right, then left, of upwind
+        return { behavior: 'follow_scent', magnitude: 0.12, direction: (trace.upwind + side) % 8 };
+      }
+      creature._scentTrace = null;
     }
   }
 

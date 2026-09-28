@@ -180,6 +180,7 @@ function executeAction(creature, action) {
       creature.currentBehavior = 'forage';
       break;
     }
+    case 'follow_scent':
     case 'follow_trail': {
       // Nose down, a step along the trail toward its fresher end
       if (action.direction != null) moved = moveInDirection(creature, action.direction);
