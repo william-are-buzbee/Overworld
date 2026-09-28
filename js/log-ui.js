@@ -1,16 +1,12 @@
 // ==================== LOG UI ====================
 // The log panel's chrome: tab filtering, per-category muting, font size,
-// resize drag handles, and click-through suppression. Also closes the
-// legacy game-overlay when its backdrop is clicked (through closeOverlay,
-// so the overlay's open-state stays in sync — the old inline handler
-// removed the class directly and left input blocked).
+// resize drag handles, and click-through suppression.
 //
 // log.js owns the entries and appends one <div data-category> per message;
 // this module hands it a filter so each new entry is shown or hidden on
 // insertion (no MutationObserver). Filter and font state are session-only.
 
 import { logEl, setLogEntryFilter } from './log.js';
-import { closeOverlay } from './overlay.js';
 
 const FONT_SIZES = [10, 12, 14, 16, 19];
 const TAB_CATS = {              // tab → categories it shows (null = all)
@@ -83,7 +79,6 @@ export function initLogUI() {
   const fontPlus   = document.getElementById('log-font-plus');
   const dragTop    = document.getElementById('log-drag-top');
   const dragRight  = document.getElementById('log-drag-right');
-  const overlay    = document.getElementById('game-overlay');
   if (!wrapper || !logEl) return;
 
   setLogEntryFilter(shouldShow);
@@ -91,9 +86,6 @@ export function initLogUI() {
   // Clicks on the log must not reach the canvas (which treats clicks as moves).
   wrapper.addEventListener('mousedown', (e) => e.stopPropagation());
   wrapper.addEventListener('click',     (e) => e.stopPropagation());
-
-  // Legacy overlay: clicking the backdrop closes it properly.
-  if (overlay) overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) closeOverlay(); });
 
   if (dragTop)   bindDrag(dragTop, wrapper, 'y');
   if (dragRight) bindDrag(dragRight, wrapper, 'x');

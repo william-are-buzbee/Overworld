@@ -1,11 +1,10 @@
 // ==================== SAVE / LOAD SYSTEM ====================
 // Serializes full game state to IndexedDB. Auto-saved after every turn.
-// Handles circular references (bondPartner), Set objects, and item registry refs.
+// Handles circular references (bondPartner) and body maps (zone state only).
 // All public functions (saveGame, loadGame, hasSave, deleteSave, tryResume) are async.
 
 import { state, worlds, covers, monsters, features, groundItems } from './state.js';
-import { LAYER_META, HP_PER_SIZE, HP_PER_LEVEL_FACTOR, SPECIES_TEMPLATES, initBodyMap, getBodyMap, computeBleedPenalty } from './constants.js';
-import { findWeapon, findArmor } from './items.js';
+import { LAYER_META, SPECIES_TEMPLATES, initBodyMap, getBodyMap, computeBleedPenalty } from './constants.js';
 import { WANDER_PROFILES, DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { render } from './rendering.js';
 import { textureConfig, rebuildSpriteCache, SPRITE_LIBRARY } from './sprites.js';
@@ -16,8 +15,8 @@ import { rand, getRngState, setRngState } from './rng.js';
 
 const SAVE_KEY = 'overworld_zero_save';
 const BACKUP_KEY = 'overworld_zero_save_backup';   // a save that failed to load, kept rather than deleted
-const SAVE_VERSION = 4;
-const ACCEPTED_VERSIONS = [1, 2, 3, SAVE_VERSION];   // older ones are migrated on load
+const SAVE_VERSION = 5;   // v5: no player HP pool, inventory, equipment, XP, gold or chargen attributes
+const ACCEPTED_VERSIONS = [4, SAVE_VERSION];   // v4 is migrated on load; older saves are kept as a backup and not loaded
 let _saveFailWarned = false;
 
 // ==================== INDEXEDDB STORAGE BACKEND ====================
@@ -263,55 +262,6 @@ function deserializeExplored(raw) {
   return out;
 }
 
-// ==================== STAT MIGRATION (v1 → v2) ====================
-// Converts old 5-stat system (str/con/dex/int/per) to new 7-stat system
-// (siz/strength/chem/vib/vis/central/distributed).
-// Applied to both player and monster data when loading old saves.
-
-function migratePlayerStats(p) {
-  if (p.str != null || p.con != null || p.dex != null || p.per != null) {
-    // Player migration: use formula shims
-    p.siz = p.con || 1;           // CON → Size
-    p.strength = p.str || 1;      // STR → Strength
-    p.chem = p.per || 1;          // PER → Chemical
-    p.vib = 0;                    // new stat
-    p.vis = p.per || 1;           // PER → Visual
-    p.central = p.int || 1;       // INT → Central
-    p.distributed = 0;            // new stat
-    delete p.str; delete p.con; delete p.dex; delete p.int; delete p.per;
-  }
-  return p;
-}
-
-function migrateMonsterStats(mon) {
-  if (mon.str != null || mon.con != null || mon.dex != null || mon.per != null) {
-    mon.siz = mon.con || 1;
-    mon.strength = mon.str || 1;
-    mon.chem = mon.per || 1;
-    mon.vib = 0;
-    mon.vis = mon.per || 1;
-    mon.central = mon.int || 1;
-    mon.distributed = 0;
-    delete mon.str; delete mon.con; delete mon.dex; delete mon.int; delete mon.per;
-  }
-  return mon;
-}
-
-function migrateCgAttrs(attrs) {
-  if (attrs && (attrs.str != null || attrs.con != null)) {
-    return {
-      siz: attrs.con || 1,
-      strength: attrs.str || 1,
-      chem: attrs.per || 1,
-      vib: attrs.dex || 1,
-      vis: attrs.per || 1,
-      central: attrs.int || 1,
-      distributed: 0,
-    };
-  }
-  return attrs;
-}
-
 // ==================== ZONE STATE PERSISTENCE ====================
 // Restore saved zone HP and destroyed state onto a freshly-initialized body map.
 // Matches by zone key. If a saved zone doesn't exist in the template (e.g. body
@@ -356,16 +306,6 @@ function extractZoneState(bodyMap) {
 function serializePlayer(p) {
   if (!p) return null;
   const out = { ...p };
-  // Weapon & armor → store keys only
-  out._weaponKey = p.weapon ? p.weapon.key : 'dagger';
-  out._armorKey  = p.armor  ? p.armor.key  : 'rags';
-  delete out.weapon;
-  delete out.armor;
-  // Sets → arrays
-  out._npcsMet   = p.npcsMet   ? [...p.npcsMet]   : [];
-  out._booksRead = p.booksRead ? [...p.booksRead] : [];
-  delete out.npcsMet;
-  delete out.booksRead;
   // Body map → save only zone runtime state (hp, maxHp, destroyed, clotting,
   // substrate). Same extractor as monsters; a hand-rolled copy here used to
   // leave substrate out, so a reload was a free sprint recovery.
@@ -399,14 +339,13 @@ function serializePlayer(p) {
 function deserializePlayer(raw) {
   if (!raw) return null;
   const p = { ...raw };
-  // Reconstruct weapon & armor from registry
-  p.weapon = findWeapon(raw._weaponKey) || findWeapon('dagger');
-  p.armor  = findArmor(raw._armorKey)   || findArmor('rags');
-  delete p._weaponKey;
-  delete p._armorKey;
-  // Backwards compat: migrate old 5-stat system to new 7-stat system
-  migratePlayerStats(p);
-  // Backwards compat: ensure all new stats have defaults
+  // v4 → v5: the fantasy layer is gone. Drop its fields; hp is an alive flag.
+  for (const k of ['hpMax', 'inventory', 'gold', 'xp', 'xpNext', 'level', 'perks',
+                   'restTurns', 'regenProgress', 'weapon', 'armor', 'npcsMet', 'booksRead',
+                   '_weaponKey', '_armorKey', '_npcsMet', '_booksRead']) delete p[k];
+  p.hp = p.hp > 0 ? 1 : 0;
+  p.effects = (p.effects || []).filter(e => e && e.type === 'stealth');
+  // Backwards compat: ensure all stats have defaults
   if (p.siz == null) p.siz = 1;
   if (p.strength == null) p.strength = 1;
   if (p.chem == null) p.chem = 1;
@@ -441,11 +380,6 @@ function deserializePlayer(raw) {
     p.fleeMode = FLEE_MAP[ck] || 'standard';
     p.wanderProfile = { ...(WANDER_PROFILES[ck] || DEFAULT_WANDER_PROFILE) };
   }
-  // Reconstruct Sets
-  p.npcsMet   = new Set(raw._npcsMet   || []);
-  p.booksRead = new Set(raw._booksRead || []);
-  delete p._npcsMet;
-  delete p._booksRead;
   // Reconstruct body map from template, then restore zone state
   const savedZoneState = raw._zoneState || null;
   delete p._zoneState;
@@ -688,7 +622,6 @@ export async function saveGame() {
         activeLayer: state.activeLayer,
         gameState: state.gameState,
         worldSeed: state.worldSeed,
-        cgAttrs: state.cgAttrs,
         rngState: getRngState(),
         windDirection: state.windDirection,
         windSpeed: state.windSpeed,
@@ -807,15 +740,8 @@ export async function loadGame() {
       return false;
     }
 
-    const needsStatMigration = data.version === 1;   // v1 → rename old stat keys
-    const needsHPRecalc = data.version <= 2;          // v1 & v2 → recalc HP with new formula
-    const needsZoneMigration = data.version <= 3;     // v1-v3 → add zone destroyed defaults
-    if (needsStatMigration) {
-      console.log('[Save] Migrating v1 save to v4 (stat system rename + HP recalc + zone state).');
-    } else if (data.version === 2) {
-      console.log('[Save] Migrating v2 save to v4 (HP recalc + zone state).');
-    } else if (data.version === 3) {
-      console.log('[Save] Migrating v3 save to v4 (zone destruction state).');
+    if (data.version === 4) {
+      console.log('[Save] Migrating v4 save to v5 (player HP pool, inventory, equipment, XP and gold dropped).');
     }
 
     // Validate critical data
@@ -840,9 +766,6 @@ export async function loadGame() {
     if (savedState.windSpeed != null) state.windSpeed = savedState.windSpeed;
     state.prevLayer = savedState.prevLayer != null ? savedState.prevLayer : null;
     state.layerLeftTurn = savedState.layerLeftTurn ? { ...savedState.layerLeftTurn } : {};
-    if (savedState.cgAttrs) {
-      state.cgAttrs = needsStatMigration ? migrateCgAttrs(savedState.cgAttrs) : savedState.cgAttrs;
-    }
 
     // --- Restore world grids (Object keyed by layerIndex) ---
     for (const key of Object.keys(worlds)) delete worlds[key];
@@ -865,41 +788,6 @@ export async function loadGame() {
       const restored = deserializeMonsters(data.monsters);
       for (const [key, value] of Object.entries(restored)) {
         monsters[key] = value;
-      }
-    }
-
-    // --- Migrate monster stats if loading old save ---
-    if (needsStatMigration) {
-      for (const li of Object.keys(monsters)) {
-        if (!monsters[li]) continue;
-        for (const mon of monsters[li]) {
-          if (mon) migrateMonsterStats(mon);
-        }
-      }
-    }
-
-    // --- Recalculate HP for v1/v2 saves using new Size-based formula ---
-    if (needsHPRecalc) {
-      // Recalc player HP
-      const p = state.player;
-      if (p) {
-        const newMax = p.siz * HP_PER_SIZE + (p.level - 1) * Math.ceil(p.siz * HP_PER_LEVEL_FACTOR)
-                       + (p.perks && p.perks.hp_bonus ? 8 : 0);
-        p.hpMax = newMax;
-        p.hp = Math.min(p.hp, p.hpMax);  // clamp current HP to new max
-      }
-      // Recalc monster HP where applicable
-      for (const li of Object.keys(monsters)) {
-        if (!monsters[li]) continue;
-        for (const mon of monsters[li]) {
-          if (!mon) continue;
-          // Monsters have hpMax set from their template; recalc using Size
-          if (mon.siz != null) {
-            const newMax = mon.siz * HP_PER_SIZE + ((mon.level || 1) - 1) * Math.ceil(mon.siz * HP_PER_LEVEL_FACTOR);
-            mon.hpMax = newMax;
-            mon.hp = Math.min(mon.hp, mon.hpMax);
-          }
-        }
       }
     }
 

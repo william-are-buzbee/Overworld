@@ -11,12 +11,11 @@ import { getBodyMap, getNeuralArchitecture,
          SUBSTRATE_DEPLETION_MOD, SUBSTRATE_DEPLETION_HIGH, SUBSTRATE_REGEN_BASE,
          CIRC_REGEN_EFF_CLOSED, CIRC_REGEN_EFF_OPEN, CIRC_REGEN_EFF_HYBRID,
          VASCULARITY_MIN, REGEN_UPREGULATION, FAST_TWITCH_RECRUIT_THRESHOLD,
-         MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF,
+         MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, STARVATION_BLOOD_FRACTION,
          ACTIVE_RADIUS, DORMANT_RADIUS, MAX_DRIFT } from './constants.js';
 import { computeIntegrationCapacity, getTier } from './cognition.js';
 import { computePlayerPerception } from './detection.js';
 import { isWalkable, terrainInfo } from './terrain.js';
-import { playerDef, playerDodge, poisonResistance, passiveRegenInterval } from './player.js';
 import { inBounds, monsterAt, isTownCell, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { render } from './rendering.js';
@@ -303,67 +302,33 @@ function endPlayerTurn(action){
   }
   if (state.player.fed > 15) state.player._warnedHungry = false;
 
-  // Starvation: FED=0 drains HP slowly
+  // Starvation. PLACEHOLDER (Design-Principles): there is no metabolism yet,
+  // so an empty food reserve drains blood volume directly, a fixed fraction
+  // of bloodMax per turn, while processBleed stops making new blood (no
+  // food, no blood). Death then comes through the same blood threshold as
+  // bleeding out. The real model is substrate and tissue catabolism.
   if (state.player.fed === 0){
     state.player.starveTurns = (state.player.starveTurns||0) + 1;
-    if (state.player.starveTurns >= 3){  // 1 HP per 3 turns of starvation
-      state.player.starveTurns = 0;
-      state.player.hp -= 1;
-      if (state.player.hp <= 0){
-        state.player.hp = 0;
-        log('You collapse from starvation.', LOG_CATEGORIES.ENVIRONMENT);
-        state.player.deathCause = 'starvation';
-        if (_onPlayerDeathCallback) _onPlayerDeathCallback();
-        return;
-      }
-      log('Starvation weakens you.', LOG_CATEGORIES.ENVIRONMENT);
+    if (state.player.bloodMax > 0){
+      state.player.blood = Math.max(0, state.player.blood - state.player.bloodMax * STARVATION_BLOOD_FRACTION);
     }
+    if (state.player.starveTurns === 1) log('You are starving. Your body begins to consume itself.', LOG_CATEGORIES.ENVIRONMENT);
+    else if (state.player.starveTurns % 10 === 0) log('Starvation weakens you.', LOG_CATEGORIES.ENVIRONMENT);
   } else {
     state.player.starveTurns = 0;
   }
 
-  // Passive regen — scales linearly with Size, all values get regen
-  // Passive healing does NOT drain FED
-  const iv = passiveRegenInterval(player);
-  if (state.player.fed > 0 && state.player.hp < state.player.hpMax){
-    state.player.regenProgress = (state.player.regenProgress||0) + 1;
-    if (state.player.regenProgress >= iv){
-      state.player.hp = Math.min(state.player.hpMax, state.player.hp + 1);
-      state.player.regenProgress = 0;
-    }
-  }
-
-  // Player effects tick
-  const survivingEffects = [];
-  for (const e of state.player.effects){
-    if (e.type === 'stealth'){ survivingEffects.push(e); continue; }
-    if (e.type === 'poison'){
-      const resist = poisonResistance(player);
-      const reduction = 1 - resist.damageReduction;
-      // % max HP damage
-      const pctDmg = Math.max(0, Math.round((e.percentDmg || 0.03) * state.player.hpMax * reduction));
-      // Flat damage
-      const flatDmg = Math.max(0, Math.round((e.flatDmg || 1) * reduction));
-      const totalPoisonDmg = Math.max(1, pctDmg + flatDmg);
-      state.player.hp -= totalPoisonDmg;
-      log(`Toxin damage. [-${totalPoisonDmg} HP]`, LOG_CATEGORIES.COMBAT);
-      if (state.player.hp <= 0){
-        state.player.hp = 0;
-        log('The venom claims you.', LOG_CATEGORIES.COMBAT);
-        state.player.deathCause = 'poison';
-        if (_onPlayerDeathCallback) _onPlayerDeathCallback();
-        return;
-      }
-    }
-    e.turns--;
-    if (e.turns > 0) survivingEffects.push(e);
-  }
-  state.player.effects = survivingEffects;
+  // Player effects: only the stealth marker exists now (it never expires on
+  // its own; endStealth removes it). There are no timed status effects.
+  state.player.effects = state.player.effects.filter(e => e.type === 'stealth');
 
   // Blood system — process player bleed (seep, regen, clotting, death check)
   if (processBleed(state.player, true)) {
     state.player.hp = 0;
-    // deathCause already set by processBleed
+    // deathCause already set by processBleed; name starvation when no wound is open
+    if (state.player.fed === 0 && !getBodyMap(state.player).some(z => !z.destroyed && z.hp != null && z.hp < z.maxHp * 0.5)) {
+      state.player.deathCause = 'starvation';
+    }
     if (_onPlayerDeathCallback) _onPlayerDeathCallback();
     return;
   }

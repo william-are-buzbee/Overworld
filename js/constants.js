@@ -63,15 +63,6 @@ export const TILE_VOID = { walkable: false, transparent: false };
 export const COL_FG = '#e8e8e8';
 export const COL_MID = '#8a8a8a';
 
-// ==================== PRICE CATEGORIES ====================
-// Tiered Central-discount brackets.  Each item is tagged (or derived)
-// into one of these so buyPriceMul / sellValueMul can apply the
-// correct per-Central scaling.
-//   staple   — food, basic supplies.          1% per Central above 1 (max ~9%).
-//   standard — basic weapons, basic armor.    2% per Central above 1 (max ~18%).
-//   luxury   — books, potions, high-end gear. 3% per Central above 1 (max ~27%).
-export const PRICE_CAT = { STAPLE:'staple', STANDARD:'standard', LUXURY:'luxury' };
-
 // ==================== FED MAX ====================
 export const FED_MAX = 100;
 
@@ -280,9 +271,10 @@ export const SPAWN_VIABILITY_MIN    = 6;  // need at least this many habitat til
 export const STAT_MIN = 1;
 export const STAT_MAX = 100;
 
-// HP — each point of Size = 1 HP, so Size 40 = 40 HP
+// PLACEHOLDER: monsters still carry hpMax = siz * HP_PER_SIZE; it is only
+// read as corpse nutrition now (killMonster / performNPCAttack). Goes with
+// the seven-stat table.
 export const HP_PER_SIZE           = 1;
-export const HP_PER_LEVEL_FACTOR   = 0.05;  // hpPerLevel = Math.ceil(Size * HP_PER_LEVEL_FACTOR)
 
 // Damage — LEGACY Size/Strength coefficients removed (Prompt E).
 // Damage now derives from attacking zone tissue via computeStrikeDamage().

@@ -375,7 +375,13 @@ Armor derives from the structural mass in the zone. More integument/bone = more 
 
 ## Creature Global HP
 
-Creature-level HP is the sum of all zone HPs. This is what the player sees in the status display. Two creatures at 50% HP are not equivalent — one may have all zones lightly damaged, the other may have its primary cognitive zone destroyed with the rest intact.
+**Status (Sep 2026): there is no creature-level HP.** The player's `hp` is an alive flag (1 or 0), set to 0 by
+`applyZoneDamage` (vital zone destroyed, neural mass below threshold, blood below threshold) or by `processBleed`. The HUD
+shows zone bars, blood and the food reserve; nothing sums the zones. Monsters still carry `hpMax = siz * HP_PER_SIZE`, read
+only as corpse nutrition; it goes with the seven-stat table. The old inventory, equipment, XP, levels, gold, potions and books
+are gone with it: the player attacks with the body map's own attacks exactly as an NPC does (`combat.js playerAttack` mirrors
+`behaviors.js monsterMelee`). Starvation is a placeholder until metabolism exists: at food 0 the body makes no new blood and
+loses `STARVATION_BLOOD_FRACTION` of its blood volume per turn, dying through the blood threshold.
 
 ---
 

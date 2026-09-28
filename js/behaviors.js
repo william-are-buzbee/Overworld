@@ -18,7 +18,7 @@ import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { endStealth, stealthDetectChance, rollHit } from './combat.js';
 import { placeItem, generateItemId } from './ground-items.js';
-import { playerDef, playerDodge, poisonResistance } from './player.js';
+import { playerDodge } from './player.js';
 import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          canMoveTo, moveInDirection, isNearWater, findNearestWaterTile,
          getCreatureMass, weightedRandomChoice, movesCloserTo,
@@ -856,8 +856,7 @@ function monsterMelee(mon){
   let base = monDamage(mon, attackingZone) + randi(3);
   const crit = roll100() <= monCritChance(mon);
   if (crit) base = Math.floor(base * monCritMult(mon));
-  const effDef = Math.max(0, playerDef(player));
-  let dmg = Math.max(1, base - effDef);
+  const dmg = Math.max(1, base);   // no armor items; zone structural mass is the armor (below)
 
   // ─── Footprint-based zone resolution on player ───
   if (playerBodyMap && usedAttack) {
@@ -929,23 +928,8 @@ function monsterMelee(mon){
     }
   }
 
-  // Poison application
-  if (mon.dmgType === DMG.POISON){
-    const poisonResist = poisonResistance(player);
-    const baseChance = 60;
-    const poisonChance = Math.max(5, baseChance - poisonResist.chanceReduction);
-    if (roll100() <= poisonChance){
-      state.player.effects.push({
-        type:'poison',
-        turns: Math.max(2, 5 - Math.floor(poisonResist.durationReduction)),
-        percentDmg: 0.03,
-        flatDmg: 1,
-      });
-      const stacks = state.player.effects.filter(e => e.type === 'poison').length;
-      if (stacks === 1) log('You are poisoned.', LOG_CATEGORIES.COMBAT);
-      else log(`Poison stacks. (×${stacks})`, LOG_CATEGORIES.COMBAT);
-    }
-  }
+  // (No poison status: venom is not modelled until there is a chemistry to
+  // carry it. DMG.POISON attackers just do their tissue damage.)
   if (state.player.stealth) endStealth('Your cover is blown.');
 }
 

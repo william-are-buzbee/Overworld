@@ -77,6 +77,7 @@ export const BURST_COEFF            = 0.03;   // burst multiplier per bandwidth 
 export const CLOT_RATE              = 0.05;   // clotting progress per turn (1.0 = fully clotted)
 export const REGEN_FRACTION         = 0.002;  // blood regeneration per turn as fraction of max
 export const BLOOD_DEATH_THRESHOLD  = 0.10;   // die at 10% blood remaining
+export const STARVATION_BLOOD_FRACTION = 0.008; // PLACEHOLDER: blood lost per turn at fed 0 (turn-loop.js); ~110 turns from full
 export const BLOOD_WEAKENED_THRESHOLD = 0.50; // speed/damage penalty begins
 export const BLOOD_CRITICAL_THRESHOLD = 0.25; // severe penalty, AI flee trigger
 
