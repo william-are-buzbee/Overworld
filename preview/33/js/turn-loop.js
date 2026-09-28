@@ -1,0 +1,609 @@
+// ==================== TURN LOOP ====================
+// The master turn loop that coordinates physiology, FOV, scent, AI,
+// dormancy, and cleanup.  Calls into physiology.js, ai.js, fov.js,
+// scent.js, and detection.js but doesn't implement any of them.
+// Split from enemy-ai.js.
+
+import { state, worlds, monsters } from './state.js';
+import { getBodyMap, getNeuralArchitecture,
+         BASE_AP_COST, MAX_ACTIONS_PER_INPUT, REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
+         HEAL_BASE_RATE, HEAL_REST_MULTIPLIER,
+         SUBSTRATE_DEPLETION_MOD, SUBSTRATE_DEPLETION_HIGH, SUBSTRATE_REGEN_BASE,
+         CIRC_REGEN_EFF_CLOSED, CIRC_REGEN_EFF_OPEN, CIRC_REGEN_EFF_HYBRID,
+         VASCULARITY_MIN, REGEN_UPREGULATION, FAST_TWITCH_RECRUIT_THRESHOLD,
+         MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, STARVATION_BLOOD_FRACTION,
+         ACTIVE_RADIUS, DORMANT_RADIUS, MAX_DRIFT } from './constants.js';
+import { computeIntegrationCapacity, getTier } from './cognition.js';
+import { computePlayerPerception } from './detection.js';
+import { isWalkable, terrainInfo } from './terrain.js';
+import { inBounds, monsterAt, getCover } from './world-state.js';
+import { log, LOG_CATEGORIES } from './log.js';
+import { render } from './rendering.js';
+import { advanceTick } from './time-cycle.js';
+import { saveGame } from './save-load.js';
+import { rand } from './rng.js';
+import { updatePlayerFOV, updateAmbientSensing } from './fov.js';
+import { computeSignals } from './signals.js';
+import { updateScentSystem } from './scent.js';
+import { getBodyPTW, processBleed, applyHealing,
+         _getCirculatoryRegenEfficiency, _regenerateSubstrate,
+         _clearStressChemistry,
+         turnsToFullSpeed, getEntityTotalMass, applyTurningCost, getMovementIntensity } from './physiology.js';
+import { runCreatureAI, _updateInWater } from './ai.js';
+import { isWaterTile, isWaterLocked, wouldExceedTerritory, WATER_TILES,
+         rebuildSpatialGrid, canMoveTo } from './ai-utils.js';
+
+// Forward references — set by main.js
+let _onPlayerDeathCallback = null;
+export function setOnPlayerDeathCallback(fn){ _onPlayerDeathCallback = fn; }
+let _useActionCallback = null;
+export function setUseActionCallback(fn){ _useActionCallback = fn; }
+
+function monstersHere(){ return monsters[state.player.layer] || []; }
+
+// Food spent per player action, in hundredths of a FED point (endPlayerTurn
+// banks it and takes a point per 10). PLACEHOLDER until there is a
+// metabolism: the numbers are the legacy costs, not derived from the body.
+function fedDrainFor(action){
+  if (action === 'rest') return 2;
+  if (action === 'move') return 0.5625;
+  if (action === 'attack') return 5.4;
+  if (action === 'miss') return 5.4;
+  if (action === 'turn') return 0.5625;
+  return 1;
+}
+
+// The turn counter lives on state.turnCount (saved, and read by log.js and
+// scent.js). It used to be shadowed by a module-local that nothing else saw.
+
+// ── Layer-transition tracking for dormancy catch-up (Prompt S) ──
+// When the player leaves a layer, we record the turn count.  When they return,
+// every creature on that layer gets catch-up for the intervening turns.
+// State lives on state.prevLayer / state.layerLeftTurn (reset per run, saved).
+
+// ==================== ACTIVE SIMULATION RADIUS (Prompt S) ====================
+// Creatures beyond DORMANT_RADIUS from the player are dormant — they skip
+// the expensive per-turn pipeline entirely.  When they re-enter ACTIVE_RADIUS
+// they run a lightweight catch-up that advances their state to be plausible.
+// Hysteresis between the two radii prevents flickering at the boundary.
+
+/**
+ * Classify a creature as active or dormant based on distance to the player.
+ * Returns true if the creature is active (should run full simulation).
+ */
+function updateCreatureActivity(creature, player) {
+  const dx = creature.x - player.x;
+  const dy = creature.y - player.y;
+  const distSq = dx * dx + dy * dy;
+
+  if (creature._dormant) {
+    // Wake up if within active radius
+    if (distSq <= ACTIVE_RADIUS * ACTIVE_RADIUS) {
+      if (creature._dormantTurns > 0) {
+        catchUpCreature(creature);
+      }
+      creature._dormant = false;
+      creature._dormantTurns = 0;
+      return true;  // active
+    }
+    // Stay dormant
+    creature._dormantTurns = (creature._dormantTurns || 0) + 1;
+    return false;
+  } else {
+    // Go dormant if beyond dormant radius
+    if (distSq > DORMANT_RADIUS * DORMANT_RADIUS) {
+      creature._dormant = true;
+      creature._dormantTurns = 0;
+      return false;  // dormant
+    }
+    // Stay active
+    return true;
+  }
+}
+
+/**
+ * Advance a dormant creature's state to be plausible when it wakes up.
+ * Uses the same rates as the real simulation — no separate hardcoded values.
+ * Blood is NOT touched here: processBleed runs every turn for dormant
+ * creatures too (see the classification loop in endPlayerTurn), so seep,
+ * clotting, regeneration and blood-loss death happen at the real rate while
+ * the creature is out of range. A creature that bled out 60 tiles away is
+ * dead, not healthy when you walk back.
+ */
+function catchUpCreature(creature) {
+  const turns = creature._dormantTurns;
+  if (turns <= 0) return;
+
+  // 1. Advance hunger (same rate as updateDrives)
+  if (creature.drives) {
+    const bodyMap = getBodyMap(creature);
+    let totalMass = creature.totalMass || 0;
+    let totalNeural = 0;
+    if (bodyMap) {
+      totalMass = 0;
+      for (const zone of bodyMap) {
+        if (!zone.destroyed) {
+          totalMass += zone.mass || 0;
+          totalNeural += zone.neural || 0;
+        }
+      }
+    }
+    const hungerPerTurn = totalMass * MASS_HUNGER_COEFF + totalNeural * NEURAL_HUNGER_COEFF;
+    creature.drives.hunger = Math.min(1.0, creature.drives.hunger + hungerPerTurn * turns);
+  }
+
+  // 2. Heal wounds (if blood was sufficient — dormant creature was effectively resting)
+  if (creature.blood != null && creature.bloodMax != null && creature.bloodMax > 0) {
+    if (creature.blood > creature.bloodMax * 0.5) {
+      const bodyMap = getBodyMap(creature);
+      if (bodyMap) {
+        const bloodFraction = creature.blood / creature.bloodMax;
+        const bloodScalar = (bloodFraction - 0.50) / 0.50;
+        const healPerTurn = HEAL_BASE_RATE * bloodScalar * HEAL_REST_MULTIPLIER;
+        for (const zone of bodyMap) {
+          if (zone.destroyed) continue;
+          if (zone.hp != null && zone.maxHp != null && zone.hp < zone.maxHp) {
+            zone.hp = Math.min(zone.maxHp, zone.hp + healPerTurn * turns);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Blood and clotting: handled per turn by processBleed while dormant.
+
+  // 4. Stress chemistry cleared for the time away (same rate as clearance
+  //    per input; a dormant creature ran no clearance while out of range).
+  _clearStressChemistry(creature, turns);
+
+  // 5. Drift position — dormant creatures weren't actually frozen, they were wandering
+  driftPosition(creature, turns);
+
+  // 5b. No banked action points: it should not burst on waking.
+  creature._accumulatedAP = 0;
+
+  // 6. Reset rest drive — if dormant long enough, the creature rested fully
+  if (creature.drives && turns > 10) {
+    creature.drives.rest = 0;
+  }
+
+  // 7. Reset safety drive — no threats while dormant
+  if (creature.drives) {
+    creature.drives.safety = 0;
+  }
+}
+
+/**
+ * Shift a creature's position based on dormancy duration to simulate wandering.
+ * Territorial creatures drift within home radius; wanderers drift freely (capped).
+ * Square root scaling: 10 turns → ~3 tiles, 100 → ~10, 400 → 15 (capped).
+ */
+function driftPosition(creature, dormantTurns) {
+  let maxDrift;
+  const layer = creature.layer != null ? creature.layer : state.player.layer;
+
+  if (creature.territoryRadius > 0) {
+    // Territorial creature: drift within territory, biased toward home
+    maxDrift = Math.min(creature.territoryRadius, Math.floor(Math.sqrt(dormantTurns)));
+  } else {
+    // Wandering creature: drift scales with time, capped
+    maxDrift = Math.min(MAX_DRIFT, Math.floor(Math.sqrt(dormantTurns)));
+  }
+
+  if (maxDrift <= 0) return;
+
+  // Try random offsets, accept the first valid position
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const dx = Math.floor(rand() * (maxDrift * 2 + 1)) - maxDrift;
+    const dy = Math.floor(rand() * (maxDrift * 2 + 1)) - maxDrift;
+
+    const newX = creature.x + dx;
+    const newY = creature.y + dy;
+
+    if (isDriftPositionValid(creature, newX, newY, layer)) {
+      creature.x = newX;
+      creature.y = newY;
+      // Update home if creature has wander home tracking but is non-territorial
+      return;
+    }
+  }
+  // If no valid position found in 10 attempts, stay put
+}
+
+/**
+ * Validate a drift target position — reuses the same constraints as normal movement.
+ * Checks: bounds, terrain walkability, water locks, no creature collision, territory.
+ */
+function isDriftPositionValid(creature, tx, ty, layer) {
+  if (!inBounds(layer, tx, ty)) return false;
+
+  const ground = worlds[layer][ty][tx];
+  const cover = getCover(layer, tx, ty);
+
+  // Water tile check (mirrors canMoveTo)
+  if (WATER_TILES.has(ground)) {
+    if (creature.canEnterWater !== true) return false;
+    // Water creature still needs cover to be walkable (if any)
+    if (cover) {
+      const ci = terrainInfo(cover);
+      if (!ci.walk) return false;
+    }
+  } else {
+    if (!isWalkable(ground, cover)) return false;
+  }
+
+  // Water-locked creatures can't leave water
+  if (isWaterLocked(creature) && !WATER_TILES.has(ground)) return false;
+
+  // No collision with another creature (skip self)
+  const occupant = monsterAt(tx, ty, layer);
+  if (occupant && occupant !== creature) return false;
+
+  // No collision with player
+  if (tx === state.player.x && ty === state.player.y) return false;
+
+  // Territory radius check
+  if (wouldExceedTerritory(creature, tx, ty)) return false;
+
+  return true;
+}
+
+// ==================== END PLAYER TURN ====================
+
+function endPlayerTurn(action){
+  const player = state.player;
+
+  // ── Ensure player signal fields exist (Prompt L-A) ──
+  if (player.signals == null) {
+    player.signals = { chemical: 0, vibration: { ground: 0, air: 0, water: 0 }, visual: 0 };
+  }
+  if (player.movedThisTurn == null) player.movedThisTurn = false;
+  if (player.inCombatThisTurn == null) player.inCombatThisTurn = false;
+  if (player.inWater == null) player.inWater = false;
+
+  // ── Cognitive tier — player (Prompt M-A1) ──
+  player.integrationCapacity = computeIntegrationCapacity(player);
+  player.tier = getTier(player.integrationCapacity);
+
+  state.turnCount++;
+
+  // ── Player acceleration tracking (mass-dependent startup) ──
+  // Must run BEFORE AP calculation so first turn of movement isn't at 0.
+  if (state.player.movedThisTurn) {
+    state.player._consecutiveMoveTurns = (state.player._consecutiveMoveTurns || 0) + 1;
+  } else {
+    state.player._consecutiveMoveTurns = 0;
+  }
+
+  // ── AP and world-time calculations ──
+  // These are SEPARATE systems that both read the player's speed.
+  //   AP accumulation:  ratio-based (creaturePTW / playerPTW) — determines
+  //                     how often creatures act relative to the player.
+  //   World-time:       reference-speed-based — determines how fast the
+  //                     day/night cycle and time-scaled effects advance.
+  // A turn spent standing runs at the body's walking rate, whatever gait it
+  // last moved at: creeping costs time per step, not per wait.
+  const playerIntensity = state.player.movedThisTurn ? getMovementIntensity(state.player) : null;
+  const playerPTW = getBodyPTW(player, playerIntensity);
+  // Apply mass-dependent acceleration scalar
+  const playerTotalMass = getEntityTotalMass(player);
+  const playerTTFS = turnsToFullSpeed(playerTotalMass);
+  const playerAccelScalar = Math.min(1.0, (state.player._consecutiveMoveTurns || 0) / playerTTFS);
+  const playerAPRate = playerPTW * (state.player.movedThisTurn ? playerAccelScalar : 1.0);
+  const effectivePlayerRate = Math.max(playerAPRate, 0.001);  // guard against zero/tiny
+
+  // World-time: how many day-cycle ticks pass per player action.
+  // At REFERENCE_SPEED → 1 tick/action → 1200 actions per full day.
+  // Faster player → fewer ticks/action → more actions per day.
+  // Slower player → more ticks/action → fewer actions per day.
+  const worldTicksElapsed = BASE_TICKS_PER_ACTION * (REFERENCE_SPEED / effectivePlayerRate);
+  advanceTick(worldTicksElapsed);
+  // Drain FED based on action (scaled; 1 FED per accumulated 100)
+  state.player.fedProgress = (state.player.fedProgress||0) + fedDrainFor(action||'move');
+  while (state.player.fedProgress >= 10 && state.player.fed > 0){
+    state.player.fed = Math.max(0, state.player.fed - 1);
+    state.player.fedProgress -= 10;
+  }
+  // Clamp: discard banked progress once starving so it doesn't
+  // instantly re-drain after eating
+  if (state.player.fed <= 0){
+    state.player.fed = 0;
+    state.player.fedProgress = 0;
+  }
+  if (state.player.fed === 15 && !state.player._warnedHungry){
+    log('You grow hungry.', LOG_CATEGORIES.ENVIRONMENT); state.player._warnedHungry = true;
+  }
+  if (state.player.fed > 15) state.player._warnedHungry = false;
+
+  // Starvation. PLACEHOLDER (Design-Principles): there is no metabolism yet,
+  // so an empty food reserve drains blood volume directly, a fixed fraction
+  // of bloodMax per turn, while processBleed stops making new blood (no
+  // food, no blood). Death then comes through the same blood threshold as
+  // bleeding out. The real model is substrate and tissue catabolism.
+  if (state.player.fed === 0){
+    state.player.starveTurns = (state.player.starveTurns||0) + 1;
+    if (state.player.bloodMax > 0){
+      state.player.blood = Math.max(0, state.player.blood - state.player.bloodMax * STARVATION_BLOOD_FRACTION);
+    }
+    if (state.player.starveTurns === 1) log('You are starving. Your body begins to consume itself.', LOG_CATEGORIES.ENVIRONMENT);
+    else if (state.player.starveTurns % 10 === 0) log('Starvation weakens you.', LOG_CATEGORIES.ENVIRONMENT);
+  } else {
+    state.player.starveTurns = 0;
+  }
+
+  // Player effects: only the stealth marker exists now (it never expires on
+  // its own; endStealth removes it). There are no timed status effects.
+  state.player.effects = state.player.effects.filter(e => e.type === 'stealth');
+
+  // Blood system — process player bleed (seep, regen, clotting, death check)
+  if (processBleed(state.player, true)) {
+    state.player.hp = 0;
+    // deathCause already set by processBleed; name starvation when no wound is open
+    if (state.player.fed === 0 && !getBodyMap(state.player).some(z => !z.destroyed && z.hp != null && z.hp < z.maxHp * 0.5)) {
+      state.player.deathCause = 'starvation';
+    }
+    if (_onPlayerDeathCallback) _onPlayerDeathCallback();
+    return;
+  }
+
+  // Zone healing (Prompt J) — player heals wounded zones after bleed
+  // Set currentBehavior so getHealingRate can check for rest bonus
+  state.player.currentBehavior = action === 'rest' ? 'rest' : action;
+  applyHealing(state.player);
+
+  // The step the player just took and how fast, for other eyes (detection.js
+  // _velocity). Measured against where the last turn ended.
+  if (state.player._lastPos && state.player._lastPos.layer === state.player.layer) {
+    _recordStep(state.player, state.player._lastPos.x, state.player._lastPos.y,
+                state.player.movedThisTurn ? playerAPRate : 0);
+  } else {
+    state.player._step = null; state.player._speed = 0;
+  }
+
+  // ── Player signal emission (Prompt L-A) ──
+  // Update water state and compute player signals before NPC turns,
+  // so NPCs see current player emission values.
+  _updateInWater(state.player);
+  computeSignals(state.player);
+
+  // ── Player substrate depletion — uses actual movement intensity ──
+  if (state.player.movedThisTurn) {
+    const playerBodyMap = getBodyMap(state.player);
+    if (playerBodyMap) {
+      const intensity = getMovementIntensity(state.player);
+      // Only deplete if intensity exceeds fast-twitch recruitment threshold
+      if (intensity >= FAST_TWITCH_RECRUIT_THRESHOLD) {
+        const excessIntensity = intensity - FAST_TWITCH_RECRUIT_THRESHOLD;
+        for (const zone of playerBodyMap) {
+          if (zone.destroyed || !zone.locomotion || zone.fiberRatio == null) continue;
+          const fastMass = zone.muscle * zone.fiberRatio;
+          const cost = fastMass * excessIntensity * SUBSTRATE_DEPLETION_HIGH;
+          zone.substrate = Math.max(0, (zone.substrate || 0) - cost);
+        }
+      }
+    }
+  }
+
+  // ── Player substrate regeneration (all non-depleted zones) ──
+  {
+    const playerBodyMap = getBodyMap(state.player);
+    if (playerBodyMap) {
+      const circRegenEff = _getCirculatoryRegenEfficiency(state.player);
+      const playerIntensity = getMovementIntensity(state.player);
+      for (const zone of playerBodyMap) {
+        if (zone.destroyed || zone.fiberRatio == null) continue;
+        if (zone.substrateMax == null || zone.substrateMax <= 0) continue;
+        if (zone.substrate >= zone.substrateMax) continue;
+
+        // Block regen on locomotion zones only when movement intensity was high
+        if (zone.locomotion && state.player.movedThisTurn) {
+          if (playerIntensity >= FAST_TWITCH_RECRUIT_THRESHOLD) continue;
+        }
+
+        const vascularityFactor = VASCULARITY_MIN + (1.0 - VASCULARITY_MIN) * (1.0 - zone.fiberRatio);
+        const substrateFraction = (zone.substrate || 0) / zone.substrateMax;
+        const depletionBoost = 1.0 + REGEN_UPREGULATION * (1.0 - substrateFraction);
+        const regen = zone.muscle * SUBSTRATE_REGEN_BASE * circRegenEff * vascularityFactor * depletionBoost;
+        zone.substrate = Math.min(zone.substrateMax, (zone.substrate || 0) + regen);
+      }
+    }
+  }
+
+  // ── Sprint exhaustion: auto-disable sprint when any locomotion zone runs dry ──
+  if (state.player.sprintMode) {
+    const playerBodyMap = getBodyMap(state.player);
+    if (playerBodyMap) {
+      let anyDepleted = false;
+      let warned25 = false;
+      for (const zone of playerBodyMap) {
+        if (zone.destroyed || !zone.locomotion || zone.fiberRatio == null) continue;
+        if (zone.substrateMax > 0 && zone.substrate <= 0) {
+          anyDepleted = true;
+        }
+        if (!state.player._sprintWarnedLow && zone.substrateMax > 0 &&
+            zone.substrate / zone.substrateMax <= 0.25 && zone.substrate > 0) {
+          warned25 = true;
+        }
+      }
+      if (warned25) {
+        log('Your legs burn.', LOG_CATEGORIES.ENVIRONMENT);
+        state.player._sprintWarnedLow = true;
+      }
+      if (anyDepleted) {
+        log("Your legs give out — you can't maintain this pace.", LOG_CATEGORIES.ENVIRONMENT);
+        state.player.sprintMode = false;
+        state.player._sprintWarnedLow = false;
+      }
+    }
+  } else {
+    state.player._sprintWarnedLow = false;
+  }
+
+  // Reset the player's combat flag AFTER signals are computed (Prompt L-A).
+  // movedThisTurn is NOT reset here: the creature loop below reads it (a
+  // moving player is what their eyes pick up) and so does the player's scent
+  // deposit. It is reset at the very end of the turn and set again by the next
+  // move action.
+  state.player.inCombatThisTurn = false;
+
+  // ── Prompt S: layer-transition catch-up ──
+  // If the player changed layers since last turn, record departure from the old
+  // layer and catch up creatures on the new layer for the time the player was away.
+  const currentLayer = state.player.layer;
+  if (state.prevLayer != null && state.prevLayer !== currentLayer) {
+    // Record when we left the previous layer
+    state.layerLeftTurn[state.prevLayer] = state.turnCount;
+    // If returning to a layer we've visited before, catch up its creatures
+    if (state.layerLeftTurn[currentLayer] != null) {
+      const turnsAway = state.turnCount - state.layerLeftTurn[currentLayer];
+      if (turnsAway > 0) {
+        const layerMons = monsters[currentLayer] || [];
+        for (const m of layerMons) {
+          if (m.hp <= 0) continue;
+          // All creatures on a non-active layer are effectively dormant for the duration
+          m._dormant = true;
+          m._dormantTurns = (m._dormantTurns || 0) + turnsAway;
+        }
+      }
+      delete state.layerLeftTurn[currentLayer];
+    }
+  }
+  state.prevLayer = currentLayer;
+
+  // Enemies act — on the current layer
+  {
+    const mons = monstersHere();
+
+    // Prompt S: classify creatures as active or dormant
+    const activeCreatures = [];
+    for (const m of mons) {
+      if (m.hp <= 0) continue;
+      if (updateCreatureActivity(m, player)) {
+        activeCreatures.push(m);
+      } else if (processBleed(m, false)) {
+        // Dormant creatures still bleed (and clot, and regenerate) at the
+        // real rate; a zone loop per creature is cheap. Only AI, detection
+        // and movement are skipped while out of range.
+        m.hp = 0;  // blood loss death
+      }
+    }
+
+    // Prompt R: rebuild spatial hash grid with active creatures only
+    rebuildSpatialGrid(activeCreatures);
+
+    // ── AP-based creature action loop ──
+    // Each creature accumulates AP proportional to its speed ratio vs the player.
+    // When accumulated AP >= BASE_AP_COST, the creature acts.  Fast creatures
+    // act multiple times per player input; slow creatures act less than once.
+    // AP is pure ratio math — no world-ticks involved.
+    for (const m of activeCreatures){
+      if (m.hp <= 0) continue;
+
+      // Blood system — process monster bleed each turn
+      if (processBleed(m, false)) {
+        m.hp = 0;  // blood loss death
+        continue;
+      }
+
+      // Zone healing (Prompt J) — monsters heal wounded zones after bleed
+      applyHealing(m);
+
+      // Facing initialization for creatures that need it
+      if (!m.facing && (m.key === 'cave_crab')) {
+        m.facing = { dx: 0, dy: 1 };
+      }
+
+      // Accumulate AP based on speed ratio (pure ratio math, no world-ticks)
+      // Apply mass-dependent acceleration scalar.
+      // Only reduces speed once the creature has been moving (consecutiveMoveTurns > 0).
+      // Standing creatures act at full AP rate so they can detect, react, and start moving.
+      // Once in motion, speed ramps up from 1/ttfs to full over several turns.
+      const creatureTotalMass = getEntityTotalMass(m);
+      const creatureTTFS = turnsToFullSpeed(creatureTotalMass);
+      const rawConsecutive = m._consecutiveMoveTurns || 0;
+      const creatureAccelScalar = rawConsecutive > 0
+        ? Math.min(1.0, rawConsecutive / creatureTTFS)
+        : 1.0;
+      const creaturePTW = getBodyPTW(m, getMovementIntensity(m));  // same rule as the player
+      const speedRatio = (creaturePTW * creatureAccelScalar) / effectivePlayerRate;
+      m._accumulatedAP = (m._accumulatedAP || 0) + speedRatio * BASE_AP_COST;
+
+      // Act while enough AP is accumulated (up to cap)
+      let actionsThisTurn = 0;
+      let movedAnyAction = false;  // Track if creature moved during ANY action this input
+      while (m._accumulatedAP >= BASE_AP_COST && actionsThisTurn < MAX_ACTIONS_PER_INPUT) {
+        m._accumulatedAP -= BASE_AP_COST;
+        actionsThisTurn++;
+
+        // Reset per-action transient flags
+        m.movedThisTurn = false;
+        m.inCombatThisTurn = false;
+        m._lastGanglionIntensity = null;
+        m._ganglionTriggeredStress = false;
+
+        // Run the creature's full AI cycle
+        const x0 = m.x, y0 = m.y;
+        runCreatureAI(m);
+        if (m.movedThisTurn) movedAnyAction = true;
+        _recordStep(m, x0, y0, m.movedThisTurn
+          ? getBodyPTW(m, getMovementIntensity(m)) * creatureAccelScalar : 0);
+
+        if (state.player.hp <= 0){ _onPlayerDeathCallback && _onPlayerDeathCallback(); return; }
+        if (m.hp <= 0) break;  // creature died during its action
+      }
+
+      // Cap accumulated AP to prevent runaway accumulation on dormant-then-active creatures.
+      // At most ~1.5 actions worth — enough for carryover, never a huge burst.
+      m._accumulatedAP = Math.min(m._accumulatedAP, BASE_AP_COST * 1.5);
+
+      // Store action count for debugCognition
+      m._actionsThisTurn = actionsThisTurn;
+
+      // ── NPC acceleration tracking (mass-dependent startup) ──
+      // Track whether the creature moved during any of its actions this player input.
+      if (movedAnyAction) {
+        m._consecutiveMoveTurns = (m._consecutiveMoveTurns || 0) + 1;
+      } else {
+        m._consecutiveMoveTurns = 0;
+      }
+
+      // ── Time-scaled substrate regeneration (runs once per player input) ──
+      _regenerateSubstrate(m, worldTicksElapsed);
+
+      // ── Time-scaled stress clearance (runs once per player input) ──
+      _clearStressChemistry(m, worldTicksElapsed);
+    }
+  }
+  for (const layer of Object.keys(monsters)){
+    if (monsters[layer]) monsters[layer] = monsters[layer].filter(m => m.hp > 0);
+  }
+  updatePlayerFOV();  // recompute FOV before rendering
+  updateAmbientSensing();  // ambient terrain sensing — extends explored set (no entities)
+  updateScentSystem(state.activeLayer);  // scent emission, transport, and player detection (log after vision)
+  computePlayerPerception();  // Prompt N: detect creatures through non-visual senses
+  // Hit flashes count down per turn here, not per frame in render(), so a
+  // zoom or resize no longer eats them.
+  if (state.player.hitFlash > 0) state.player.hitFlash--;
+  for (const m of monstersHere()) if (m.hitFlash > 0) m.hitFlash--;
+  render();
+  state.player.movedThisTurn = false;  // set again by the next move action
+  state.player._lastPos = { x: state.player.x, y: state.player.y, layer: state.player.layer };
+  saveGame().catch(err => console.error('[Save] Auto-save failed:', err));  // Async fire-and-forget
+}
+
+// A body's last step and the speed it was taken at (force-to-weight at the
+// gait × acceleration: the rate the action economy runs it at). What another
+// eye's change detection sees (detection.js _velocity). A still action records
+// speed 0; a step of more than one tile (a stair, a knock) is not a step.
+function _recordStep(entity, x0, y0, speed) {
+  const dx = entity.x - x0, dy = entity.y - y0;
+  if (speed > 0 && (dx || dy) && Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+    entity._step = { dx, dy };
+    entity._speed = speed;
+  } else {
+    entity._speed = 0;
+  }
+}
+
+// ==================== EXPORTS ====================
+export { endPlayerTurn, monstersHere };
