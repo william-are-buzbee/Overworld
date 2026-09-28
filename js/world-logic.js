@@ -8,7 +8,7 @@ import { LAYER_SURFACE, LAYER_UNDER, W_SURF, H_SURF, W_UNDER, H_UNDER, LAYER_MET
          SPAWN_VIABILITY_RADIUS, SPAWN_VIABILITY_MIN } from './constants.js';
 import { T, isWalkable } from './terrain.js';
 import { rand, randi, choice } from './rng.js';
-import { spawnMonster, MON, SPAWN_BLACKLIST, HABITAT, SPAWN_HABITAT } from './monsters.js';
+import { spawnMonster, MON, HABITAT, SPAWN_HABITAT } from './monsters.js';
 import { worldDims, inBounds, chebyshev } from './world-state.js';
 import { generateLayer } from './world-gen.js';
 
@@ -149,7 +149,7 @@ function placeCreature(key, x, y) {
   if (!m) return null;
   m.x = x; m.y = y;
   m.homeX = x; m.homeY = y;
-  m.hp = m.hpMax;
+  m.hp = 1;   // alive flag
 
   // Drive system: set wander home position for territorial creatures
   if (m._needsHomePosition && m.wanderProfile) {
@@ -354,7 +354,7 @@ export function spawnMonstersInWorld(){
   // ==================================================================
   {
     const mushroomHab = HABITAT.mushroom;
-    if (mushroomHab && !SPAWN_BLACKLIST.has('mushroom')) {
+    if (mushroomHab) {
       const cellCounters = {};
       function getCellKey(x, y) {
         return Math.floor(x / CELL_TILE_W) + ',' + Math.floor(y / CELL_TILE_H);
@@ -428,15 +428,14 @@ export function spawnMonstersInWorld(){
       if (rand() >= density) continue;
       const targetT = biomeHint || ground;
       const eligible = Object.keys(MON).filter(k => {
-        if (SPAWN_BLACKLIST.has(k)) return false;
         const d = MON[k];
-        return d[13].includes(targetT) && d[14] === LAYER_UNDER;
+        return d.biomes.includes(targetT) && d.layer === LAYER_UNDER;
       });
       if (!eligible.length) continue;
       const m = spawnMonster(choice(eligible));
       m.x = x; m.y = y;
       m.homeX = x; m.homeY = y;
-      m.hp = m.hpMax;
+      m.hp = 1;   // alive flag
       // Drive system: set wander home position for territorial creatures
       if (m._needsHomePosition && m.wanderProfile) {
         m.wanderProfile.homePosition = { x: x, y: y };

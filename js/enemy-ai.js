@@ -18,7 +18,6 @@ export * from './debug.js';
 
 // Re-exports from existing modules (already split in prior sessions)
 export { monsterMelee } from './behaviors.js';
-export { canSeePlayer, canSeePlayerTile, monsterViewRadius,
-         applySafetyFromDamage, computePlayerPerception } from './detection.js';
+export { applySafetyFromDamage, computePlayerPerception } from './detection.js';
 export { hasCladeTerritory, wouldExceedTerritory,
          isWaterLocked, isWaterTile } from './ai-utils.js';

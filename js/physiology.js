@@ -38,7 +38,7 @@ import { log, LOG_CATEGORIES } from './log.js';
  */
 function getBodyPTW(entity, intensity) {
   const bodyMap = getBodyMap(entity);
-  if (!bodyMap) return (entity.strength || 1) / (entity.siz || 1);
+  if (!bodyMap) return 1;   // no body map: neutral power-to-weight
 
   let totalMass = 0;
   let totalLocoForce = 0;
@@ -412,7 +412,7 @@ function turnsToFullSpeed(totalMass) {
  */
 function getEntityTotalMass(entity) {
   const bodyMap = getBodyMap(entity);
-  if (!bodyMap) return entity.totalMass || entity.siz || 10;
+  if (!bodyMap) return entity.totalMass || 10;
   let total = 0;
   for (const zone of bodyMap) {
     if (!zone.destroyed) total += zone.mass || 0;

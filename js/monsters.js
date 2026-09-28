@@ -1,248 +1,73 @@
-// ==================== MONSTER DATA ====================
-import { DMG, LAYER_SURFACE, LAYER_UNDER,
-         HP_PER_SIZE, STAT_MAX, MAX_DODGE_CHANCE, BASE_ACCURACY, ACC_PER_VISUAL,
-         CREATURE_PATHWAYS, initBodyMap, getAvailableAttacks,
-         computeStrikeDamage } from './constants.js';
+// ==================== SPECIES RECORDS, SPAWNING, PERSONALITIES ====================
+// What a species is beyond its body map: name, sprite, where it lives, how it
+// holds territory, its clade and wander profile, and how it is spawned. There
+// are no stats here. Mass, senses, cognition, dodge, accuracy and damage are
+// all read from the body map (body-maps.js, physiology.js, combat-constants.js).
+import { LAYER_SURFACE, CREATURE_PATHWAYS, initBodyMap } from './constants.js';
 import { T } from './terrain.js';
-import { rand, randi, roll100 } from './rng.js';
+import { rand, randi } from './rng.js';
 
+// The six species of the current fauna (Notes/Surface-Creatures.md). Keys are
+// the legacy creature keys the body maps and sprites still use.
+//   hostility  0 passive, 1 territorial, 2 aggressive (legacy AI reads it)
+//   aggroRange legacy detection radius for the chase state
+//   territory  tiles the creature will roam; chase/search are legacy chase-state lengths
 const MON = {
-  // PLAINS
-  hare:       ['Small Grazer',   'SMALL_GRAZER',
-               20, 30, 20, 50, 40, 20, 40,  1, 0,
-               2,  [0,1],
-               ['flesh','beast'], DMG.BLADE,
-               [T.GRASS],          LAYER_SURFACE,
-               15, 1,
-               0, 2,                // passive, tiny aggro
-               [T.GRASS,T.DIRT,T.BEACH],
-               0, 0,
-               '#7a8070',           // muted gray-green, plated integument
-               null],
-  // FOREST
-  wolf:       ['Meso-Predator',  'MESO_PRED',
-               40, 40, 60, 10, 30, 50, 10,  2, 1,
-               12, [2,6],
-               ['flesh','beast'], DMG.BLADE,
-               [T.FOREST],            LAYER_SURFACE,
-               40, 2,
-               1, 3,                // territorial, reduced aggro range
-               [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.BEACH],  // roams freely across most terrain
-               5, 2,                // solo chase ~5 tiles; personalities adjust for pack/wary
-               '#5a4a40',           // dark warm gray-brown, wrinkled skin
-               {nightVision:true}],
-  goblin:     ['Forest Goblin',  'GOBLIN',
-               30, 30, 40, 0, 40, 40, 0,  2, 2,
-               12, [6,16],
-               ['flesh'], DMG.BLADE,
-               [T.FOREST], LAYER_SURFACE,
-               45, 2,
-               2, 4,
-               [T.FOREST],
-               3, 3,                // search a bit — they're clever
-               '#887040',           // dirty brown — distinct from treant green
-               {nightVision:true}],
-  treant:     ['Treant',         'TREANT',
-               80, 80, 20, 0, 20, 10, 0,  3, 5,
-               35, [8,18],
-               ['plant'], DMG.BLUNT,
-               [T.FOREST], LAYER_SURFACE,
-               20, 4,
-               0, 1,                // passive — ignore unless hit
-               [T.FOREST],
-               2, 0,                // lumber slowly, won't search
-               '#5a7a3a',           // forest green (it IS the forest)
-               null],
-  // DESERT
-  scorpion:   ['Dune Scorpion',  'SCORPION',
-               30, 40, 30, 0, 30, 10, 0,  3, 4,
-               22, [4,12],
-               ['insect','shelled'], DMG.POISON,
-               [T.SAND],           LAYER_SURFACE,
-               35, 3,
-               1, 3,
-               [T.SAND,T.BEACH],
-               2, 0,                // short chase — gives up quickly
-               '#a88838',           // tan-yellow
-               {nightVision:true}],
-  lurker:     ['Sand Lurker',    'SAND_LURKER',
-               40, 50, 50, 0, 50, 20, 0,  3, 3,
-               24, [6,16],
-               ['flesh','beast'], DMG.BLADE,
-               [T.SAND],           LAYER_SURFACE,
-               30, 3,
-               2, 4,
-               [T.SAND],
-               2, 0,                // ambush predator — strikes then gives up
-               '#c4a068',
-               {nightVision:true}],
-  mummy:      ['Desert Mummy',   'MUMMY',
-               60, 60, 20, 0, 20, 30, 0,  3, 3,
-               32, [12,28],
-               ['flesh','undead'], DMG.BLUNT,
-               [T.SAND],           LAYER_SURFACE,
-               20, 3,
-               1, 2,
-               [T.SAND],
-               3, 1,                // slow, short pursuit
-               '#a09070',
-               {nightVision:true}],
-  // MOUNTAIN
-  ice_wraith: ['Ice Wraith',     'ICE_WRAITH',
-               40, 30, 70, 0, 70, 50, 0,  4, 1,
-               38, [14,32],
-               ['undead','ice'], DMG.COLD,
-               [T.ROCK],           LAYER_SURFACE,
-               60, 4,
-               2, 5,
-               [T.ROCK],
-               5, 4,                // intelligent undead — searches
-               '#b0c8d8',
-               {dodgeMul:1.4, nightVision:true}],
-  frost_troll:['Frost Troll',    'FROST_TROLL',
-               100, 100, 30, 0, 30, 10, 0,  4, 5,
-               70, [25,55],
-               ['flesh','ice','beast'], DMG.BLUNT,
-               [T.ROCK],           LAYER_SURFACE,
-               35, 5,
-               2, 4,
-               [T.ROCK],
-               3, 0,                // tough and dumb, won't search
-               '#a8c0c0',
-               null],
-  // UNDERGROUND
-  skeleton:   ['Skeleton',       'SKELETON',
-               30, 40, 30, 0, 30, 20, 0,  3, 3,
-               22, [6,14],
-               ['bone','undead'], DMG.BLADE,
-               [T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
-               30, 3,
-               2, 4,
-               [T.CAVE_FLOOR,T.ROCK],
-               4, 0,
-               '#c8c4b8',
-               {nightVision:true}],
-  zombie:     ['Zombie',         'ZOMBIE',
-               50, 50, 10, 0, 10, 10, 0,  3, 2,
-               24, [4,10],
-               ['flesh','undead'], DMG.BLADE,
-               [T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
-               20, 3,
-               2, 3,
-               [T.CAVE_FLOOR,T.ROCK],
-               4, 0,
-               '#708070',
-               {nightVision:true}],
-  knight:     ['Fallen Knight',  'KNIGHT',
-               80, 80, 60, 0, 60, 50, 0,  4, 9,
-               90, [30,70],
-               ['armored','undead'], DMG.BLADE,
-               [T.ROCK], LAYER_UNDER,
-               45, 5,
-               2, 4,
-               [T.CAVE_FLOOR,T.ROCK],
-               5, 3,                // disciplined — searches
-               '#b0b0c0',
-               {nightVision:true}],
-  // LAVA
-  magma_hound:['Magma Hound',    'MAGMA_HOUND',
-               40, 50, 60, 0, 60, 30, 0,  4, 3,
-               40, [10,22],
-               ['fire','beast'], DMG.FIRE,
-               [T.LAVA,T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
-               50, 4,
-               2, 4,
-               [T.LAVA,T.CAVE_FLOOR,T.ROCK],
-               5, 3,                // hounds track
-               '#d06040',
-               {nightVision:true}],
-  lava_fiend: ['Lava Fiend',     'LAVA_FIEND',
-               80, 80, 50, 0, 50, 60, 0,  4, 4,
-               85, [25,55],
-               ['fire'], DMG.FIRE,
-               [T.LAVA,T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
-               40, 5,
-               1, 3,
-               [T.LAVA,T.CAVE_FLOOR],
-               4, 4,                // intelligent, searches
-               '#e07030',
-               {nightVision:true}],
-
-  // CHEMOTROPHIC ZONE (SE)
-  mushroom:   ['Chemotroph',       'CHEMOTROPH_NODE',
-               20, 10, 10, 60, 20, 10, 70,  0, 2,  // Size 2, high Vibration/Distributed, zero weaponAtk
-               28, [8,20],
-               ['plant','fungal'], DMG.POISON,
-               [T.MUSHFOREST], LAYER_SURFACE,
-               0, 3,               // zero perception — they don't detect stealth
-               0, 0,               // passive, zero aggro range
-               [T.MUSHFOREST,T.FUNGAL_GRASS],
-               0, 0,               // no chase, no search — swarm AI handles everything
-               '#786880',          // muted purple-gray (manganese zone default)
-               {blindsight:5}],    // vibration sense — ignores LOS and light
-  // NORTHEAST CAVES — surface
-  rock_golem: ['Rock Golem',      'ROCK_GOLEM',
-               100, 70, 20, 0, 20, 10, 0,  4, 8,
-               65, [20,45],
-               ['stone','rockite'], DMG.BLUNT,
-               [T.CAVE_FLOOR,T.ROCK], LAYER_SURFACE,
-               25, 5,
-               1, 3,
-               [T.CAVE_FLOOR,T.ROCK],
-               2, 0,
-               '#808080',
-               {nightVision:true},
-               { restrictedRegion: 'NE_QUADRANT', layers: [0, 1] }],
-  // WATER CAVES — aquatic enemies
-  cave_eel:   ['Cave Eel',        'EEL',
-               30, 40, 50, 0, 50, 20, 0,  3, 1,
-               30, [8,18],
-               ['aquatic','beast'], DMG.ELEC,
-               [T.WATER,T.DEEP_WATER,T.UWATER], LAYER_SURFACE,
-               35, 3,
-               1, 4,
-               [T.WATER,T.DEEP_WATER,T.UWATER],
-               3, 0,
-               '#4090b0',
-               {waterHeal:true, nightVision:true}],
-  cave_crab:  ['Wading Grazer',   'WADING_GRAZER',
-               70, 30, 50, 0, 50, 40, 0,  3, 6,
-               35, [10,25],
-               ['flesh','beast'], DMG.BLUNT,
-               [T.WATER,T.DEEP_WATER,T.UWATER,T.BEACH], LAYER_SURFACE,
-               25, 3,
-               1, 3,
-               [T.WATER,T.DEEP_WATER,T.UWATER,T.BEACH,T.GRASS,T.SAND],
-               2, 0,
-               '#4a5040',          // dark muddy brown-green, lighter belly
-               {nightVision:true}],
-  // UNDERGROUND OCEAN
-  drowned:    ['The Drowned',    'DROWNED',
-               60, 50, 20, 0, 20, 20, 0,  3, 2,
-               46, [12,30],
-               ['undead','aquatic'], DMG.BLADE,
-               [T.UWATER,T.CAVE_FLOOR,T.ROCK], LAYER_UNDER,
-               30, 4,
-               1, 3,
-               [T.UWATER,T.CAVE_FLOOR],
-               3, 0,
-               '#6890a8',
-               {nightVision:true}],
-  deep_squid: ['Deep Squid',     'DEEP_SQUID',
-               100, 80, 60, 0, 60, 40, 0,  4, 4,
-               120,[30,75],
-               ['aquatic','beast'], DMG.BLADE,
-               [T.UWATER], LAYER_UNDER,
-               40, 6,
-               0, 2,                // passive until provoked
-               [T.UWATER],
-               2, 0,
-               '#4080a0',
-               {nightVision:true}],
+  hare: {
+    name: 'Small Grazer', sprite: 'SMALL_GRAZER',
+    tags: ['flesh', 'beast'],
+    biomes: [T.GRASS], layer: LAYER_SURFACE,
+    hostility: 0, aggroRange: 2,
+    territory: [T.GRASS, T.DIRT, T.BEACH],
+    chase: 0, search: 0,
+    tint: '#7a8070',           // muted gray-green, plated integument
+  },
+  wolf: {
+    name: 'Meso-Predator', sprite: 'MESO_PRED',
+    tags: ['flesh', 'beast'],
+    biomes: [T.FOREST], layer: LAYER_SURFACE,
+    hostility: 1, aggroRange: 3,
+    territory: [T.FOREST, T.GRASS, T.MUD, T.DIRT, T.BEACH],   // roams freely across most terrain
+    chase: 5, search: 2,       // solo chase ~5 tiles; personalities adjust for pack/wary
+    tint: '#5a4a40',           // dark warm gray-brown, wrinkled skin
+  },
+  dire_wolf: {
+    name: 'Apex Predator', sprite: 'APEX_PRED',
+    tags: ['flesh', 'beast'],
+    biomes: [T.FOREST], layer: LAYER_SURFACE,
+    hostility: 1, aggroRange: 3,
+    territory: [T.FOREST, T.GRASS, T.MUD, T.DIRT, T.BEACH],
+    chase: 5, search: 2,
+    tint: '#3a302a',           // dark charcoal-brown, dense skin
+  },
+  ambush_pred: {
+    name: 'Ambush Predator', sprite: 'AMBUSH_PRED',
+    tags: ['flesh', 'beast'],
+    biomes: [T.FOREST, T.MUSHFOREST], layer: LAYER_SURFACE,
+    hostility: 2, aggroRange: 5,
+    territory: [T.FOREST, T.MUSHFOREST, T.FUNGAL_GRASS],
+    chase: 4, search: 0,       // short chase, no search — disengages cleanly
+    tint: '#5a5048',           // dark mottled gray-brown, blends with terrain
+  },
+  cave_crab: {
+    name: 'Wading Grazer', sprite: 'WADING_GRAZER',
+    tags: ['flesh', 'beast'],
+    biomes: [T.WATER, T.DEEP_WATER, T.UWATER, T.BEACH], layer: LAYER_SURFACE,
+    hostility: 1, aggroRange: 3,
+    territory: [T.WATER, T.DEEP_WATER, T.UWATER, T.BEACH, T.GRASS, T.SAND],
+    chase: 2, search: 0,
+    tint: '#4a5040',           // dark muddy brown-green, lighter belly
+  },
+  mushroom: {
+    name: 'Chemotroph', sprite: 'CHEMOTROPH_NODE',
+    tags: ['plant', 'fungal'],
+    biomes: [T.MUSHFOREST], layer: LAYER_SURFACE,
+    hostility: 0, aggroRange: 0,   // passive; swarm AI handles everything
+    territory: [T.MUSHFOREST, T.FUNGAL_GRASS],
+    chase: 0, search: 0,
+    tint: '#786880',           // muted purple-gray (manganese zone default)
+  },
 };
-
-// Monster derived stats — Size & Strength driven (Prompt 2)
-function monHP(mon){ return mon.siz * HP_PER_SIZE; }
 
 // ==================== MONSTER SPEED ====================
 // Speed determines action frequency. 100 = every turn. Lower = skip turns.
@@ -250,41 +75,21 @@ function monHP(mon){ return mon.siz * HP_PER_SIZE; }
 const MON_SPEED = {
   hare: 90,
   wolf: 80,       dire_wolf: 65,
-  goblin: 70,     treant: 35,
-  scorpion: 65,   lurker: 55,     mummy: 40,
-  ice_wraith: 75, frost_troll: 45,
-  skeleton: 55,   zombie: 35,     knight: 60,
-  magma_hound: 75,lava_fiend: 55,
-  mushroom: 45,   rock_golem: 25,
-  cave_eel: 80,   cave_crab: 45,
-  drowned: 45,    deep_squid: 50,
   ambush_pred: 70,
+  cave_crab: 45,
+  mushroom: 45,
 };
 
 // ==================== PERSONALITY SYSTEM ====================
 /*
   Each monster can have a personality trait assigned at spawn.
-  Traits modify AI behavior subtly. Some creatures have few variants
-  (mushrooms: almost none), others have many (goblins, wolves).
-  Probability-weighted so unique behaviors are less common.
+  Traits modify AI behavior subtly. Probability-weighted so unique
+  behaviors are less common.
 */
 const PERSONALITY_POOL = {
-  rock_golem: [
-    {trait:'still', weight:0.50},     // won't move until takes 10% max HP damage
-    {trait:'active', weight:0.35},    // moves around, attacks within 1 tile
-    {trait:'roaming', weight:0.15},   // peacefully wanders territory
-  ],
-  goblin: [
-    {trait:'normal', weight:0.30},
-    {trait:'aggressive', weight:0.20},   // runs and attacks blindly, higher aggroRange
-    {trait:'wary', weight:0.18},         // unlikely to attack while alone
-    {trait:'explorer', weight:0.12},     // explores beyond territory
-    {trait:'leader', weight:0.08},       // others follow, triggers group aggro
-    {trait:'skulker', weight:0.12},      // prefers stealth, retreats if hurt
-  ],
   wolf: [
     {trait:'normal', weight:0.25},
-    {trait:'lone_hunter', weight:0.15},  // hunts alone, slightly stronger
+    {trait:'lone_hunter', weight:0.15},  // hunts alone
     {trait:'pair_bond', weight:0.15},    // stays near a bonded partner
     {trait:'leader', weight:0.10},       // pack follows
     {trait:'skittish', weight:0.15},     // flees at low HP
@@ -299,13 +104,6 @@ const PERSONALITY_POOL = {
   ambush_pred: [
     {trait:'normal', weight:0.70},
     {trait:'patient', weight:0.30},      // waits longer before striking, tighter leash
-  ],
-  treant: [
-    {trait:'normal', weight:0.30},
-    {trait:'ancient', weight:0.15},      // higher HP, slower to anger
-    {trait:'guardian', weight:0.20},      // protects nearby treants more actively
-    {trait:'withered', weight:0.15},      // lower HP but faster
-    {trait:'dormant', weight:0.20},       // won't wake unless directly hit
   ],
   mushroom: [
     {trait:'normal', weight:0.90},
@@ -326,108 +124,22 @@ function rollPersonality(key){
   return pool[pool.length-1].trait;
 }
 
-// ==================== APEX PREDATOR DATA ====================
-// Rarer, higher Size/Strength, same Central, tends toward lone or small groups
-MON.dire_wolf = ['Apex Predator',  'APEX_PRED',
-               60, 60, 70, 10, 40, 60, 10,  4, 2,
-               22, [6,14],
-               ['flesh','beast'], DMG.BLADE,
-               [T.FOREST],            LAYER_SURFACE,
-               45, 4,
-               1, 3,                // territorial, reduced aggro range
-               [T.FOREST,T.GRASS,T.MUD,T.DIRT,T.BEACH],
-               5, 2,
-               '#3a302a',           // dark charcoal-brown, dense skin
-               {nightVision:true}];
-
-// ==================== AMBUSH PREDATOR DATA ====================
-// Clade B solitary ambush predator. Territorial, disengages outside home range.
-// Spawns at forest and fungal zone edges. Less common than other surface creatures.
-MON.ambush_pred = ['Ambush Predator', 'AMBUSH_PRED',
-               40, 50, 20, 70, 50, 20, 50,  3, 3,
-               18, [4,10],
-               ['flesh','beast'], DMG.BLADE,
-               [T.FOREST,T.MUSHFOREST],  LAYER_SURFACE,
-               40, 2,
-               2, 5,                // aggressive within territory, moderate aggro range
-               [T.FOREST,T.MUSHFOREST,T.FUNGAL_GRASS],
-               4, 0,                // short chase, no search — disengages cleanly
-               '#5a5048',           // dark mottled gray-brown, blends with terrain
-               null];
-function monDodge(mon){
-  const raw = Math.floor(((STAT_MAX + 1 - mon.siz) / STAT_MAX) * MAX_DODGE_CHANCE);
-  const m = (mon.mods && mon.mods.dodgeMul) || 1;
-  return Math.max(0, raw * m);
-}
-function monAcc(mon){ return BASE_ACCURACY + Math.floor(mon.vis * ACC_PER_VISUAL); }
-function monCritChance(mon){
-  if (mon.siz < 20) return 0;
-  const base = (mon.siz / 10 - 2) * 3 + (mon.central / 10 - 1) * 1;
-  const m = (mon.mods && mon.mods.critMul) || 1;
-  return Math.min(50, base * m);
-}
-function monCritMult(mon){ return 1.5 + mon.strength * 0.003; }
-function monDamage(mon, attackingZone){
-  // Physics-based damage — derive from attacking zone tissue composition.
-  // If an attacking zone is passed directly, use it.
-  if (attackingZone) {
-    return computeStrikeDamage(mon, attackingZone);
-  }
-  // Otherwise, find the primary attacking zone from the monster's body map.
-  const bodyMap = mon.bodyMap;
-  if (bodyMap) {
-    const attacks = getAvailableAttacks(bodyMap);
-    if (attacks.length > 0) {
-      const zone = bodyMap.find(z => z.key === attacks[0].sourceZone);
-      if (zone) return computeStrikeDamage(mon, zone);
-    }
-  }
-  // Safety fallback — no body map or no attacks (shouldn't happen post-Phase 1)
-  return 1;
-}
-
 // ==================== VISION PROFILES ====================
-// Per-species vision type and cone parameters.
-// visionType: 'cone' (directional) or 'radius' (omnidirectional).
-// coneAngle: forward vision arc in degrees. No longer read by detection —
-// an NPC's visual field comes from its body map's visual transducers
-// (isInVisionCone in detection.js, per Per-Eye-Visual-Field-Design). Kept as
-// the fallback for creatures without a body map and for visionType.
-// awarenessRadius is computed from Visual at runtime, not stored here.
-// These properties are defined on monsters for future AI use but are
-// currently only read for the player's own FOV calculation.
+// Per-species vision type. coneAngle is no longer read by detection — an NPC's
+// visual field comes from its body map's visual transducers (isInVisionCone in
+// detection.js, per Per-Eye-Visual-Field-Design). visionType still decides
+// whether the creature carries a facing.
 const VISION_PROFILES = {
-  // Humanoids — wide forward arc
-  goblin:      { visionType: 'cone', coneAngle: 120 },
-  knight:      { visionType: 'cone', coneAngle: 120 },
-  mummy:       { visionType: 'cone', coneAngle: 120 },
   // Clade A predators — focused hunting cone
   wolf:        { visionType: 'cone', coneAngle: 90 },
   dire_wolf:   { visionType: 'cone', coneAngle: 90 },
   // Clade B ambush predator — moderate forward cone, good motion detection
   ambush_pred: { visionType: 'cone', coneAngle: 120 },
-  magma_hound: { visionType: 'cone', coneAngle: 90 },
   // Prey / herbivores — near-panoramic awareness
   hare:        { visionType: 'cone', coneAngle: 170 },
-  // Desert predators — moderate forward cone
-  scorpion:    { visionType: 'cone', coneAngle: 100 },
-  lurker:      { visionType: 'cone', coneAngle: 100 },
-  // Aquatic — moderate cone
-  cave_eel:    { visionType: 'cone', coneAngle: 110 },
-  deep_squid:  { visionType: 'cone', coneAngle: 110 },
-  drowned:     { visionType: 'cone', coneAngle: 110 },
   // Full-radius vision (omnidirectional / blindsight)
   cave_crab:   { visionType: 'radius' },
   mushroom:    { visionType: 'radius' },  // blindsight — vibration sense
-  // Slow / rooted creatures — wide radius
-  treant:      { visionType: 'radius' },
-  rock_golem:  { visionType: 'radius' },
-  // Undead / spectral — wide cone
-  skeleton:    { visionType: 'cone', coneAngle: 120 },
-  zombie:      { visionType: 'cone', coneAngle: 120 },
-  ice_wraith:  { visionType: 'cone', coneAngle: 130 },
-  frost_troll: { visionType: 'cone', coneAngle: 100 },
-  lava_fiend:  { visionType: 'cone', coneAngle: 120 },
 };
 
 // ==================== CLADE TRAIT DATA ====================
@@ -619,38 +331,19 @@ const VISION_CONE_WIDTHS = {
 };
 
 function spawnMonster(key){
-  let d;
-  d = MON[key];
+  const d = MON[key];
   if (!d) return null;
-  const [name, spr,
-         siz, strength, chem, vib, vis, central, distributed,
-         weaponAtk, def,
-         xp, gold,
-         tags, dmgT,
-         biomes, layer,
-         percept, tier,
-         hostility, aggroRange,
-         territory,
-         chase, search,
-         tint,
-         mods,
-         spawnRules] = d;
   const personality = rollPersonality(key);
   const m = {
-    key, name, spr,
-    siz, strength, chem, vib, vis, central, distributed,
-    weaponAtk, def,
-    xp, goldRange: gold,
-    tags: [...tags],
-    dmgType: dmgT,
-    biomes: [...biomes],
-    layer,
-    percept, tier,
-    hostility, aggroRange,
-    territory: [...territory],
-    chase, search,
-    tint, mods,
-    spawnRules: spawnRules || null,
+    key, name: d.name, spr: d.sprite,
+    tags: [...d.tags],
+    biomes: [...d.biomes],
+    layer: d.layer,
+    hostility: d.hostility, aggroRange: d.aggroRange,
+    territory: [...d.territory],
+    chase: d.chase, search: d.search,
+    tint: d.tint,
+    spawnRules: d.spawnRules || null,
     pathways: CREATURE_PATHWAYS[key] || [],
     effects: [],
     isMonster: true,
@@ -689,24 +382,9 @@ function spawnMonster(key){
       visual: 0,
     },
   };
-  // Apply personality stat modifiers
-  if (personality === 'ancient' && key === 'treant'){
-    m.siz += 30; m.strength += 10;
-  } else if (personality === 'withered' && key === 'treant'){
-    m.siz -= 20; m.speed = 50;
-  } else if (personality === 'guardian' && key === 'treant'){
-    m.percept += 10; m.aggroRange += 2;
-  } else if (personality === 'lone_hunter' && (key === 'wolf' || key === 'dire_wolf')){
-    m.strength += 10; m.siz += 10;
-  } else if (personality === 'aggressive' && key === 'goblin'){
-    m.aggroRange += 3; m.chase += 3; m.hostility = 2;
-  } else if (personality === 'wary' && key === 'goblin'){
-    m.hostility = 1; m.aggroRange = Math.max(2, m.aggroRange - 2);
-  } else if (personality === 'explorer' && key === 'goblin'){
-    m.territory = [T.FOREST, T.GRASS, T.ROCK]; // explores beyond forest
-  } else if (personality === 'skulker' && key === 'goblin'){
-    m.percept += 5; m.siz += 10;
-  } else if (personality === 'spore_heavy' && key === 'mushroom'){
+  // Personality modifiers. (The lone hunter's extra size and strength went
+  // with the stat table: a bigger wolf needs a bigger body map, not a number.)
+  if (personality === 'spore_heavy' && key === 'mushroom'){
     m.sporeHeavy = true;  // flag checked during poison touch
   } else if (personality === 'patient' && key === 'ambush_pred'){
     m.aggroRange = Math.max(2, m.aggroRange - 2);  // tighter detection
@@ -761,8 +439,7 @@ function spawnMonster(key){
   if (m.clade && m.clade.territorial && m.clade.territoryRadius > 0) {
     m.territoryRadius = m.clade.territoryRadius;
   }
-  m.hpMax = monHP(m);
-  m.hp = m.hpMax;
+  m.hp = 1;   // alive flag; death is decided by the body (applyZoneDamage, processBleed)
   m.immobilized = false;
   // Initialize per-instance body map with zone HP
   initBodyMap(m);
@@ -841,32 +518,8 @@ function spawnMonster(key){
 */
 function getSpawnRules(key){
   const d = MON[key];
-  if (!d) return null;
-  return d[26] || null;
+  return (d && d.spawnRules) || null;
 }
-
-// ==================== SPAWN BLACKLIST ====================
-// Creatures whose definitions are kept but should never appear in the world.
-// World-gen spawner must skip any key in this set.
-const SPAWN_BLACKLIST = new Set([
-  'ice_wraith',    // removed from rotation — too punishing
-  'magma_hound',   // lava monsters disabled
-  'lava_fiend',    // lava monsters disabled
-  'zombie',        // undead disabled
-  'skeleton',      // undead disabled
-  'knight',        // undead disabled (Fallen Knight)
-  'mummy',         // undead disabled (Desert Mummy)
-  'drowned',       // undead disabled (The Drowned)
-  // DISABLED — legacy creatures, do not delete yet
-  'goblin',        // legacy — not part of current fauna
-  'scorpion',      // legacy — not part of current fauna
-  'lurker',        // legacy — not part of current fauna
-  'frost_troll',   // legacy — not part of current fauna
-  'cave_eel',      // legacy — not part of current fauna
-  'deep_squid',    // legacy — not part of current fauna
-  'rock_golem',    // legacy — not part of current fauna
-  'treant',        // legacy — not part of current fauna
-]);
 
 // ==================== HABITAT DEFINITIONS ====================
 // FIRST PASS SPAWNING — placeholder, see Spawning-Design.md
@@ -945,5 +598,5 @@ const HABITAT = {
 };
 
 // Re-export everything that other modules need
-export { MON, MON_SPEED, PERSONALITY_POOL, SPAWN_BLACKLIST, VISION_PROFILES, CLADE_DATA, HABITAT, SPAWN_HABITAT, WANDER_PROFILES, DEFAULT_WANDER_PROFILE };
-export { rollPersonality, monHP, monDodge, monAcc, monCritChance, monCritMult, monDamage, spawnMonster, getSpawnRules, getCladeData };
+export { MON, MON_SPEED, PERSONALITY_POOL, VISION_PROFILES, CLADE_DATA, HABITAT, SPAWN_HABITAT, WANDER_PROFILES, DEFAULT_WANDER_PROFILE };
+export { rollPersonality, spawnMonster, getSpawnRules, getCladeData };

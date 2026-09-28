@@ -267,27 +267,8 @@ export const SPAWN_VIABILITY_RADIUS = 6;  // check this radius around spawn poin
 export const SPAWN_VIABILITY_MIN    = 6;  // need at least this many habitat tiles in radius
 
 // ==================== GAMEPLAY FORMULA CONSTANTS ====================
-// Stat scale: 1-100 range (scaled from legacy 1-10).
-export const STAT_MIN = 1;
-export const STAT_MAX = 100;
-
-// PLACEHOLDER: monsters still carry hpMax = siz * HP_PER_SIZE; it is only
-// read as corpse nutrition now (killMonster / performNPCAttack). Goes with
-// the seven-stat table.
-export const HP_PER_SIZE           = 1;
-
-// Damage — LEGACY Size/Strength coefficients removed (Prompt E).
-// Damage now derives from attacking zone tissue via computeStrikeDamage().
-
-// Dodge — scaled to 1-100 stat range
-export const MAX_DODGE_CHANCE      = 30;    // dodgeChance = floor(((STAT_MAX+1-Size)/STAT_MAX)*MAX_DODGE_CHANCE)
-
-// Accuracy
-export const BASE_ACCURACY         = 70;
-export const ACC_PER_VISUAL        = 0.3;   // accuracy = BASE_ACCURACY + floor(Visual * ACC_PER_VISUAL)
-
-// Stealth
-export const STEALTH_SIZE_COEFF    = 0.4;   // stealthEffectiveness = floor((STAT_MAX+1-Size)*STEALTH_SIZE_COEFF)
+// Damage, dodge, stealth and accuracy derive from the body map and the
+// attacker's detection of the target; see combat-constants.js.
 
 // ── Action Point system ──
 // Deterministic AP accumulation replaces probabilistic bonus-move speed.

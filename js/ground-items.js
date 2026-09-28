@@ -113,19 +113,19 @@ export function clearItems(layerIndex, x, y) {
 // ==================== CORPSE ITEM FACTORY ====================
 
 /**
- * Create a corpse item object suitable for placeItem() or player inventory.
- * Corpses can be eaten to restore HP equal to the creature's max HP.
- * They can also be dropped back on the ground via the normal drop (D) key.
+ * Create a corpse item object suitable for placeItem(). What a corpse is
+ * worth to an eater is its mass in kg (player-actions.js eatAction,
+ * behaviors.js eatCorpse).
  *
  * @param {string} creatureName — display name of the dead creature
  * @param {object} [opts]
- * @param {number} [opts.weight=2]   — inventory weight
+ * @param {number} [opts.weight=2]   — legacy display weight
  * @param {string} [opts.sprite='CORPSE'] — sprite key in spriteCache
- * @param {number} [opts.nutrition=0] — HP restored when eaten (creature's max HP)
- * @returns {object} item object with { id, kind, type, name, sprite, desc, weight, quantity, nutrition }
+ * @param {number} [opts.mass=1] — the dead creature's total mass in kg
+ * @returns {object} item object with { id, kind, type, name, sprite, desc, weight, quantity, mass }
  */
 export function makeCorpseItem(creatureName, opts) {
-  const { weight = 2, sprite = 'CORPSE', nutrition = 0 } = opts || {};
+  const { weight = 2, sprite = 'CORPSE', mass = 1 } = opts || {};
   return {
     id: generateItemId(),
     kind: 'corpse',
@@ -135,6 +135,6 @@ export function makeCorpseItem(creatureName, opts) {
     desc: `${creatureName} Corpse — could be butchered or examined.`,
     weight,
     quantity: 1,
-    nutrition,
+    mass,
   };
 }
