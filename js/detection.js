@@ -635,13 +635,56 @@ function _hasDestroyedLocomotionZone(target) {
   return bodyMap.some(z => z.locomotion && z.destroyed);
 }
 
+// ==================== PERCEPTS (perception pass 5) ====================
+// A percept is what an observer's senses deliver about one source on this
+// action: the detection info below (size estimate, species and diet
+// confidence, closing speed, ...) and the tile the source is perceived on.
+// Every decision about another body reads its percept, never the body: where
+// it is, how big, what kind. The entity reference rides along only as
+// identity (to keep a goal on "that one") and for physical contact (a bite
+// lands on whatever is actually on the tile; canMoveTo will not step onto an
+// occupied one). The player's display draws from percepts too.
+
+/** The tile an observer perceives a detected source on. PLACEHOLDER: the true
+ *  tile, until perception pass 6 infers it from the received signal (bearing
+ *  resolution from sensor geometry, distance confounded with size). This is
+ *  the one place that changes when it does. */
+function _perceivedTile(observer, target, detections) {
+  return { x: target.x, y: target.y };
+}
+
+/** This observer's percept of an entity on its current action, or null if no
+ *  sense delivers it. */
+function perceptOf(observer, entity) {
+  const infos = observer.detectionInfo;
+  if (!infos || !entity) return null;
+  for (const info of infos) if (info.entity === entity) return info;
+  return null;
+}
+
+/** Where this observer perceives an entity to be: its percept's tile, or, for a
+ *  body no sense delivers this action (a threat that struck from outside the
+ *  senses, a hunt target kept by goal persistence), its true tile.
+ *  PLACEHOLDER for that fallback: perception pass 8 replaces it with a
+ *  last-known position held in integration tissue. Until then a creature keeps
+ *  tracking an undetected goal as it always has; a strike from an unseen
+ *  attacker is at least felt at the contact. */
+function perceivedPosition(observer, entity) {
+  const p = perceptOf(observer, entity);
+  return p ? { x: p.x, y: p.y } : { x: entity.x, y: entity.y };
+}
+
 /** Build continuous-uncertainty detection info from per-zone detections.
  *  Produces narrowing size ranges and confidence curves instead of binary flags. */
 function buildDetectionInfo(observer, target, detections) {
+  const tile = _perceivedTile(observer, target, detections);
   const info = {
     detected: true,
-    distance: dist(observer.x, observer.y, target.x, target.y),
-    direction: directionToward(observer.x, observer.y, target.x, target.y),
+    // Perceived tile, and distance and bearing to it
+    x: tile.x,
+    y: tile.y,
+    distance: dist(observer.x, observer.y, tile.x, tile.y),
+    direction: directionToward(observer.x, observer.y, tile.x, tile.y),
     bestSNR: 0,
 
     // Size: narrowing range
@@ -1035,7 +1078,7 @@ function getAdjacentPrey(creature) {
   for (const info of (creature.detectionInfo || [])) {
     const other = info.entity;
     if (!other || other.hp <= 0) continue;
-    if (chebyshev(creature.x, creature.y, other.x, other.y) > 1) continue;
+    if (chebyshev(creature.x, creature.y, info.x, info.y) > 1) continue;
     if (!isViablePrey(creature, info)) continue;
     const m = info.sizeEstimate.estimated;
     if (m < bestMass) { bestMass = m; best = other; }
@@ -1144,8 +1187,13 @@ function computePlayerPerception() {
   const player = state.player;
   if (!player || player.hp <= 0) return;
 
+  // Percepts for the display: every creature the player's senses deliver,
+  // on the tile it is perceived on. _visuallyDetected maps an identified
+  // sighting to that tile and _perceivedAt maps the tile back to the creature
+  // (rendering.js draws sprites from it); sensedCreatures carry their tile.
   player.sensedCreatures = [];
-  player._visuallyDetected = new Set();
+  player._visuallyDetected = new Map();
+  player._perceivedAt = new Map();
 
   const fovSet = state.fovSet;
   const monocularSet = state.monocularSet;
@@ -1167,6 +1215,7 @@ function computePlayerPerception() {
       const vis = _visualDetection(player, creature);
       if (vis) {
         const visSNR = vis.snr;
+        const tile = _perceivedTile(player, creature, [vis]);
         let speciesConfidence = 0;
         if (visSNR > SPECIES_CONF_MIN) {
           speciesConfidence = Math.min(1.0,
@@ -1175,7 +1224,8 @@ function computePlayerPerception() {
 
         if (speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE) {
           // High confidence — creature renders normally via drawEntityAtTile
-          player._visuallyDetected.add(creature);
+          player._visuallyDetected.set(creature, tile);
+          player._perceivedAt.set(`${tile.x},${tile.y}`, creature);
         } else {
           // Low confidence — route through sensedCreatures for blob rendering
           const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / visSNR;
@@ -1186,7 +1236,7 @@ function computePlayerPerception() {
             upper: rawEstimate * (1 + uncertaintyFactor),
           };
           player.sensedCreatures.push({
-            creature, bestSNR: visSNR, speciesConfidence, sizeEstimate,
+            creature, x: tile.x, y: tile.y, bestSNR: visSNR, speciesConfidence, sizeEstimate,
             _visualFOV: true,
           });
         }
@@ -1224,7 +1274,8 @@ function computePlayerPerception() {
       upper: rawEstimate * (1 + uncertaintyFactor),
     };
 
-    player.sensedCreatures.push({ creature, bestSNR, speciesConfidence, sizeEstimate });
+    const tile = _perceivedTile(player, creature, detections);
+    player.sensedCreatures.push({ creature, x: tile.x, y: tile.y, bestSNR, speciesConfidence, sizeEstimate });
   }
 }
 
@@ -1251,4 +1302,6 @@ export {
   isViablePrey, getSpeciesKey, detectPrey, detectCorpses, getAdjacentPrey,
   // Player perception
   computePlayerPerception,
+  // Percepts
+  perceptOf, perceivedPosition,
 };

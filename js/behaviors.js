@@ -23,7 +23,7 @@ import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          getCreatureMass, weightedRandomChoice, movesCloserTo,
          wouldExceedTerritory, hasCladeTerritory, tileIsFood,
          findNearestFoodTile, getCorpseAt } from './ai-utils.js';
-import { getAdjacentPrey, isViablePrey, applySafetyFromDamage } from './detection.js';
+import { getAdjacentPrey, applySafetyFromDamage, perceivedPosition, perceptOf } from './detection.js';
 import { applyTurningCost, applyZoneDamage } from './physiology.js';
 
 // ==================== ACTION DISPATCHER (Prompt O) ====================
@@ -37,7 +37,8 @@ function executeAction(creature, action) {
 
   switch (action.behavior) {
     case 'retaliate': {
-      // Attack the target
+      // Attack the target. The adjacency test here is contact, not perception:
+      // a strike lands only on what is actually on the next tile.
       const target = action.target;
       if (target && target.isPlayer && chebyshev(creature.x, creature.y, target.x, target.y) <= 1) {
         monsterMelee(creature);
@@ -74,8 +75,9 @@ function executeAction(creature, action) {
     case 'orient': {
       // Face toward the target without moving
       if (action.target && creature.facing) {
-        creature.facing.dx = Math.sign(action.target.x - creature.x);
-        creature.facing.dy = Math.sign(action.target.y - creature.y);
+        const pos = perceivedPosition(creature, action.target);
+        creature.facing.dx = Math.sign(pos.x - creature.x);
+        creature.facing.dy = Math.sign(pos.y - creature.y);
       } else if (action.direction != null && creature.facing) {
         // Ganglion system passes direction index — convert to facing vector
         const delta = DIRECTION_DELTAS[action.direction];
@@ -96,8 +98,8 @@ function executeAction(creature, action) {
       // Move perpendicular to or slightly away from the target.
       // Face the competitor while spacing — posturing, not fleeing.
       if (action.target) {
-        const awayDir = directionAwayFrom(creature.x, creature.y,
-                                          action.target.x, action.target.y);
+        const pos = perceivedPosition(creature, action.target);
+        const awayDir = directionAwayFrom(creature.x, creature.y, pos.x, pos.y);
         // Prefer perpendicular (90°), then angled away, then directly away
         const candidates = [
           (awayDir + 2) % 8,  // perpendicular right
@@ -117,8 +119,8 @@ function executeAction(creature, action) {
             creature.movedThisTurn = true;
             if (creature.facing) {
               // Face the competitor, not the movement direction
-              creature.facing.dx = Math.sign(action.target.x - creature.x);
-              creature.facing.dy = Math.sign(action.target.y - creature.y);
+              creature.facing.dx = Math.sign(pos.x - creature.x);
+              creature.facing.dy = Math.sign(pos.y - creature.y);
             }
             moved = true;
             break;
@@ -155,7 +157,8 @@ function executeAction(creature, action) {
     case 'approach_food': {
       // Move toward prey entity
       if (action.target) {
-        const dir = directionToward(creature.x, creature.y, action.target.x, action.target.y);
+        const pos = perceivedPosition(creature, action.target);
+        const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
         moved = moveInDirection(creature, dir);
       }
       creature.currentBehavior = 'hunt';
@@ -209,7 +212,8 @@ function executeAction(creature, action) {
     case 'hunt_chase': {
       if (action.target) {
         creature.huntTarget = action.target;
-        const dir = directionToward(creature.x, creature.y, action.target.x, action.target.y);
+        const pos = perceivedPosition(creature, action.target);
+        const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
         moved = moveInDirection(creature, dir);
       }
       creature.currentBehavior = 'hunt';
@@ -252,8 +256,9 @@ function executeStandardFlee(creature) {
     return true; // wander counts as "doing something"
   }
 
-  // Direction away from threat
-  const fleeDir = directionAwayFrom(creature.x, creature.y, threat.x, threat.y);
+  // Direction away from where the threat is perceived
+  const tp = perceivedPosition(creature, threat);
+  const fleeDir = directionAwayFrom(creature.x, creature.y, tp.x, tp.y);
 
   // Try primary direction first, then +/- 1 (45° off), then +/- 2 (90° off),
   // then +/- 3 (135° off) — steep angle fallback to slip around obstacles
@@ -295,7 +300,8 @@ function executeFleeToWater(creature) {
 
   // If already near water, move along water edge away from threat
   if (isNearWater(creature.x, creature.y)) {
-    const awayDir = threat ? directionAwayFrom(creature.x, creature.y, threat.x, threat.y) : (creature.wander ? creature.wander.direction : 0);
+    const tp = threat ? perceivedPosition(creature, threat) : null;
+    const awayDir = tp ? directionAwayFrom(creature.x, creature.y, tp.x, tp.y) : (creature.wander ? creature.wander.direction : 0);
     // Try directions near awayDir that keep us near water
     const candidates = [awayDir, (awayDir + 1) % 8, (awayDir + 7) % 8, (awayDir + 2) % 8, (awayDir + 6) % 8, (awayDir + 3) % 8, (awayDir + 5) % 8];
     for (const dir of candidates) {
@@ -444,8 +450,9 @@ function chasePrey(creature) {
 
   creature.huntTarget = target.target; // remember what we're chasing
 
-  // Move toward prey
-  const dir = directionToward(creature.x, creature.y, target.target.x, target.target.y);
+  // Move toward where the prey is perceived
+  const pos = perceivedPosition(creature, target.target);
+  const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
   return moveInDirection(creature, dir);
 }
 
@@ -782,9 +789,11 @@ function adjacencyCombatCheck(creature) {
   const player = state.player;
   if (player.hp <= 0) return;
 
-  // Only if adjacent to the player
-  const d = chebyshev(creature.x, creature.y, player.x, player.y);
-  if (d > 1) return;
+  // Only if the senses put the player on an adjacent tile, and it is
+  // actually there to be struck (the strike itself is contact)
+  const pp = perceptOf(creature, player);
+  if (!pp || chebyshev(creature.x, creature.y, pp.x, pp.y) > 1) return;
+  if (chebyshev(creature.x, creature.y, player.x, player.y) > 1) return;
 
   // Check if creature has proactive (non-defensive) attacks
   const monBodyMap = getBodyMap(creature);
@@ -921,7 +930,8 @@ function performBonusMove(mon){
   if (mon.currentBehavior === 'rest') return; // resting creatures don't move
   // Bonus move respects current behavior for movement direction
   if (mon.currentBehavior === 'hunt' && mon.huntTarget) {
-    const dir = directionToward(mon.x, mon.y, mon.huntTarget.x, mon.huntTarget.y);
+    const pos = perceivedPosition(mon, mon.huntTarget);
+    const dir = directionToward(mon.x, mon.y, pos.x, pos.y);
     if (!moveInDirection(mon, dir)) executeWander(mon);
   } else if (mon.currentBehavior === 'flee') {
     executeFlee(mon);

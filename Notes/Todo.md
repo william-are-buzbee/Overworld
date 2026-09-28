@@ -156,7 +156,7 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] 2. Parity: NPC sightlines charged per eye through trees (NPC smell from the scent field moved to pass 6: the field is anonymous molecules, so reading it needs percepts that point at no entity)
 - [x] 3. Intensity recruits force (Motor step 4, part): a creep is physically slower than a walk (2.5× the time per step); action cap 3 → 8 so fast creatures are not clipped
 - [x] 4. Motion as velocity: angular and looming components per observer, looming into the threat template; self-noise (own footfalls raise own vibration floor). Own speed blurring own eyes deferred: needs background optic flow
-- [ ] 5. Percept plumbing: every AI consumer reads a percept (perceived position, size, identity), not the entity; percept = truth at first
+- [x] 5. Percept plumbing: every AI consumer reads a percept (perceived position, size, identity), not the entity; percept = truth at first; the display draws from percepts
 - [ ] 6. Received-signal inference: size-distance confound per channel, distance cues (binocular parallax, limb amplitude spread), bearing resolution from sensor geometry; display at the perceived tile; NPC smell read from the wind-driven scent field (molecular classes → diet and kind, concentration → confounded size and distance, upwind → bearing), with the "NPC scent tracking AI" item
 - [ ] 7. Identification by body-map features against wired templates; display and examine show the perceived species
 - [ ] 8. Persistence held in tissue: evidence summation and last-known position, scaled by integration mass
