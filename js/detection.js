@@ -27,6 +27,7 @@ import { getBodyMap,
          getIntegument, getVisualAcuity, getVisualConfig,
        } from './constants.js';
 import { getLightLevel } from './time-cycle.js';
+import { referenceEmission } from './signals.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -54,6 +55,7 @@ function _getTargetEmission(target, channel) {
     case 'chemicalAirborne': return target.signals.chemical || 0;
     case 'vibrationGround':  return (target.signals.vibration && target.signals.vibration.ground) || 0;
     case 'vibrationAir':     return (target.signals.vibration && target.signals.vibration.air) || 0;
+    case 'visual':           return target.signals.visual || 0;
     default: return 0;
   }
 }
@@ -373,26 +375,48 @@ function hasLineOfSight(detector, target) {
   return hasLOS(layer, detector.x, detector.y, target.x, target.y);
 }
 
+// ==================== VISUAL DETECTION (one path) ====================
+// The visual channel for any detector: the eye's range on this target (size,
+// motion, contrast, light), line of sight, the eyes' field (or an actively
+// tracked threat, for NPCs), then the cover on the target's tile, which
+// shrinks the effective range by the cube root of what it hides. Returns
+// a detection entry { zone: null, channel: 'visual', quality, snr } or null.
+// canDetect (NPCs) and computePlayerPerception (the player) both use this,
+// so the SNR the ganglia see is the SNR that decided the detection.
+function _visualDetection(detector, target) {
+  const d = dist(detector.x, detector.y, target.x, target.y);
+  const visRange = getVisualRange(detector, target);
+  if (visRange <= 0 || d > visRange) return null;
+  if (!hasLineOfSight(detector, target)) return null;
+  if (!isInVisionCone(detector, target) && !(!detector.isPlayer && _isActivelyTracking(detector, target))) return null;
+  const concealment = computeEffectiveConcealment(target);
+  const effectiveVisRange = concealment > 0 ? visRange * Math.cbrt(1.0 - concealment) : visRange;
+  if (d > effectiveVisRange) return null;
+  const snr = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
+  return { zone: null, channel: 'visual', quality: getEffectiveVisual(detector), snr };
+}
+
 // ==================== MASTER DETECTION (Prompt P) ====================
-// Uses per-zone detection for non-visual channels, max-based for visual.
-// Returns { detected, detections, senses, distance, bestSNR }
+// Per-zone detection for the non-visual channels plus the one visual path.
+// Returns { detected, detections, senses, distance, bestSNR }; detections is
+// every channel that detected, visual included, so callers never recompute.
 
 function canDetect(detector, target) {
 
   const d = dist(detector.x, detector.y, target.x, target.y);
 
   // Early exit — nothing detects beyond absolute ceiling
-  if (d > MAX_DETECTION_DISTANCE) return { detected: false, detections: null, senses: [], distance: d, bestSNR: 0 };
+  if (d > MAX_DETECTION_DISTANCE) return { detected: false, detections: [], senses: [], distance: d, bestSNR: 0 };
 
   const senses = [];
   let bestSNR = 0;
 
   // Non-visual: per-zone detection
-  const perZoneDetections = detectTargetPerZone(detector, target);
-  if (perZoneDetections) {
+  const detections = detectTargetPerZone(detector, target) || [];
+  if (detections.length > 0) {
     // Collect which channel types were detected
     const channelsSeen = new Set();
-    for (const det of perZoneDetections) {
+    for (const det of detections) {
       channelsSeen.add(det.channel);
       if (det.snr > bestSNR) bestSNR = det.snr;
     }
@@ -401,31 +425,17 @@ function canDetect(detector, target) {
     if (channelsSeen.has('vibrationAir')) senses.push('vibration_air');
   }
 
-  // Visual — cone + line of sight + light + local concealment
-  const visRange = getVisualRange(detector, target);
-  if (visRange > 0 && d <= visRange && hasLineOfSight(detector, target)) {
-    const inCone = isInVisionCone(detector, target);
-    const isTrackedThreat = _isActivelyTracking(detector, target);
-    if (inCone || isTrackedThreat) {
-        // Local concealment: cover on the target's tile reduces visual signal.
-        // Signal reduction scales the effective range (cube-root relationship).
-        // Only affects the visual channel — chemical/vibration are unaffected.
-        const concealment = computeEffectiveConcealment(target);
-        const effectiveVisRange = concealment > 0
-          ? visRange * Math.cbrt(1.0 - concealment)
-          : visRange;
-
-        if (d <= effectiveVisRange) {
-          senses.push('visual');
-          const visSNR = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
-          if (visSNR > bestSNR) bestSNR = visSNR;
-        }
-    }
+  // Visual
+  const vis = _visualDetection(detector, target);
+  if (vis) {
+    senses.push('visual');
+    detections.push(vis);
+    if (vis.snr > bestSNR) bestSNR = vis.snr;
   }
 
   return {
     detected: senses.length > 0,
-    detections: perZoneDetections,  // per-zone array (non-visual only) or null
+    detections,
     senses:   senses,
     distance: d,
     bestSNR:  bestSNR,
@@ -462,25 +472,23 @@ function getDetectionRange(creature) {
 
 // ==================== SNR AND UNCERTAINTY (Prompt P) ====================
 
-/** Estimate target mass from signal — uses chemical emission as primary mass proxy.
- *  Observer uses its own body as a measuring stick. */
-function estimateMassFromSignal(target, observer) {
+/** Estimate target mass from the channel that detected it, with the
+ *  observer's own emission on that channel as the measuring stick
+ *  (Sensory-Design "Size estimation"). Smell and air vibration scale with
+ *  mass; a silhouette with its cube root, so that ratio is cubed back;
+ *  ground vibration is footfall loudness, mass over foot contact, which says
+ *  as much about gait as about weight, and the estimate is honestly rough.
+ *  What the observer cannot know it does not correct for: a moving predator
+ *  smells like a heavier animal to a resting grazer. */
+function estimateMassFromSignal(target, observer, channel) {
   const observerMass = getCreatureMass(observer);
-  // Use chemical emission as primary proxy (always nonzero for living creatures)
-  const targetChemEmission = target.signals ? target.signals.chemical : 0;
-  // Compute what the observer's own chemical emission would be (at rest, base)
-  const selfChemEmission = observerMass * CHEM_MASS_COEFF;
-  if (selfChemEmission > 0 && targetChemEmission > 0) {
-    return observerMass * (targetChemEmission / selfChemEmission);
+  const ref = referenceEmission(observer, channel);
+  const sig = _getTargetEmission(target, channel);
+  if (ref > 0 && sig > 0) {
+    const ratio = sig / ref;
+    return observerMass * (channel === 'visual' ? ratio * ratio * ratio : ratio);
   }
-  // Fallback: use vibration ground emission if available
-  const targetVibG = target.signals ? target.signals.vibration.ground : 0;
-  if (targetVibG > 0) {
-    // Vibration scales with mass/contactArea — rough mass proxy
-    return observerMass * (targetVibG / Math.max(0.01, observerMass * 0.02));
-  }
-  // No usable signal — return observer mass as default
-  return observerMass;
+  return observerMass;   // no usable signal: assume something like itself
 }
 
 /** Compute relativeMagnitude from size uncertainty bounds.
@@ -546,13 +554,13 @@ function buildDetectionInfo(observer, target, detections) {
     threatAssessment: null,
   };
 
-  let bestSNR = 0;
+  let bestSNR = 0, bestChannel = null;
   let bestChemSNR = 0;
   let bestVibSNR = 0;
   let bestVisSNR = 0;
 
   for (const det of detections) {
-    if (det.snr > bestSNR) bestSNR = det.snr;
+    if (det.snr > bestSNR) { bestSNR = det.snr; bestChannel = det.channel; }
 
     if (det.channel === 'chemicalAirborne' && det.snr > bestChemSNR) {
       bestChemSNR = det.snr;
@@ -581,7 +589,7 @@ function buildDetectionInfo(observer, target, detections) {
   // Size estimate: uncertainty narrows with best SNR from any channel
   if (bestSNR > 0) {
     const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
-    const rawEstimate = estimateMassFromSignal(target, observer);
+    const rawEstimate = estimateMassFromSignal(target, observer, bestChannel);
     info.sizeEstimate = {
       estimated: rawEstimate,
       lower: rawEstimate / (1 + uncertaintyFactor),
@@ -703,21 +711,9 @@ function buildAllDetectionInfo(creature) {
     const result = canDetect(creature, target);
     if (!result.detected) continue;
 
-    // Gather per-zone detections (non-visual). If visual detected, ensure a visual
-    // entry exists so buildDetectionInfo can compute per-channel SNR for all channels.
-    let detections = result.detections || [];
-    if (result.senses.includes('visual')) {
-      // Compute visual SNR the same way canDetect does
-      const d = dist(creature.x, creature.y, target.x, target.y);
-      const visRange = getVisualRange(creature, target);
-      const visSNR = d > 0 ? visRange / d : visRange * 10;
-      detections = detections.concat([{
-        zone: null, channel: 'visual',
-        quality: getEffectiveVisual(creature), snr: visSNR
-      }]);
-    }
-
-    const info = buildDetectionInfo(creature, target, detections);
+    // result.detections carries every channel that detected, visual included,
+    // at the SNR that decided the detection (concealment and light applied).
+    const info = buildDetectionInfo(creature, target, result.detections);
     info.entity = target;
     info.senses = result.senses;
     creature.detectionInfo.push(info);
@@ -1056,51 +1052,35 @@ function computePlayerPerception() {
     const inMonocularFOV = !inBinocularFOV && monocularSet && monocularSet.has(creatureKey);
     const inAnyFOV = inBinocularFOV || inMonocularFOV;
 
-    // ── Visual detection for FOV creatures (Visual Detection Pass 1) ──
+    // ── Visual detection for FOV creatures: the same path NPCs use ──
     if (inAnyFOV) {
-      const d = dist(player.x, player.y, creature.x, creature.y);
-      const visRange = getVisualRange(player, creature);
-
-      if (visRange > 0 && d <= visRange && hasLineOfSight(player, creature)) {
-        const inCone = isInVisionCone(player, creature);
-        if (inCone) {
-          const concealment = computeEffectiveConcealment(creature);
-          const effectiveVisRange = concealment > 0
-            ? visRange * Math.cbrt(1.0 - concealment)
-            : visRange;
-
-          if (d <= effectiveVisRange) {
-            const visSNR = d > 0 ? effectiveVisRange / d : effectiveVisRange * 10;
-
-            let speciesConfidence = 0;
-            if (visSNR > SPECIES_CONF_MIN) {
-              speciesConfidence = Math.min(1.0,
-                (visSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
-            }
-
-            if (speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE) {
-              // High confidence — creature renders normally via drawEntityAtTile
-              player._visuallyDetected.add(creature);
-            } else {
-              // Low confidence — route through sensedCreatures for blob rendering
-              let sizeEstimate = null;
-              if (visSNR > 0) {
-                const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / visSNR;
-                const rawEstimate = estimateMassFromSignal(creature, player);
-                sizeEstimate = {
-                  estimated: rawEstimate,
-                  lower: rawEstimate / (1 + uncertaintyFactor),
-                  upper: rawEstimate * (1 + uncertaintyFactor),
-                };
-              }
-              player.sensedCreatures.push({
-                creature, bestSNR: visSNR, speciesConfidence, sizeEstimate,
-                _visualFOV: true,
-              });
-            }
-            continue;  // visual detection handled — skip non-visual for FOV creatures
-          }
+      const vis = _visualDetection(player, creature);
+      if (vis) {
+        const visSNR = vis.snr;
+        let speciesConfidence = 0;
+        if (visSNR > SPECIES_CONF_MIN) {
+          speciesConfidence = Math.min(1.0,
+            (visSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
         }
+
+        if (speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE) {
+          // High confidence — creature renders normally via drawEntityAtTile
+          player._visuallyDetected.add(creature);
+        } else {
+          // Low confidence — route through sensedCreatures for blob rendering
+          const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / visSNR;
+          const rawEstimate = estimateMassFromSignal(creature, player, 'visual');
+          const sizeEstimate = {
+            estimated: rawEstimate,
+            lower: rawEstimate / (1 + uncertaintyFactor),
+            upper: rawEstimate * (1 + uncertaintyFactor),
+          };
+          player.sensedCreatures.push({
+            creature, bestSNR: visSNR, speciesConfidence, sizeEstimate,
+            _visualFOV: true,
+          });
+        }
+        continue;  // visual detection handled — skip non-visual for FOV creatures
       }
       // Visual detection failed — creature blends into background on this FOV
       // tile. Not added to _visuallyDetected (the renderer will not draw it),
@@ -1112,30 +1092,27 @@ function computePlayerPerception() {
     const detections = detectTargetPerZone(player, creature);
     if (!detections) continue;
 
-    let bestSNR = 0;
+    let bestSNR = 0, bestChannel = null;
     for (const det of detections) {
       if (det.channel === 'chemicalAirborne') continue;
-      if (det.snr > bestSNR) bestSNR = det.snr;
+      if (det.snr > bestSNR) { bestSNR = det.snr; bestChannel = det.channel; }
     }
 
     if (bestSNR <= 0) continue;
-    
+
     let speciesConfidence = 0;
     if (bestSNR > SPECIES_CONF_MIN) {
       speciesConfidence = Math.min(1.0,
         (bestSNR - SPECIES_CONF_MIN) / (SPECIES_CONF_FULL - SPECIES_CONF_MIN));
     }
 
-    let sizeEstimate = null;
-    if (bestSNR > 0) {
-      const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
-      const rawEstimate = estimateMassFromSignal(creature, player);
-      sizeEstimate = {
-        estimated: rawEstimate,
-        lower: rawEstimate / (1 + uncertaintyFactor),
-        upper: rawEstimate * (1 + uncertaintyFactor),
-      };
-    }
+    const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
+    const rawEstimate = estimateMassFromSignal(creature, player, bestChannel);
+    const sizeEstimate = {
+      estimated: rawEstimate,
+      lower: rawEstimate / (1 + uncertaintyFactor),
+      upper: rawEstimate * (1 + uncertaintyFactor),
+    };
 
     player.sensedCreatures.push({ creature, bestSNR, speciesConfidence, sizeEstimate });
   }

@@ -8,9 +8,8 @@
 import {
   CHEM_MASS_COEFF, CHEM_PREDATOR_MULT, CHEM_ACTIVITY_MULT, CHEM_WOUND_COEFF,
   VIB_GROUND_COEFF, VIB_AIR_BASELINE_COEFF, VIB_AIR_ACTIVITY_COEFF, VIB_AIR_COMBAT_BONUS,
-  VIB_WATER_COEFF, VIB_WATER_IDLE_COEFF, CONTACT_AREA_COEFF, DEFAULT_CONTACT_FRACTION,
+  VIB_WATER_COEFF, VIB_WATER_IDLE_COEFF,
   VIS_SIZE_COEFF,
-  getBodyMap,
 } from './constants.js';
 
 // ==================== CHEMICAL EMISSION ====================
@@ -46,42 +45,15 @@ function computeChemicalEmission(creature) {
 
 // ==================== VIBRATION EMISSION ====================
 
-/**
- * Sum the mass of locomotion-tagged zones to estimate foot contact area.
- * Heavier, broader locomotion zones = larger ground contact = quieter per-mass.
- */
-function getFootContactArea(creature) {
-  const bodyMap = getBodyMap(creature);
-  if (!bodyMap) {
-    // Fallback: proportional contact area from total mass
-    return Math.max(0.5, (creature.totalMass || 1) * DEFAULT_CONTACT_FRACTION);
-  }
-
-  let locoMass = 0;
-  for (const zone of bodyMap) {
-    if (zone.destroyed) continue;
-    if (zone.locomotion) {
-      locoMass += zone.mass || 0;
-    }
-  }
-
-  if (locoMass > 0) {
-    return Math.max(0.5, locoMass * CONTACT_AREA_COEFF);
-  }
-
-  // No locomotion zones found — use total mass fallback
-  return Math.max(0.5, (creature.totalMass || 1) * DEFAULT_CONTACT_FRACTION);
-}
-
 function computeVibrationEmission(creature) {
   const mass = creature.totalMass || 0;
   if (mass <= 0) return { ground: 0, air: 0, water: 0 };
 
-  // --- Ground ---
+  // --- Ground --- the footfall impulse: the mass a moving body drops on the
+  // substrate each step. Still creatures put nothing into the ground.
   let ground = 0;
   if (creature.movedThisTurn && !creature.inWater) {
-    const contactArea = getFootContactArea(creature);
-    ground = (mass / contactArea) * VIB_GROUND_COEFF;
+    ground = mass * VIB_GROUND_COEFF;
   }
 
   // --- Air ---
@@ -120,6 +92,29 @@ function computeVisualDetectability(creature) {
   let detectability = Math.pow(mass, 0.33) * VIS_SIZE_COEFF;
 
   return detectability;
+}
+
+// ==================== REFERENCE EMISSION ====================
+// What this creature itself puts out on a channel, as the measuring stick it
+// uses to size others (Sensory-Design "Size estimation"): its own smell at
+// rest, its own footfalls and breathing as if moving, its own silhouette.
+// A creature standing still still knows what its own footfalls sound like,
+// so movement-dependent channels are computed as if moving.
+export function referenceEmission(creature, channel) {
+  const mass = creature.totalMass || 0;
+  if (mass <= 0) return 0;
+  switch (channel) {
+    case 'chemicalAirborne':
+      return mass * CHEM_MASS_COEFF * (creature.diet === 'predator' ? CHEM_PREDATOR_MULT : 1);
+    case 'vibrationGround':
+      return mass * VIB_GROUND_COEFF;
+    case 'vibrationAir':
+      return mass * (VIB_AIR_BASELINE_COEFF + VIB_AIR_ACTIVITY_COEFF);
+    case 'visual':
+      return computeVisualDetectability(creature);
+    default:
+      return 0;
+  }
 }
 
 // ==================== MASTER SIGNAL COMPUTATION ====================

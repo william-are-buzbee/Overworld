@@ -11,13 +11,18 @@ export const CHEM_ACTIVITY_MULT  = 1.4;    // moving increases emission by 40%
 export const CHEM_WOUND_COEFF    = 0.3;    // wound emission per kg per unit of blood loss severity
 
 // Vibration emission
-export const VIB_GROUND_COEFF       = 0.15;  // ground vibration intensity per (mass / contact area)
+// Ground vibration is the footfall impulse a moving body puts into the
+// substrate, proportional to the mass carried (Sensory-Design: a lurker's
+// quality-5 sensor feels a moving 22 kg meso-predator at 10-12 tiles and a
+// 200 kg herbivore at 15+; a quality-1 limb feels the meso at ~2). It used to
+// be divided by foot contact area, which cancelled to a gait ratio and made a
+// 200 kg wader quieter than a wolf.
+export const VIB_GROUND_COEFF       = 0.08;  // ground vibration emission per kg of moving mass
 export const VIB_AIR_BASELINE_COEFF = 0.005; // air vibration from breathing per kg (always on)
 export const VIB_AIR_ACTIVITY_COEFF = 0.02;  // additional air vibration from movement per kg
 export const VIB_AIR_COMBAT_BONUS   = 3.0;   // flat bonus during combat (impacts are loud in air)
 export const VIB_WATER_COEFF        = 0.2;   // water vibration from movement per kg
 export const VIB_WATER_IDLE_COEFF   = 0.02;  // water vibration from being still in water per kg
-export const CONTACT_AREA_COEFF     = 0.15;  // contact area per kg of locomotion zone mass
 
 // Visual detectability
 export const VIS_SIZE_COEFF    = 1.0;   // visual detectability per cube-root-kg
@@ -25,9 +30,6 @@ export const VIS_SIZE_COEFF    = 1.0;   // visual detectability per cube-root-kg
 // MOTION_SIGNAL_MOVING / MOTION_SIGNAL_STILL in detection.js (Visual Detection
 // Pass 1). Retained for reference only. Do not use.
 // export const VIS_MOVEMENT_MULT = 3.0;
-
-// Default contact area fraction (fallback if no locomotion zones tagged)
-export const DEFAULT_CONTACT_FRACTION = 0.15;
 
 // --- Perception Range (Prompt P) — per-zone detection coefficients ---
 // Retuned for per-zone quality (no aggregation). Range = cbrt(emission) × quality × coeff.
