@@ -256,8 +256,11 @@ function processBleed(creature, isPlayer) {
     }
   }
 
-  // 2. Regeneration
-  creature.blood = Math.min(creature.blood + creature.bloodMax * REGEN_FRACTION, creature.bloodMax);
+  // 2. Regeneration. A body with an empty food reserve makes no new blood
+  //    (the player's `fed`; NPC hunger is a separate placeholder and never gates this).
+  if (!(creature.fed != null && creature.fed <= 0)) {
+    creature.blood = Math.min(creature.blood + creature.bloodMax * REGEN_FRACTION, creature.bloodMax);
+  }
 
   // 3. Clamp
   creature.blood = Math.max(creature.blood, 0);

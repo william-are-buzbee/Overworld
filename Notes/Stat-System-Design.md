@@ -34,7 +34,7 @@ This is what "Size" used to be. The player sees their total mass in kg on the st
 
 What it determines:
 - Zone HP pools (heavier zones have more HP)
-- Total HP (sum of zone HPs)
+- ~~Total HP (sum of zone HPs)~~ — retired; there is no creature-level HP (see Body-Sim-Design, "Creature Global HP")
 - Target profile (bigger = easier to hit)
 - Stealth penalty (bigger = harder to hide)
 - Dodge chance (bigger = less dodge, inverse relationship)
@@ -337,7 +337,7 @@ The status screen shows derived summary values, not body map internals:
 - **Speed:** effective speed (a descriptive word or relative value — "fast," "moderate," "slow" — rather than the raw ratio)
 - **Senses:** each sense with an effective quality level. Only senses above 0 are shown. "Chemical: strong. Visual: moderate." Or numeric if preferred.
 - **Cognition:** a descriptive tier. "Centralized" or "Distributed" or "Partially distributed." Not a number.
-- **HP:** total across all zones (the sum)
+- ~~**HP:** total across all zones (the sum)~~ — retired; zone bars, blood and food are shown instead
 
 The examine screen when looking at enemies shows information gated by the player's own centralization score. Higher centralization = better anatomical reasoning = more detail visible.
 

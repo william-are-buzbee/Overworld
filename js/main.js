@@ -4,15 +4,14 @@
 
 import { state, worlds, covers } from './state.js';
 import { tileSize, viewW, viewH, cycleZoom, setZoom, zoom, toggleSpritePack, getSpritePack } from './display.js';
-// LEGACY POPUP: modal.js still used by ground items, shops, NPC dialogue, books.
-// Migrate these features to HUD-native patterns, then remove this import.
+// modal.js: the help screen and the eat panel (several corpses on one tile).
 import { modalEl, closeModal, openModal, setUpdateUICallback } from './modal.js';
 import { updateUI, hideHud, toggleStatusFullMode } from './ui.js';
 import { canvas, ctx, resizeCanvas, render } from './rendering.js';
 import { tintedSprite } from './sprites.js';
 import { isTexturePickerOpen, toggleTexturePicker } from './texture-picker.js';
 
-import { attemptMove, restAction, eatBest, eatItem, eatCorpseFromInv, usePotion, dropItem, equipWeaponFromInv, equipArmorFromInv, turnInPlace, lookAtGround, pickUpFromGround, setGroundModalCallbacks, eatAction } from './player-actions.js';
+import { attemptMove, restAction, turnInPlace, setGroundModalCallbacks, eatAction } from './player-actions.js';
 import { T, terrainName, terrainInfo } from './terrain.js';
 import { inBounds, getCover, monsterAt as worldMonsterAt } from './world-state.js';
 import { getItems } from './ground-items.js';
@@ -25,14 +24,12 @@ window.debugSubstrate = debugSubstrate;
 window.scentAt = debugScentAt;
 window.scentStats = debugScentStats;
 import { toggleStealth } from './combat.js';
-import { useAction, showHelp, readBook } from './interactions.js';
+import { showHelp } from './interactions.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { initLogUI } from './log-ui.js';
 import { openCharGen, beginGame, onPlayerDeath, speciesKeyNav } from './chargen.js';
 import { hasSave, tryResume, deleteSave, migrateFromLocalStorage } from './save-load.js';
 import { isMapOpen, toggleMap, closeMap, markCurrentCell } from './worldmap.js';
-// LEGACY POPUP: overlay.js still used by inventory panel. Migrate to HUD-native.
-import { isOverlayOpen, activePanel, togglePanel, closeOverlay, setInventoryActions } from './overlay.js';
 
 
 // ==================== WIRE CALLBACKS ====================
@@ -44,24 +41,13 @@ setOnPlayerDeathCallback(() => {
   hideHud();
   renderDeathScreen();
 });
-// LEGACY POPUP: ground pickup still uses modal. Migrate to HUD-native.
-setGroundModalCallbacks(openModal, closeModal);
-setInventoryActions({
-  eat:       (i) => eatItem(i),
-  drop:      (i) => dropItem(i),
-  potion:    (i) => usePotion(i),
-  book:      (i) => readBook(i),
-  equipW:    (i) => equipWeaponFromInv(i),
-  equipA:    (i) => equipArmorFromInv(i),
-  eatCorpse: (i) => eatCorpseFromInv(i),
-});
+setGroundModalCallbacks(openModal, closeModal);   // the eat panel
 
 // ==================== SAFE DISPATCH ====================
 function safeDispatch(fn, ...args) {
   if (state.gameState !== 'play') return;
   if (modalEl.classList.contains('show')) return;
   if (isMapOpen()) return;
-  if (isOverlayOpen()) return;
   if (isTexturePickerOpen()) return;
   if (state.inputLocked) return;
   if (state.lookMode) return;
@@ -94,7 +80,6 @@ canvas.addEventListener('click', (ev) => {
   if (state.gameState !== 'play' || modalEl.classList.contains('show')) return;
   if (state.inputLocked) return;
   if (isMapOpen()) return;
-  if (isOverlayOpen()) return;
   if (isTexturePickerOpen()) return;
   if (_restartConfirmVisible) return;
   if (state.lookMode) { exitLookMode(); return; }
@@ -204,9 +189,8 @@ const SELF_KEYS = new Set(['s', '5', 'clear', ' ']);
 
 // ── Action keys (non-movement) ──
 const ACTION_MAP = {
-  'r': () => eatAction(),          // Eat (ground corpses first, then legacy inventory fallback)
+  'r': () => eatAction(),          // Eat a corpse underfoot
   'f': () => toggleStealth(),      // Sneak toggle
-  'g': () => pickUpFromGround(),   // Get/pickup
   // V (sniff) handled explicitly below ACTION_MAP — V: ground, Shift+V: air
   '?': () => showHelp(),           // Help
   '/': () => showHelp(),
@@ -431,25 +415,7 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // LEGACY INVENTORY — commented out, not deleted.
-  // The inventory system (items, equipment, potions, books) predates
-  // the body map. Will be replaced by object manipulation system.
-  // UI entry point severed here. Data structures in items.js,
-  // interactions.js, player.js left intact for future use.
-  // ══════════════════════════════════════════════════════════════
-
-  // // ── Overlay panel handling (inventory only) ──
-  // // LEGACY POPUP: inventory still uses overlay. Migrate to HUD-native pattern.
-  // const PANEL_KEYS = { i: 'inventory' };
   const kLow = ev.key.toLowerCase();
-
-  // if (isOverlayOpen()) {
-  //   if (ev.key === 'Escape') { closeOverlay(); ev.preventDefault(); return; }
-  //   if (PANEL_KEYS[kLow]) { ev.preventDefault(); togglePanel(PANEL_KEYS[kLow]); return; }
-  //   ev.preventDefault();
-  //   return;
-  // }
 
   // Texture picker: Alt+T toggles overlay
   if (kLow === 't' && ev.altKey && !isMapOpen()) {
@@ -470,14 +436,6 @@ document.addEventListener('keydown', (ev) => {
     updateUI();
     return;
   }
-
-  // // LEGACY INVENTORY: I key binding severed (see comment block above)
-  // // No overlay open — intercept inventory key before movement
-  // if (PANEL_KEYS[kLow] && !ev.shiftKey && !isMapOpen()) {
-  //   ev.preventDefault();
-  //   togglePanel(PANEL_KEYS[kLow]);
-  //   return;
-  // }
 
   // TAB key: toggle log visibility
   if (ev.key === 'Tab') {
@@ -590,36 +548,6 @@ document.addEventListener('keyup', (ev) => {
     state.player.sprintMode = false;
   }
 });
-
-// ══════════════════════════════════════════════════════════════
-// LEGACY INVENTORY DELEGATION — commented out, not deleted.
-// These handlers fired when inventory-panel buttons were clicked inside
-// modals. With the I key binding severed, the inventory panel no longer
-// opens, so these handlers are unreachable. Ground loot (data-gpick) and
-// ground eat (data-geat) use separate wiring in player-actions.js.
-// ══════════════════════════════════════════════════════════════
-// const INV_ACTIONS = {
-//   eat:        (i) => eatItem(i),
-//   drop:       (i) => dropItem(i),
-//   potion:     (i) => usePotion(i),
-//   book:       (i) => readBook(i),
-//   equipW:     (i) => equipWeaponFromInv(i),
-//   equipA:     (i) => equipArmorFromInv(i),
-//   eatCorpse:  (i) => eatCorpseFromInv(i),
-// };
-//
-// document.getElementById('modal-inner').addEventListener('click', (ev) => {
-//   for (const [key, fn] of Object.entries(INV_ACTIONS)) {
-//     const raw = ev.target.dataset[key];
-//     if (raw != null) {
-//       const idx = parseInt(raw, 10);
-//       if (Number.isFinite(idx)) {
-//         try { fn(idx); } catch (err) { console.error(err); }
-//       }
-//       return;
-//     }
-//   }
-// });
 
 // ==================== CANVAS-RENDERED SCREENS ====================
 // Title, death, and restart confirmation are all rendered on the game

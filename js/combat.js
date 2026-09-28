@@ -1,23 +1,25 @@
 // ==================== COMBAT + STEALTH ====================
+// The player's strike, the stealth toggle, and the monster-side helpers
+// that read them. A player attack resolves exactly like an NPC's
+// (behaviors.js monsterMelee): one of the body map's available attacks is
+// chosen, damage comes from the striking zone's tissue (computeStrikeDamage),
+// the footprint from the attack's damage type, armor from the target zone's
+// structural mass, and every hit goes through applyZoneDamage. There are no
+// weapons, no armor items, no XP or levels: the body is the character.
 import { render } from './rendering.js';
 import { monsterMelee, applySafetyFromDamage } from './enemy-ai.js';
 import { state, worlds, monsters } from './state.js';
-import { DMG, resistMult, getBodyMap, selectHitZone,
-         getAvailableAttacks, ARMOR_PER_STRUCTURAL_KG,
+import { getBodyMap, selectHitZone, getAvailableAttacks, ARMOR_PER_STRUCTURAL_KG,
          getAttackDirection, getExposedZones, selectContactedZones,
          computeStrikeDamage } from './constants.js';
-import { T, coverBonus } from './terrain.js';
-import { rand, randi, randRange, roll100 } from './rng.js';
-import { playerAcc, playerDodge, playerDef,
-         effectiveAP, cursedBaneMul, xpFromKill, deriveHP,
-         stealthBonus, poisonResistance } from './player.js';
-import { monDodge, monAcc, monDamage } from './monsters.js';
-import { inBounds, chebyshev, monsterAt, isTownCell, getCover } from './world-state.js';
+import { coverBonus } from './terrain.js';
+import { randi, roll100 } from './rng.js';
+import { playerAcc, playerCritChance, playerCritMult, stealthBonus } from './player.js';
+import { monDodge } from './monsters.js';
+import { chebyshev, getCover } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { applyZoneDamage } from './physiology.js';
 import { placeItem, generateItemId } from './ground-items.js';
-
-// Forward reference — set by main.js to break circular dep
 
 function monstersHere(){ return monsters[state.player.layer]; }
 
@@ -26,223 +28,142 @@ function rollHit(acc, dodge){
   return roll100() <= c;
 }
 
-function playerAttack(mon){
-  const player = state.player
-  // Break stealth
-  if (state.player.stealth) endStealth('You strike from concealment.');
+// Strike verb from the attack that lands (mirrors monsterMelee's table).
+function strikeVerb(usedAttack){
+  const atkName = usedAttack ? usedAttack.name.toLowerCase() : null;
+  const dmgType = usedAttack ? usedAttack.damageType : 'blunt';
+  if (dmgType === 'puncture') return atkName === 'bite' ? 'bite' : atkName === 'hook' ? 'hook' : 'pierce';
+  if (dmgType === 'slashing') return atkName === 'claw' ? 'claw' : 'rake';
+  return 'strike';
+}
 
-  const acc = playerAcc(player);
-  const mdodge = monDodge(mon);
-  if (!rollHit(acc, mdodge)){
+/** The player bump-attacks `mon`. Returns true on a hit (a turn's 'attack'), false on a miss. */
+function playerAttack(mon){
+  const player = state.player;
+  if (player.stealth) endStealth('You strike from concealment.');
+
+  // Zone destruction can leave nothing to strike with (same gate as monsterMelee).
+  const playerBodyMap = getBodyMap(player);
+  const availAtks = playerBodyMap ? getAvailableAttacks(playerBodyMap) : [];
+  if (playerBodyMap && availAtks.length === 0){
+    log('Nothing you could strike with remains.', LOG_CATEGORIES.COMBAT);
+    return false;
+  }
+
+  if (!rollHit(playerAcc(player), monDodge(mon))){
     log(`You miss ${mon.name}.`, LOG_CATEGORIES.COMBAT);
     mon.wasAttacked = true;
     mon.alerted = true;
-    mon.lastSeenX = state.player.x; mon.lastSeenY = state.player.y;
-    return false;  // missed
-  }
-  // ─── Determine player's attacking zone (needed for damage + footprint) ───
-  const playerBodyMap = getBodyMap(player);
-  let attackingZone = null;
-  let usedAttack = null;
-  if (playerBodyMap) {
-    const availAtks = getAvailableAttacks(playerBodyMap);
-    if (availAtks.length > 0) {
-      usedAttack = availAtks[0]; // front limb strike
-      attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
-    }
+    mon.lastSeenX = player.x; mon.lastSeenY = player.y;
+    return false;
   }
 
-  // ─── Physics-based damage: tissue composition + weapon bonuses ───
-  let base = computeStrikeDamage(player, attackingZone)
-           + (state.player.weapon.atk || 0) + Math.floor((player.level - 1) * 0.5) + randi(3);
-  if (player.perks && player.perks.blade_bonus && state.player.weapon.type === DMG.BLADE) base += 1;
-  if (player.perks && player.perks.blunt_bonus && state.player.weapon.type === DMG.BLUNT) base += 1;
-  const effDef = Math.max(0, mon.def - effectiveAP(player));
-  let dmg = Math.max(1, base - effDef);
-  const mult = resistMult(mon.tags, state.player.weapon.type);
-  let resistNote = '';
-  if (mult === 0){
-    dmg = 0;
-    resistNote = ' — no effect';
-  } else {
-    dmg = Math.max(1, Math.round(dmg * mult));
-    if (mult >= 1.4) resistNote = ' — it cuts deep';
-    else if (mult <= 0.6) resistNote = ' — it barely marks the surface';
+  // Pick the attack first so damage comes from the zone that actually strikes.
+  let usedAttack = null, attackingZone = null;
+  if (availAtks.length > 0){
+    usedAttack = availAtks[randi(availAtks.length)];
+    attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
-  // Cursed bane
-  if (dmg > 0){
-    const cb = cursedBaneMul(player, mon.tags);
-    if (cb > 1) dmg = Math.round(dmg * cb);
-  }
-  // Weapon's own bane property
-  if (dmg > 0 && state.player.weapon.bane && mon.tags.includes(state.player.weapon.bane)){
-    dmg = Math.round(dmg * (state.player.weapon.baneMul || 1.5));
-  }
+  let base = computeStrikeDamage(player, attackingZone) + randi(3);
+  const crit = roll100() <= playerCritChance(player);
+  if (crit) base = Math.floor(base * playerCritMult(player));
+  const dmg = Math.max(1, Math.round(base));
 
-  // ─── Footprint-based zone resolution ───
+  // ─── Footprint-based zone resolution on the defender ───
   const monBodyMap = getBodyMap(mon);
   let contactedZones = null;
-
-  if (monBodyMap) {
-    // Determine defender facing (default south if no facing)
+  if (monBodyMap){
     const defFacing = mon.facing || { dx: 0, dy: 1 };
-
-    // Attack direction from player position into defender's frame
-    const attackDir = getAttackDirection(
-      { x: state.player.x, y: state.player.y },
-      { x: mon.x, y: mon.y },
-      defFacing
-    );
-
-    // Build exposed zone pool
+    const attackDir = getAttackDirection({ x: player.x, y: player.y }, { x: mon.x, y: mon.y }, defFacing);
     const exposedZones = getExposedZones(monBodyMap, attackDir);
-    if (exposedZones.length > 0) {
-      // Map weapon type to body sim damage type for footprint behavior
-      const wType = state.player.weapon.type;
-      const bodyDmgType = (wType === DMG.BLADE) ? 'slashing' :
-                          (wType === DMG.BLUNT) ? 'blunt' : 'blunt';
-
-      // Compute footprint
-      let footprint = 0;
-      if (attackingZone && usedAttack && usedAttack.footprintModifier) {
-        footprint = attackingZone.mass * usedAttack.footprintModifier;
-      } else if (attackingZone) {
-        footprint = attackingZone.mass * 0.3; // default modifier
-      } else {
-        footprint = 0.5; // fallback: small footprint
-      }
-
+    if (exposedZones.length > 0){
+      const bodyDmgType = (usedAttack && usedAttack.damageType) || 'blunt';
+      const footprint = attackingZone
+        ? attackingZone.mass * ((usedAttack && usedAttack.footprintModifier) || 0.3)
+        : 0.5;
       contactedZones = selectContactedZones(exposedZones, footprint, bodyDmgType);
     }
   }
-
-  // Fallback: single zone selection if footprint resolution didn't work
-  if (!contactedZones || contactedZones.length === 0) {
+  if (!contactedZones || contactedZones.length === 0){
     const fallbackZone = monBodyMap ? selectHitZone(monBodyMap) : null;
     contactedZones = fallbackZone ? [fallbackZone] : [];
   }
 
-  // Prompt H: creature-wide HP is no longer decremented by combat damage.
-  // Death is determined by zone destruction (vital/neural/blood) only.
-  // hitFlash and damageTaken are kept for visual feedback and AI evaluation.
-  if (dmg > 0){ mon.hitFlash = 3; mon.damageTaken = (mon.damageTaken||0) + dmg; }
+  mon.hitFlash = 3;
+  mon.damageTaken = (mon.damageTaken || 0) + dmg;
 
-  // Compute total damage including elemental (for zone distribution)
-  let totalDmg = dmg;
-
-  // Combat log verb
-  const verb = state.player.weapon.type === DMG.BLUNT ? 'crush' :
-               state.player.weapon.type === DMG.BLADE ? 'strike' : 'hit';
-
-  // Build zone contact log message — naturalistic, no numbers
-  if (contactedZones.length === 1) {
-    const zn = contactedZones[0].name;
-    log(`You ${verb} ${mon.name}'s ${zn}${resistNote}.`, LOG_CATEGORIES.COMBAT);
-  } else if (contactedZones.length === 2) {
+  // Naturalistic log line, no numbers.
+  const verb = strikeVerb(usedAttack);
+  const hard = crit ? ' hard' : '';
+  if (contactedZones.length === 1){
+    log(`You ${verb} ${mon.name}'s ${contactedZones[0].name}${hard}.`, LOG_CATEGORIES.COMBAT);
+  } else if (contactedZones.length === 2){
     const names = contactedZones.map(z => z.name).join(' and ');
-    log(`You ${verb} across ${mon.name}'s ${names}${resistNote}.`, LOG_CATEGORIES.COMBAT);
-  } else if (contactedZones.length >= 3) {
+    log(`You ${verb} across ${mon.name}'s ${names}${hard}.`, LOG_CATEGORIES.COMBAT);
+  } else if (contactedZones.length >= 3){
     const last = contactedZones[contactedZones.length - 1].name;
     const rest = contactedZones.slice(0, -1).map(z => z.name).join(', ');
-    log(`Your ${verb} catches ${mon.name}'s ${rest}, and ${last}${resistNote}.`, LOG_CATEGORIES.COMBAT);
+    log(`Your ${verb} catches ${mon.name}'s ${rest}, and ${last}${hard}.`, LOG_CATEGORIES.COMBAT);
   } else {
-    log(`You ${verb} ${mon.name}${resistNote}.`, LOG_CATEGORIES.COMBAT);
-  }
-
-  // Elemental bonus
-  if (state.player.weapon.elem && mon.hp > 0){
-    const emul = resistMult(mon.tags, state.player.weapon.elem);
-    if (emul === 0){
-      log(`${state.player.weapon.elem}: no effect.`, LOG_CATEGORIES.COMBAT);
-    } else {
-      const ebase = state.player.weapon.elemBonus + randi(3);
-      const edmg = Math.max(1, Math.round(ebase * emul));
-      // Prompt H: no creature-wide HP decrement; elemental damage enters zone pipeline
-      totalDmg += edmg;
-      if (emul >= 1.4) log(`The ${state.player.weapon.elem} burns deep.`, LOG_CATEGORIES.COMBAT);
-      else if (emul <= 0.6) log(`The ${state.player.weapon.elem} barely takes hold.`, LOG_CATEGORIES.COMBAT);
-      else log(`${state.player.weapon.elem} damage.`, LOG_CATEGORIES.COMBAT);
-    }
+    log(`You ${verb} ${mon.name}${hard}.`, LOG_CATEGORIES.COMBAT);
   }
 
   // ─── Distribute damage across contacted zones ───
-  let zoneDeath = false;
-  if (contactedZones.length > 0 && monBodyMap && totalDmg > 0) {
+  let died = false;
+  if (contactedZones.length > 0 && monBodyMap){
     const totalContactedMass = contactedZones.reduce((sum, z) => sum + z.mass, 0);
-
-    for (const zone of contactedZones) {
+    for (const zone of contactedZones){
       const share = (totalContactedMass > 0) ? (zone.mass / totalContactedMass) : (1 / contactedZones.length);
-      let zoneDmg = totalDmg * share;
-
-      // Per-zone structural armor
       const zoneArmor = (zone.structural || 0) * ARMOR_PER_STRUCTURAL_KG;
-      zoneDmg = Math.max(1, zoneDmg - zoneArmor);
-
-      if (applyZoneDamage(mon, zone, zoneDmg).died) zoneDeath = true;
-    }
-
-    if (zoneDeath) {
-      mon.hp = 0;  // ensure global HP reflects death
+      const zoneDmg = Math.max(1, dmg * share - zoneArmor);
+      if (applyZoneDamage(mon, zone, zoneDmg).died) died = true;
     }
   }
 
   // Prompt I-B: spike safety drive from damage taken
-  if (!zoneDeath && mon.hp > 0 && totalDmg > 0) {
-    applySafetyFromDamage(mon, totalDmg, state.player);
-  }
+  if (!died) applySafetyFromDamage(mon, dmg, player);
 
-  // Enemy bleed feedback — gated by player centralization
-  if (!zoneDeath && mon.hp > 0 && mon.blood != null && mon.bloodMax > 0) {
+  // Enemy bleed feedback. PLACEHOLDER: gated by the player's aggregate
+  // `central` stat (see player.js header); the ≥60 branch is unreachable
+  // for every species until the readers move to the zone.
+  if (!died && mon.blood != null && mon.bloodMax > 0){
     const bloodRatio = mon.blood / mon.bloodMax;
-    if (bloodRatio < 0.75) {
-      const cent = state.player.central || 0;
-      if (cent >= 60) {
-        // Tier 3 player: detailed bleed info
+    if (bloodRatio < 0.75){
+      const cent = player.central || 0;
+      if (cent >= 60){
         if (bloodRatio < 0.25) log(`${mon.name}'s movements are sluggish. Blood loss.`, LOG_CATEGORIES.COMBAT);
         else if (bloodRatio < 0.50) log(`${mon.name} is bleeding heavily. It weakens.`, LOG_CATEGORIES.COMBAT);
         else log(`${mon.name} bleeds from its wounds.`, LOG_CATEGORIES.COMBAT);
-      } else if (cent >= 30) {
-        // Moderate centralization
+      } else if (cent >= 30){
         log(`${mon.name} bleeds from its wounds.`, LOG_CATEGORIES.COMBAT);
       } else {
-        // Low centralization: generic
         log(`The creature is wounded.`, LOG_CATEGORIES.COMBAT);
       }
     }
   }
 
-  // Mark attacked — switches to chase state, records last seen
-  // Mushrooms don't react individually — swarm AI handles their behavior
-  if (mon.key === 'mushroom'){
-    mon.wasAttacked = true;
-    // No aiState change, no alert, no chase — mushrooms stay passive even when hit
-  } else {
-    mon.wasAttacked = true;
+  // Mark attacked — switches to chase state, records last seen.
+  // Mushrooms don't react individually — swarm AI handles their behavior.
+  mon.wasAttacked = true;
+  if (mon.key !== 'mushroom'){
     mon.alerted = true;
     mon.aiState = 'chase';
     mon.chaseTurnsLeft = mon.chase;
-    mon.lastSeenX = state.player.x; mon.lastSeenY = state.player.y;
+    mon.lastSeenX = player.x; mon.lastSeenY = player.y;
   }
-  // Treant-specific: hitting one alerts nearby treants in forest, but they don't chase
-  // unless personally attacked. They become aware but stay idle and alert.
+  // Treants: hitting one alerts nearby treants, but they don't chase unless
+  // personally attacked.
   if (mon.key === 'treant'){
     for (const m of monstersHere()){
       if (m.hp <= 0 || m === mon) continue;
-      if (m.key === 'treant' && chebyshev(m.x,m.y,mon.x,mon.y) <= 5){
-        // Nearby treants become aware but do NOT chase — they stay idle
-        m.alerted = true;
-        // They stop healing (they know combat is happening nearby)
-      }
+      if (m.key === 'treant' && chebyshev(m.x, m.y, mon.x, mon.y) <= 5) m.alerted = true;
     }
   } else {
     alertNearby(mon, 4);
   }
 
-  if (zoneDeath) {
-    mon.hp = 0;  // sync global HP for alive-check filters
-    killMonster(mon);
-  }
-  return true;  // hit
+  if (died) killMonster(mon);
+  return true;
 }
 
 function alertNearby(src, radius){
@@ -253,21 +174,20 @@ function alertNearby(src, radius){
     if (m.key === 'treant' && m !== src) continue;
     // Mushrooms use pack coordination, not standard alert
     if (m.key === 'mushroom') continue;
-    if (chebyshev(m.x,m.y,src.x,src.y) <= radius){
+    if (chebyshev(m.x, m.y, src.x, src.y) <= radius){
       m.alerted = true;
       if (m.aiState === 'idle'){
         m.aiState = 'chase';
         m.chaseTurnsLeft = m.chase;
-        m.lastSeenX = state.player.x; m.lastSeenY = state.player.y;
+        m.lastSeenX = player.x; m.lastSeenY = player.y;
       }
     }
   }
 }
 
+// A creature killed by the player leaves a corpse. Nothing else: no XP, no
+// gold. (applyZoneDamage has already set hp = 0 and deathCause.)
 function killMonster(mon){
-  const player = state.player;
-
-  // Drop a corpse item on the tile where the monster died
   placeItem(state.player.layer, mon.x, mon.y, {
     id:       generateItemId(),
     kind:     'corpse',
@@ -281,26 +201,7 @@ function killMonster(mon){
     nutrition: mon.hpMax,
     mass:     mon.totalMass || 1,  // I-C: total mass for predator eating
   });
-
-  const xp = xpFromKill(player, mon.xp);
-  const gold = Math.round(randRange(mon.goldRange[0], mon.goldRange[1]));
-  state.player.xp += xp;
-  state.player.gold += gold;
   log(`${mon.name} falls.`, LOG_CATEGORIES.COMBAT);
-  checkLevelUp();
-}
-
-function checkLevelUp(){
-  const player = state.player;
-  while (state.player.xp >= state.player.xpNext){
-    state.player.xp -= state.player.xpNext;
-    state.player.level++;
-    state.player.xpNext = Math.floor(state.player.xpNext * 1.4 + 5);
-    const oldHpMax = state.player.hpMax;
-    state.player.hpMax = deriveHP(player);
-    // NO heal on level up per spec — just log max HP gain
-    log(`Your body hardens. You can withstand more.`, LOG_CATEGORIES.SYSTEM);
-  }
 }
 
 // ==================== STEALTH ====================
@@ -309,39 +210,38 @@ function inCombatProximity(){
   for (const m of monstersHere()){
     if (m.hp <= 0) continue;
     if (!m.alerted) continue;
-    if (chebyshev(m.x,m.y,state.player.x,state.player.y) <= 1) return true;
+    if (chebyshev(m.x, m.y, player.x, player.y) <= 1) return true;
   }
   return false;
 }
 function toggleStealth(){
   const player = state.player;
-  if (state.player.stealth){ endStealth('You step into the open.'); return; }
+  if (player.stealth){ endStealth('You step into the open.'); return; }
   if (inCombatProximity()){ log('Too close to alerted creatures.', LOG_CATEGORIES.COMBAT); return; }
-  state.player.stealth = true;
-  if (!state.player.effects.find(e=>e.type==='stealth')){
-    state.player.effects.push({type:'stealth', turns:999});
+  player.stealth = true;
+  if (!player.effects.find(e => e.type === 'stealth')){
+    player.effects.push({ type: 'stealth', turns: 999 });
   }
   log('You lower your profile.', LOG_CATEGORIES.COMBAT);
   render();
 }
 function endStealth(msg){
   const player = state.player;
-  state.player.stealth = false;
-  state.player.effects = state.player.effects.filter(e => e.type !== 'stealth');
+  player.stealth = false;
+  player.effects = player.effects.filter(e => e.type !== 'stealth');
   if (msg) log(msg, LOG_CATEGORIES.COMBAT);
 }
 
 // Monster stealth-detection chance (lower = harder to spot player)
 function stealthDetectChance(mon){
   const player = state.player;
-  const ground = worlds[state.player.layer][state.player.y][state.player.x];
-  const cover = getCover(state.player.layer, state.player.x, state.player.y);
+  const ground = worlds[player.layer][player.y][player.x];
+  const cover = getCover(player.layer, player.x, player.y);
   const cov = coverBonus(ground, cover);
-  const d = chebyshev(mon.x,mon.y,state.player.x,state.player.y);
-  let chance = mon.percept - cov - stealthBonus(player) - d*5;
+  const d = chebyshev(mon.x, mon.y, player.x, player.y);
+  const chance = mon.percept - cov - stealthBonus(player) - d * 5;
   return Math.max(0, Math.min(95, chance));
 }
 
-
-export { rollHit, playerAttack, alertNearby, killMonster, checkLevelUp,
+export { rollHit, playerAttack, alertNearby, killMonster,
          inCombatProximity, toggleStealth, endStealth, stealthDetectChance, monsterMelee };

@@ -204,9 +204,9 @@ export function resizeCanvas() {
 resizeCanvas();
 
 // ---- Ground item display priority ----
-// When multiple items share a tile, render only the highest-priority one.
-// Priority: corpse (4) > weapon/armor (3) > potion/food/book (2) > other (1).
-const GROUND_ITEM_PRIORITY = { corpse: 4, weapon: 3, armor: 3, potion: 2, food: 2, book: 2 };
+// When several items share a tile, render only the highest-priority one.
+// Corpses are the only ground item the game makes now.
+const GROUND_ITEM_PRIORITY = { corpse: 2 };
 function groundItemPriority(stack) {
   let best = null, bestP = 0;
   for (const it of stack) {
@@ -477,7 +477,7 @@ function render(){
 
       // ---- Draw GROUND ITEM indicator ----
       // Rendered after cover but before entities so items sit on top of trees/mushrooms.
-      // Priority: corpse > weapon/armor > potion/food/book > other.
+      // Priority: corpse > other.
       // Draws the highest-priority item's visual; others just get the gold dot.
       const giLayer = groundItems[layer];
       if (giLayer) {
