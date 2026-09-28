@@ -160,7 +160,7 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] 6. Received-signal inference: size-distance confound per channel (resolved by the signal's structure as SNR rises, own body as the yardstick below it), binocular parallax as a distance cue, bearing resolution per channel; percepts and display at the perceived tile; strikes at a misplaced percept hit air
 - [x] 6b-1. NPCs read ground trails: per-step deposits, nose-down reading of the tiles around, hungry predators follow the freshest herbivore trail; the hare's threat region matches intense meat-eater volatiles underfoot to fear
 - [x] 6b-2. Airborne plumes replace the per-animal smell sphere: field calibrated (cleanup floor under the best nose, dilution 0.93, dormant creatures silent); anonymous plume percepts with own-odour adaptation (Weber); wind bearing from air-flow transducers; surge upwind / cast across the wind; near-field localisation within a tile; odour bound to a seen animal only where integration and chemical processing share a zone
-- [ ] 7. Identification by body-map features against wired templates; display and examine show the perceived species
+- [x] 7. Identification by body-map features against wired templates (mass, locomotion limbs, integument, volatile mix; margin confidence); recognised species sets the size prior and brings its diet; display and examine show the perceived species
 - [ ] 8. Persistence held in tissue: evidence summation and last-known position, scaled by integration mass
 - [ ] 9. Head facing separate from heading (orienting response)
 - [ ] Retune behaviour once 1–8 land

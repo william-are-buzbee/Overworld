@@ -74,6 +74,10 @@ export const DIET_DECISION_THRESHOLD = 0.7;
 export const SNR_FULL_RENDER        = 5.0;     // SNR at which sprite reaches full opacity
 
 // --- Species-Confidence Gated Rendering (Prompt Q) ---
+// Since perception pass 7 this is the recognition threshold everywhere: the
+// display draws a species' sprite above it, and a creature treats something
+// as a known kind (kin, not prey) above it. Identification confidence is the
+// template margin (ID_MARGIN); SPECIES_CONF_MIN/FULL below no longer gate it.
 // Below this confidence, non-visual detections render as generic size-scaled blobs.
 // Above it, the creature's actual sprite is shown.  Separate from the AI's
 // DIET_DECISION_THRESHOLD (0.7) — the player "recognises" a species visually at
@@ -149,6 +153,22 @@ export const CHEM_RESOLVE_SNR  = 6.0;   // nose: the compound mix, as for diet (
 export const VIS_BEARING_RES_DEG  = 0;
 export const VIB_BEARING_RES_DEG  = 90;
 export const CHEM_BEARING_RES_DEG = 180;
+
+// ── Identification (perception pass 7) ──
+// A source is identified by matching the features its channels resolve
+// against wired templates, one per species the observer shares its world
+// with (crystallized, not learned: Sensory-Design). Each feature counts with
+// the weight its channel resolves it at (the same w as for size), and
+// differences are measured in these units, each roughly the smallest
+// difference that separates two animals:
+export const ID_MASS_UNIT       = Math.LN2;  // a doubling of mass (log scale)
+export const ID_LIMB_UNIT       = 2;         // two locomotion limbs (footfall pattern, silhouette)
+export const ID_BRIGHTNESS_UNIT = 0.1;       // integument brightness (eyes)
+export const ID_PROFILE_UNIT    = 0.5;       // L1 distance between volatile mixes (near-field nose)
+// Confidence is the margin between the best template and the runner-up, full
+// at this many units: a creature that matches two templates about equally
+// does not know which it is looking at.
+export const ID_MARGIN          = 1.0;
 
 // Olfactory adaptation (perception pass 6b-2): a nose is adapted to its own
 // odour, the constant background its body holds the air at on its own tile
