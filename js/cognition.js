@@ -26,7 +26,7 @@ import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
 import { dist, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
-import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey } from './detection.js';
+import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition } from './detection.js';
 
 // ==================== COGNITIVE TIER SYSTEM (Prompt M-A1) ====================
 // Integration capacity = total mass of integration-dedicated neural tissue across
@@ -56,6 +56,12 @@ function getTier(integrationCapacity) {
 // Universal helpers called by reactive rules. Each reads from body map,
 // detection results, and game state. No per-species profiles.
 
+
+/** Is this entity perceived on a tile next to the creature? */
+function _adjacentPerceived(creature, entity) {
+  const pos = perceivedPosition(creature, entity);
+  return chebyshev(creature.x, creature.y, pos.x, pos.y) <= 1;
+}
 
 /** Does movement compromise the creature's dominant sense? */
 function movementCompromisesSense(creature) {
@@ -173,7 +179,7 @@ function evaluateReactiveRules(creature) {
   if ((ambushed || bloodCrossedCritical || torsoCritical) && creature.tookDamageThisTurn) {
     // Adjacent attacker and can fight → retaliate
     if (cc.canFight && creature.threatSource &&
-        chebyshev(creature.x, creature.y, creature.threatSource.x, creature.threatSource.y) <= 1) {
+        _adjacentPerceived(creature, creature.threatSource)) {
       return { behavior: 'retaliate', magnitude: 0.9, target: creature.threatSource };
     }
     // Flee toward refuge or away from damage source
@@ -191,8 +197,7 @@ function evaluateReactiveRules(creature) {
       }
       return { behavior: 'flee', magnitude: 0.7 };
     }
-    if (creature.threatSource &&
-        chebyshev(creature.x, creature.y, creature.threatSource.x, creature.threatSource.y) <= 1) {
+    if (creature.threatSource && _adjacentPerceived(creature, creature.threatSource)) {
       if (bState === 'critical') {
         if (refuge.type !== 'none') {
           return { behavior: 'flee_refuge', magnitude: 0.7, target: refuge.target, refugeType: refuge.type };
@@ -579,7 +584,7 @@ function _checkBoltReflex(creature, neural, detectionInfo, thresholds) {
   let direction = null;
   if (strongestSource) {
     direction = directionAwayFrom(creature.x, creature.y,
-                                  strongestSource.x, strongestSource.y);
+                                  strongestDet.x, strongestDet.y);
   } else {
     direction = randi(8); // random bolt — no bearing information
   }
@@ -693,7 +698,7 @@ function _matchThreatTemplates(creature, neural, detectionInfo, thresholds) {
       highestConfidence = confidence;
       threatSource = det.entity;
       threatBearing = det.entity ?
-        directionAwayFrom(creature.x, creature.y, det.entity.x, det.entity.y) : null;
+        directionAwayFrom(creature.x, creature.y, det.x, det.y) : null;
     }
   }
 

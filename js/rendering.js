@@ -8,7 +8,7 @@ import { tileSize, viewW, viewH, zoom, getSpritePack } from './display.js';
 import { T, terrainInfo } from './terrain.js';
 import { spriteCache, tintedSprite, tintedMonsterSprite, COLOR_PALETTES, textureConfig } from './sprites.js';
 import { spriteCache32, tintedSprite32, tintedMonsterSprite32 } from './sprites-32.js';
-import { inBounds, monsterAt, getCover } from './world-state.js';
+import { inBounds, getCover } from './world-state.js';
 import { updateUI } from './ui.js';
 import { drawTimeTint } from './time-cycle.js';
 import { getGroundScentNear, MOLECULAR_CLASSES } from './scent.js';
@@ -142,11 +142,9 @@ function applyAmbientDip(ctx, spriteCanvas, sx, sy, ts, scale) {
 function _applyVisualCreatureDip(wx, wy, px, py, TILE, layer) {
   // Don't dip the player's own tile
   if (wx === state.player.x && wy === state.player.y) return;
-  const mon = monsterAt(wx, wy, layer);
+  // Only dip creatures the player perceives here at the full-sprite tier
+  const mon = _perceivedMonAt(wx, wy);
   if (!mon) return;
-  // Only dip visually detected creatures (full-sprite tier)
-  const vd = state.player._visuallyDetected;
-  if (!vd || !vd.has(mon)) return;
 
   let tintColor = null;
   if (mon.tint) {
@@ -154,6 +152,14 @@ function _applyVisualCreatureDip(wx, wy, px, py, TILE, layer) {
   }
   const spr = tintColor ? getTintedMon(mon.spr, tintColor) : getSprite(mon.spr);
   if (spr) applyAmbientDip(ctx, spr, px, py, TILE, 1.0);
+}
+
+/** The creature the player's eyes put on this tile at the full-sprite tier
+ *  (detection.js computePlayerPerception), or null. Sprites are drawn where
+ *  the creature is perceived, not where it is: the display shows percepts. */
+function _perceivedMonAt(wx, wy) {
+  const at = state.player._perceivedAt;
+  return at ? (at.get(`${wx},${wy}`) || null) : null;
 }
 
 /**
@@ -329,7 +335,10 @@ function render(){
       }
 
       // ---- Ground decorations (skip at ×1 for performance/clarity) ----
-      if (currentZoom >= 2 && !cover && !monsterAt(wx,wy,layer) && !(wx===state.player.x && wy===state.player.y)){
+      // Decorations are left off under a drawn sprite: a creature the player
+      // perceives here, or the player. (It used to be any creature standing
+      // here, perceived or not, so a hidden animal showed as a bare tile.)
+      if (currentZoom >= 2 && !cover && !_perceivedMonAt(wx,wy) && !(wx===state.player.x && wy===state.player.y)){
         const decor = tileHash;
         ctx.save();
         ctx.translate(px, py);
@@ -437,7 +446,7 @@ function render(){
 
       // ---- Cover decorations (drawn on ground, before cover sprite) ----
       // Forest and mushforest decorations when they are cover
-      if (cover && !monsterAt(wx,wy,layer) && !(wx===state.player.x && wy===state.player.y)){
+      if (cover && !_perceivedMonAt(wx,wy) && !(wx===state.player.x && wy===state.player.y)){
         const decor = tileHash;
         ctx.save();
         ctx.translate(px, py);
@@ -555,14 +564,17 @@ function render(){
       // drawEntityAtTile handled it in the tile loop above.
       // Exception: _visualFOV entries are low-confidence visual detections that
       // drawEntityAtTile skipped — they need blob rendering here.
+      // Drawn on the tile it is perceived on.
+      const sx = sensed.x != null ? sensed.x : creature.x;
+      const sy = sensed.y != null ? sensed.y : creature.y;
       if (!sensed._visualFOV) {
-        if (fovVisible && fovVisible.has(`${creature.x},${creature.y}`)) continue;
-        if (fovMonocular && fovMonocular.has(`${creature.x},${creature.y}`)) continue;
+        if (fovVisible && fovVisible.has(`${sx},${sy}`)) continue;
+        if (fovMonocular && fovMonocular.has(`${sx},${sy}`)) continue;
       }
 
       // Convert world position to viewport position
-      const svx = creature.x - ox;
-      const svy = creature.y - oy;
+      const svx = sx - ox;
+      const svy = sy - oy;
       // Skip if outside the viewport
       if (svx < 0 || svx >= VW || svy < 0 || svy >= VH) continue;
       const spx = svx * TILE;
@@ -752,16 +764,12 @@ function drawUnidentifiedMarker(ctx, sizeEstimate, screenX, screenY, tileSize) {
 function drawEntityAtTile(wx, wy, px, py, layer){
   const TILE = tileSize();
   const S = TILE / 32;
-  const mon = monsterAt(wx, wy, layer);
+  // Only creatures the player's eyes put on this tile at high confidence
+  // (percepts, detection.js). Low-confidence detections render as blobs via
+  // the sensedCreatures loop; undetected creatures are not drawn.
+  const mon = _perceivedMonAt(wx, wy);
   if (mon){
-    // ── Visual Detection Pass 1: only draw creatures the player has
-    // visually detected at high confidence. Low-confidence detections
-    // render as blobs via the sensedCreatures loop. Undetected creatures
-    // are invisible (blend into background). ──
-    const vd = state.player._visuallyDetected;
-    if (vd && !vd.has(mon)) {
-      // Not visually detected — skip sprite (may render as blob instead)
-    } else {
+    {
     let tintColor = null;
     if (mon.tint){
       tintColor = mon.tint.startsWith('#') ? mon.tint : (BIOME[mon.tint] && BIOME[mon.tint].tint);
