@@ -280,12 +280,21 @@ function evaluateReactiveRules(creature) {
   }
 
   // RULE 4 — NEARBY STRONG SIGNAL
+  // A strong signal is one that moves or closes: footfalls, the eye's change
+  // detection, or a closing speed the eyes resolve. A source the senses read
+  // as still, whatever its size reading, and one the channels have
+  // recognised as the creature's own kind, set nothing off. (A still source
+  // of ambiguous size used to count: a wolf beside a motionless lurker, or
+  // among its own kind, stood orienting at it for hundreds of actions while
+  // a hare grazed in view; the harness hunt funnel, Sep 2026.)
+  const ownKind = getSpeciesKey(creature);
   for (const det of nearbyDetections) {
     if (det.distance <= 1.5) continue; // already handled by Rule 3
     const size = det.sizeRelative || 'unknown';
     if (size === 'larger' || size === 'much_larger' || size === 'unknown' || size === 'ambiguous') {
-      const isStrong = det.isMoving !== false; // moving or unknown movement = strong signal
-      if (!isStrong && size !== 'unknown' && size !== 'ambiguous') continue;
+      const still = det.isMoving === false && !(det.closingSpeed > 0);   // unknown movement is not still
+      if (still) continue;
+      if (det.species === ownKind && det.speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE) continue;
 
       if (diet === 'herbivore') {
         if (refuge.type !== 'none') {
