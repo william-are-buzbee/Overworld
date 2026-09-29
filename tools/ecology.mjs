@@ -6,8 +6,9 @@
 // this before and after a change to see whether it moved anything beyond the noise.
 //
 // The player is the camera: only creatures within the active radius are simulated,
-// so it stands still (rests) for the whole run. A creature that kills it ends that
-// run early; the report says how often and by what.
+// so it stands still (rests) for the whole run, kept fed so it does not starve
+// (at ~612 turns). A creature that kills it ends that run early; the report says
+// how often and by what.
 //
 // Usage:
 //   PLAYWRIGHT_MODULE=/opt/node22/lib/node_modules/playwright node tools/ecology.mjs
@@ -115,6 +116,9 @@ async function runSeed(seed) {
       if (hunger != null && m.diet === 'predator' && m.drives) m.drives.hunger = hunger;
     }
     window.__ecoTick = () => {
+      // The camera is kept fed: a resting player starves at turn ~612 and
+      // would end every longer run there. Its own body is not what is measured.
+      state.player.fed = 100;
       const all = monsters[L] || [];
       const alive = new Set();
       for (const m of all) {
