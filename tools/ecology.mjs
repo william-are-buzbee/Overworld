@@ -164,7 +164,7 @@ const report = {
   seeds: SEEDS, turns: TURNS, hunger: HUNGER,
   playerKilled: runs.filter(r => r.playerDeath).map(r => ({ seed: r.seed, turn: r.turns, cause: r.playerDeath })),
   behaviourPer100Turns: table('behaviour', true),
-  deathsPer100Turns: table('deaths', true),
+  deathsPerRun: table('deaths', false),
   startCounts: table('start', false),
   endCounts: table('end', false),
   pageErrors: runs.reduce((a, r) => a + r.errors.length, 0),
@@ -177,8 +177,12 @@ console.log(`player killed in ${report.playerKilled.length}/${runs.length} runs`
   (report.playerKilled.length ? ': ' + report.playerKilled.map(p => `seed ${p.seed} t${p.turn} (${p.cause})`).join(', ') : ''));
 console.log('\nbehaviour, creature-turns per 100 turns (mean ± sd across seeds)');
 for (const r of report.behaviourPer100Turns) console.log(`  ${r.key.padEnd(28)}${f(r)}`);
-console.log('\ndeaths per 100 turns (species:cause)');
-if (!report.deathsPer100Turns.length) console.log('  none');
-for (const r of report.deathsPer100Turns) console.log(`  ${r.key.padEnd(28)}${f(r)}`);
+// Deaths are rare events: report them per run and in total, not per 100 turns.
+console.log('\ndeaths per run (species:cause; mean ± sd across seeds, total)');
+if (!report.deathsPerRun.length) console.log('  none');
+for (const r of report.deathsPerRun) {
+  const total = runs.reduce((a, run) => a + (run.deaths[r.key] || 0), 0);
+  console.log(`  ${r.key.padEnd(28)}${f(r)}   total ${total}`);
+}
 if (report.pageErrors) console.log(`\n${report.pageErrors} page errors (see --json for details)`);
 if (args.json) { fs.writeFileSync(args.json, JSON.stringify(report, null, 1)); console.log(`\nwrote ${args.json}`); }
