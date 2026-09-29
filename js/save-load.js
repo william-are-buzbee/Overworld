@@ -297,8 +297,9 @@ function restoreZoneState(bodyMap, savedState) {
       zone.destroyed = saved.destroyed || false;
       if (saved.maxHp != null) zone.maxHp = saved.maxHp;
       zone.clotting = saved.clotting != null ? saved.clotting : 0;
-      if (saved.substrate != null) zone.substrate = saved.substrate;
-      if (saved.substrateMax != null) zone.substrateMax = saved.substrateMax;
+      // The store's size is derived from the muscle (initBodyMap), not saved
+      // state: an older save carries the hand-written sizes
+      if (saved.substrate != null && zone.substrateMax != null) zone.substrate = Math.min(zone.substrateMax, saved.substrate);
     }
   }
 }
