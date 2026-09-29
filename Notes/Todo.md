@@ -167,7 +167,13 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] Harness names killers and fights (who landed the last blow; who opened each fight, doing what, and how it ended)
 - [x] Rule 3: "cornered" is physical (no step away from the threat), not "no refuge" (the harness showed predators near home opening fatal fights with passing crabs)
 - [x] Hunt funnel in the harness (`js/hunt-funnel.js`): per predator–animal pair, episodes from detection to kill, why each ended, what the predator did instead, strikes and damage; hunger, trail bouts, body speed, the active radius. Instrumentation only
-- [ ] Predators rarely finish a kill: decide what to change from the funnel (discussion with the person first)
+- [ ] Predators rarely finish a kill (funnel findings; the person decided, one pull request each):
+  - [x] Rule 4: brace only against a source that moves or closes, not a still one, not recognised kin
+  - [ ] Fast-twitch fuel per kg of muscle (`SUBSTRATE_PER_KG_MUSCLE`, Muscle-Fiber-Design): a hare's sprint lasts ~90 actions, the doc says 8–10
+  - [ ] Stalking gait chosen in integration tissue (approach intensity)
+  - [ ] Detours round obstacles: pathfinding as a marked placeholder for route memory
+  - [ ] Contact geometry replaces the `rollHit` dice
+  - [ ] Longer harness runs for natural predation (hunger rises slowly)
 - [ ] Retune behaviour once 1–8 land (against the harness and the person's preview impressions)
 
 ## Near-Term Plans (no particular order)

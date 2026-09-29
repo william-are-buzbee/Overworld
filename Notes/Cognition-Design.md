@@ -170,6 +170,8 @@ Goal persistence: if the target leaves all detection channels for more turns tha
 
 Rule 4 no longer makes a predator hold off, orienting, from an animal it knows (bound odour) to be a herbivore and that is not clearly larger, as Rule 4B already did not space from one.
 
+*Status (Sep 2026, hunt funnel):* Rule 4's strong signal is one that moves or closes (footfalls, the eye's change detection, a closing speed the eyes resolve). A source the senses read as still sets nothing off whatever its size reading (before, only a still source read as larger was ignored, and a still one of ambiguous size counted), and neither does one the channels have recognised as the creature's own kind. Unknown movement still counts. In the harness (seeds 1–8 × 500 turns, hunger 0.9) wolves had spent 404 actions with a hare in view orienting at a motionless lurker or at other wolves (magnitude 0.5, above a wolf's 0.45 override); after: 1, wolf time in `hunt` 4.8 → 13.3 creature-turns per 100, pursued wolf>hare episodes 19 → 28. Kills did not rise (3 in total both ways): the commit range and the hare's sprint are now what stops the hunt.
+
 ### Critical Override
 
 Some stimuli bypass deliberation regardless of integration. Ambush damage from an undetected source, blood crossing the critical threshold, massive torso trauma — these fire the reactive pathway before any deliberative signal can complete its round trip. Even the apex predator flinches from an ambush. The reactive circuitry is always running, and extreme stimuli produce signals too strong for the deliberative layer to override.
