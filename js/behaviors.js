@@ -25,6 +25,7 @@ import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          findNearestFoodTile, getCorpseAt } from './ai-utils.js';
 import { getAdjacentPrey, applySafetyFromDamage, perceivedPosition, perceptOf } from './detection.js';
 import { applyTurningCost, applyZoneDamage } from './physiology.js';
+import { noteStrike } from './hunt-funnel.js';
 
 // ==================== ACTION DISPATCHER (Prompt O) ====================
 // Translates reactive/deliberative output into existing behavior functions.
@@ -137,6 +138,8 @@ function executeAction(creature, action) {
           monsterMelee(creature);
         } else if (!target.isPlayer && chebyshev(creature.x, creature.y, target.x, target.y) <= 1) {
           performNPCAttack(creature, target);
+        } else {
+          noteStrike(creature, target, 'air');   // a lunge at a misplaced percept
         }
       }
       creature.currentBehavior = 'hunt';
@@ -504,7 +507,7 @@ function eatCorpse(creature, corpse, cx, cy) {
 function performHuntAttack(creature, target) {
   // The strike goes where the prey is perceived; it lands only if the prey is
   // actually on the next tile. A lunge at a misplaced percept hits air.
-  if (chebyshev(creature.x, creature.y, target.x, target.y) > 1) return;
+  if (chebyshev(creature.x, creature.y, target.x, target.y) > 1) { noteStrike(creature, target, 'air'); return; }
   if (target.isPlayer) {
     // Attack the player via existing monsterMelee
     monsterMelee(creature);
@@ -531,7 +534,7 @@ function performNPCAttack(attacker, defender) {
   // Compute damage from physics
   const dmg = computeStrikeDamage(attacker, atkZone, usedAttack);
 
-  if (!rollHit(attacker, defender)) return; // miss
+  if (!rollHit(attacker, defender)) { noteStrike(attacker, defender, null); return; } // miss
 
   // Select hit zone on defender
   const defBodyMap = getBodyMap(defender);
@@ -568,7 +571,10 @@ function performNPCAttack(attacker, defender) {
 
   // Same resolver as every other strike. Quiet: the player is not in this
   // fight, so only the kill is logged (as before).
+  const zoneHpBefore = hitZone.hp;
   const result = applyZoneDamage(defender, hitZone, finalDmg, { quiet: true, by: attacker });
+  noteStrike(attacker, defender, { zone: hitZone.key, vital: !!hitZone.vital, raw: dmg, armour: +zoneArmor.toFixed(1),
+    dealt: finalDmg, zoneHpBefore, zoneMaxHp: hitZone.maxHp, destroyed: result.destroyed, died: result.died });
   if (result.died) {
     log(`The ${attacker.name} kills the ${defender.name}.`, LOG_CATEGORIES.COMBAT);
     // Drop a corpse for the predator (or others) to eat
@@ -852,6 +858,7 @@ function monsterMelee(mon){
 
   if (!rollHit(mon, player)){
     log(`${mon.name} misses.`, LOG_CATEGORIES.COMBAT);
+    noteStrike(mon, player, null);
     return;
   }
   // Pick the attack first so damage comes from the zone that actually strikes.
@@ -928,6 +935,9 @@ function monsterMelee(mon){
       applyZoneDamage(player, zone, zoneDmg, { by: mon });
     }
   }
+  noteStrike(mon, player, { zone: contactedZones.map(z => z.key).join('+'), vital: contactedZones.some(z => z.vital),
+    raw: dmg, armour: null, dealt: dmg, zoneHpBefore: null, zoneMaxHp: null,
+    destroyed: contactedZones.some(z => z.destroyed), died: player.hp <= 0 });
 
   // (No poison status: venom is not modelled until there is a chemistry to
   // carry it.)

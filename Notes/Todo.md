@@ -166,6 +166,8 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] Multi-seed ecology harness (`tools/ecology.mjs`): behaviour and deaths as mean ± sd across seeds, for before/after comparisons
 - [x] Harness names killers and fights (who landed the last blow; who opened each fight, doing what, and how it ended)
 - [x] Rule 3: "cornered" is physical (no step away from the threat), not "no refuge" (the harness showed predators near home opening fatal fights with passing crabs)
+- [x] Hunt funnel in the harness (`js/hunt-funnel.js`): per predator–animal pair, episodes from detection to kill, why each ended, what the predator did instead, strikes and damage; hunger, trail bouts, body speed, the active radius. Instrumentation only
+- [ ] Predators rarely finish a kill: decide what to change from the funnel (discussion with the person first)
 - [ ] Retune behaviour once 1–8 land (against the harness and the person's preview impressions)
 
 ## Near-Term Plans (no particular order)

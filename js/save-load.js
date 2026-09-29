@@ -195,6 +195,9 @@ const TRANSIENT_FIELDS = [
     '_scentTrace',               // lost-scent memory for casting (pass 6b-2)
     '_fights',                   // Map<entity, fight>: blows dealt and taken (tools/ecology.mjs)
     '_lastStruckBy',             // entity: last to land a blow (tools/ecology.mjs)
+    '_hunts',                    // Map<entity, episode>: open hunt episodes (hunt-funnel.js, tools/ecology.mjs)
+    '_huntLog',                  // closed hunt episodes (hunt-funnel.js)
+    '_huntStats',                // hunger bands, trail bouts (hunt-funnel.js)
 ];
 
 /** Create a shallow copy with all transient per-turn fields removed. */

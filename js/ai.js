@@ -20,6 +20,7 @@ import { executeAction, adjacencyCombatCheck, monsterMelee, executeWander,
 import { isWaterTile, canMoveTo, getCorpseAt, combatCapability } from './ai-utils.js';
 import { computeSignals } from './signals.js';
 import { _depleteLocomotionSubstrate, _releaseStressChemistry } from './physiology.js';
+import { noteHuntAction } from './hunt-funnel.js';
 
 // ==================== WATER STATE HELPER (Prompt L-A) ====================
 // Update creature.inWater based on current tile. Called after movement.
@@ -299,6 +300,7 @@ function runCreatureAI(creature) {
 
   // Step 3: Execute the selected action
   creature.currentBehavior = action.behavior;
+  const x0 = creature.x, y0 = creature.y;
   let moved = executeAction(creature, action);
   _depleteLocomotionSubstrate(creature);
   // ══════════════════════════════════════════════════════════════
@@ -311,6 +313,7 @@ function runCreatureAI(creature) {
   if (!fleeingCleanly && !alreadyAttacked) {
     adjacencyCombatCheck(creature);
   }
+  noteHuntAction(creature, action, x0, y0);   // tools/ecology.mjs bookkeeping; nothing in play reads it
 
   // Prompt K-B: reset per-turn damage flag AFTER combat check
   creature.tookDamageThisTurn = false;
