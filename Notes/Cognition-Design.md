@@ -4,6 +4,8 @@ This document captures the design theory for how cognition works in the game. It
 
 Include alongside Surface-Creatures.md, Sensory-Design.md, and Ecology-Foundations.md when working on AI behavior, perception, or creature design.
 
+The structure types a nervous system is assembled from (reflex arcs, template matchers, pattern generators, the integration workspace and what each of its functions buys, memory, endocrine tissue) are in Neural-Architecture-Design.md, with the wolf's draft wiring.
+
 ## Core Principle
 
 Cognition is not a stat. It's neural tissue, physically located in zones, allocated to specific functions, connected by pathways with bandwidth limits. Every cognitive capability is a downstream consequence of the physical neural architecture described in the body map.
