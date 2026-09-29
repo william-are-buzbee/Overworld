@@ -176,6 +176,14 @@ Perception as inference from received signal, not truth with error bars. Decisio
   - [ ] Longer harness runs for natural predation (hunger rises slowly)
 - [ ] Retune behaviour once 1–8 land (against the harness and the person's preview impressions)
 
+## Up Next — Nervous systems from structure types (Sep 2026)
+The ecology is left unbalanced while the systems are built; the harness checks for regressions and for systems not doing what their doc says, not for kill counts. See Neural-Architecture-Design.
+- [ ] 1. Neural-Architecture-Design: structure types, integration's functions, the wolf's draft wiring (settle with the person)
+- [ ] 2. Generic structure runner; the hare ported onto it with no behaviour change
+- [ ] 3. The wolf wired on the runner; its reactive rules retired
+- [ ] 4. Prediction in the wolf's workspace (intercept)
+- [ ] 5. Later: memory index and learned templates, the other creatures, endocrine drives, the player's generators on a hotbar
+
 ## Near-Term Plans (no particular order)
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
 - [ ] Second-pass over bleed/metabolism/healing
