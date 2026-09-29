@@ -27,8 +27,17 @@ export const EXPOSURE_LABELS = ['front', 'front_right', 'right', 'rear_right', '
 // Substrate represents locally stored metabolic fuel in muscle tissue.
 // Fast-contracting fibers deplete substrate rapidly during high-intensity output;
 // slow-contracting fibers use aerobic pathways and deplete more slowly.
-// Units are abstract (tuned so locomotion zones deplete in ~8-10 turns at max).
-export const SUBSTRATE_PER_KG_MUSCLE = 5.0;
+// Units are abstract. A zone's store is its muscle mass × SUBSTRATE_PER_KG_MUSCLE
+// (initBodyMap; Muscle-Fiber-Design), the same for every body: how long a
+// sprint lasts then follows from the fibre ratio (the fast mass that burns it).
+// At full sprint a zone burns fastMass × (1 − FAST_TWITCH_RECRUIT_THRESHOLD) ×
+// SUBSTRATE_DEPLETION_HIGH per action, so it empties in
+// SUBSTRATE_PER_KG_MUSCLE / (fiberRatio × 0.072) actions: a hare's rear limbs
+// (0.8) in ~9, a prowler's (0.35) in ~20, a ravager's (0.45) in ~15. (Each
+// zone's store was written by hand until Sep 2026, at 5 per kg of muscle for
+// the hare and less for the predators: a bolting hare kept its top speed for
+// ~90 actions and no predator ran one down.)
+export const SUBSTRATE_PER_KG_MUSCLE = 0.5;
 export const SUBSTRATE_DEPLETION_HIGH = 0.12;   // fraction of zone's fast-contracting mass consumed per turn at max intensity
 export const SUBSTRATE_DEPLETION_MOD  = 0.03;   // fraction consumed per turn at moderate intensity (wander, forage)
 export const FAST_TWITCH_RECRUIT_THRESHOLD = 0.4; // intensity below this is fully aerobic — no substrate depletion
@@ -48,7 +57,9 @@ export const CIRC_EFFICIENCY_HYBRID   = 0.85;   // circulatory efficiency for hy
 // enzymatic activity. Rate scales with total muscle mass (enzymatic capacity), circulatory
 // nutrient delivery at rest, capillary density (correlated with oxidative fiber content),
 // and enzymatic upregulation when stores are depleted (front-loaded recovery curve).
-export const SUBSTRATE_REGEN_BASE     = 0.08;   // base substrate regenerated per kg muscle per turn (before modifiers)
+// Scaled with SUBSTRATE_PER_KG_MUSCLE (both were 10× larger until Sep 2026), so
+// the time to refill a store is unchanged.
+export const SUBSTRATE_REGEN_BASE     = 0.008;  // base substrate regenerated per kg muscle per turn (before modifiers)
 export const CIRC_REGEN_EFF_CLOSED    = 1.0;    // circulatory regen efficiency — closed systems (full nutrient delivery)
 export const CIRC_REGEN_EFF_OPEN      = 0.80;   // circulatory regen efficiency — open systems (adequate at rest, lower pressure)
 export const CIRC_REGEN_EFF_HYBRID    = 0.90;   // circulatory regen efficiency — hybrid systems
@@ -217,7 +228,7 @@ export const BODY_MAPS = {
     { key: 'front_l', name: 'Front-Left Limb', targetWeight: 0.09,
       exposure: ['front', 'front_left', 'left'],
       muscle: 0.85, structural: 0.35, neural: 0.05, sensory: 0.05, connective: 0.30, mass: 1.6,
-      fiberRatio: 0.35, substrate: 1.2, substrateMax: 1.2,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04, chemicalProcessing: 0.01 },
       transducers: { chemical: { contact: 1, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -226,7 +237,7 @@ export const BODY_MAPS = {
     { key: 'front_r', name: 'Front-Right Limb', targetWeight: 0.09,
       exposure: ['front', 'front_right', 'right'],
       muscle: 0.85, structural: 0.35, neural: 0.05, sensory: 0.05, connective: 0.30, mass: 1.6,
-      fiberRatio: 0.35, substrate: 1.2, substrateMax: 1.2,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04, chemicalProcessing: 0.01 },
       transducers: { chemical: { contact: 1, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -235,7 +246,7 @@ export const BODY_MAPS = {
     { key: 'mid_l', name: 'Mid-Left Limb', targetWeight: 0.10,
       exposure: ['left', 'front_left', 'rear_left'],
       muscle: 1.10, structural: 0.40, neural: 0.04, sensory: 0.00, connective: 0.36, mass: 1.9,
-      fiberRatio: 0.35, substrate: 1.5, substrateMax: 1.5,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -244,7 +255,7 @@ export const BODY_MAPS = {
     { key: 'mid_r', name: 'Mid-Right Limb', targetWeight: 0.10,
       exposure: ['right', 'front_right', 'rear_right'],
       muscle: 1.10, structural: 0.40, neural: 0.04, sensory: 0.00, connective: 0.36, mass: 1.9,
-      fiberRatio: 0.35, substrate: 1.5, substrateMax: 1.5,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -253,7 +264,7 @@ export const BODY_MAPS = {
     { key: 'rear_l', name: 'Rear-Left Limb', targetWeight: 0.09,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 1.30, structural: 0.42, neural: 0.04, sensory: 0.00, connective: 0.34, mass: 2.1,
-      fiberRatio: 0.35, substrate: 1.8, substrateMax: 1.8,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -262,7 +273,7 @@ export const BODY_MAPS = {
     { key: 'rear_r', name: 'Rear-Right Limb', targetWeight: 0.08,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 1.30, structural: 0.42, neural: 0.04, sensory: 0.00, connective: 0.34, mass: 2.1,
-      fiberRatio: 0.35, substrate: 1.8, substrateMax: 1.8,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -293,7 +304,7 @@ export const BODY_MAPS = {
     { key: 'front_l', name: 'Front-Left Limb', targetWeight: 0.10,
       exposure: ['front', 'front_left', 'left'],
       muscle: 3.80, structural: 1.60, neural: 0.08, sensory: 0.12, connective: 2.40, mass: 8.0,
-      fiberRatio: 0.45, substrate: 6.0, substrateMax: 6.0,
+      fiberRatio: 0.45,
       neuralAllocation: { motorControl: 0.06, chemicalProcessing: 0.02 },
       transducers: { chemical: { contact: 1, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -302,7 +313,7 @@ export const BODY_MAPS = {
     { key: 'front_r', name: 'Front-Right Limb', targetWeight: 0.10,
       exposure: ['front', 'front_right', 'right'],
       muscle: 3.80, structural: 1.60, neural: 0.08, sensory: 0.12, connective: 2.40, mass: 8.0,
-      fiberRatio: 0.45, substrate: 6.0, substrateMax: 6.0,
+      fiberRatio: 0.45,
       neuralAllocation: { motorControl: 0.06, chemicalProcessing: 0.02 },
       transducers: { chemical: { contact: 1, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -311,7 +322,7 @@ export const BODY_MAPS = {
     { key: 'mid_l', name: 'Mid-Left Limb', targetWeight: 0.10,
       exposure: ['left', 'front_left', 'rear_left'],
       muscle: 4.20, structural: 1.60, neural: 0.06, sensory: 0.00, connective: 2.64, mass: 8.5,
-      fiberRatio: 0.40, substrate: 8.5, substrateMax: 8.5,
+      fiberRatio: 0.40,
       neuralAllocation: { motorControl: 0.06 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -320,7 +331,7 @@ export const BODY_MAPS = {
     { key: 'mid_r', name: 'Mid-Right Limb', targetWeight: 0.10,
       exposure: ['right', 'front_right', 'rear_right'],
       muscle: 4.20, structural: 1.60, neural: 0.06, sensory: 0.00, connective: 2.64, mass: 8.5,
-      fiberRatio: 0.40, substrate: 8.5, substrateMax: 8.5,
+      fiberRatio: 0.40,
       neuralAllocation: { motorControl: 0.06 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -329,7 +340,7 @@ export const BODY_MAPS = {
     { key: 'rear_l', name: 'Rear-Left Limb', targetWeight: 0.11,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 4.80, structural: 1.80, neural: 0.06, sensory: 0.00, connective: 2.84, mass: 9.5,
-      fiberRatio: 0.45, substrate: 10.0, substrateMax: 10.0,
+      fiberRatio: 0.45,
       neuralAllocation: { motorControl: 0.06 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -338,7 +349,7 @@ export const BODY_MAPS = {
     { key: 'rear_r', name: 'Rear-Right Limb', targetWeight: 0.11,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 4.80, structural: 1.80, neural: 0.06, sensory: 0.00, connective: 2.84, mass: 9.5,
-      fiberRatio: 0.45, substrate: 10.0, substrateMax: 10.0,
+      fiberRatio: 0.45,
       neuralAllocation: { motorControl: 0.06 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -353,7 +364,7 @@ export const BODY_MAPS = {
     { key: 'head', name: 'Head', targetWeight: 0.06,
       exposure: ['front', 'front_left', 'front_right'],
       muscle: 0.04, structural: 0.06, neural: 0.042, sensory: 0.08, connective: 0.058, mass: 0.28,
-      fiberRatio: 0.15, substrate: 0.20, substrateMax: 0.20,
+      fiberRatio: 0.15,
       neuralAllocation: { visualProcessing: 0.020, vibrationProcessing: 0.010, patternLibrary: 0.008, motorControl: 0.004 },
       transducers: { visual: { acuity: 4, placement: 'lateral', fieldAngle: 170 }, vibration: { ground: 0, air: 1, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: false, vital: false,
@@ -362,7 +373,7 @@ export const BODY_MAPS = {
     { key: 'torso', name: 'Torso', targetWeight: 0.24,
       exposure: ['front', 'front_right', 'right', 'rear_right', 'rear', 'rear_left', 'left', 'front_left'],
       muscle: 0.25, structural: 0.22, neural: 0.022, sensory: 0.02, connective: 0.488, mass: 1.00,
-      fiberRatio: 0.40, substrate: 1.25, substrateMax: 1.25,
+      fiberRatio: 0.40,
       neuralAllocation: { motorRelay: 0.010, vibrationProcessing: 0.006, patternLibrary: 0.006 },
       transducers: { vibration: { ground: 1, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: false, vital: true,
@@ -371,7 +382,7 @@ export const BODY_MAPS = {
     { key: 'fore_l', name: 'Fore-Left Limb', targetWeight: 0.05,
       exposure: ['front', 'front_left', 'left'],
       muscle: 0.03, structural: 0.03, neural: 0.028, sensory: 0.05, connective: 0.082, mass: 0.22,
-      fiberRatio: 0.10, substrate: 0.15, substrateMax: 0.15,
+      fiberRatio: 0.10,
       neuralAllocation: { vibrationProcessing: 0.010, motorControl: 0.008, patternLibrary: 0.006, chemicalProcessing: 0.004 },
       transducers: { vibration: { ground: 5, air: 1, water: 0 }, chemical: { contact: 2, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: false, vital: false,
@@ -380,7 +391,7 @@ export const BODY_MAPS = {
     { key: 'fore_r', name: 'Fore-Right Limb', targetWeight: 0.05,
       exposure: ['front', 'front_right', 'right'],
       muscle: 0.03, structural: 0.03, neural: 0.028, sensory: 0.05, connective: 0.082, mass: 0.22,
-      fiberRatio: 0.10, substrate: 0.15, substrateMax: 0.15,
+      fiberRatio: 0.10,
       neuralAllocation: { vibrationProcessing: 0.010, motorControl: 0.008, patternLibrary: 0.006, chemicalProcessing: 0.004 },
       transducers: { vibration: { ground: 5, air: 1, water: 0 }, chemical: { contact: 2, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: false, vital: false,
@@ -389,7 +400,7 @@ export const BODY_MAPS = {
     { key: 'mid_graze_l', name: 'Mid-Graze-Left Limb', targetWeight: 0.05,
       exposure: ['front', 'front_left', 'left'],
       muscle: 0.04, structural: 0.03, neural: 0.026, sensory: 0.035, connective: 0.089, mass: 0.22,
-      fiberRatio: 0.15, substrate: 0.20, substrateMax: 0.20,
+      fiberRatio: 0.15,
       neuralAllocation: { vibrationProcessing: 0.010, motorControl: 0.008, patternLibrary: 0.006, chemicalProcessing: 0.002 },
       transducers: { vibration: { ground: 4, air: 1, water: 0 }, chemical: { contact: 1, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: false, vital: false,
@@ -398,7 +409,7 @@ export const BODY_MAPS = {
     { key: 'mid_graze_r', name: 'Mid-Graze-Right Limb', targetWeight: 0.05,
       exposure: ['front', 'front_right', 'right'],
       muscle: 0.04, structural: 0.03, neural: 0.026, sensory: 0.035, connective: 0.089, mass: 0.22,
-      fiberRatio: 0.15, substrate: 0.20, substrateMax: 0.20,
+      fiberRatio: 0.15,
       neuralAllocation: { vibrationProcessing: 0.010, motorControl: 0.008, patternLibrary: 0.006, chemicalProcessing: 0.002 },
       transducers: { vibration: { ground: 4, air: 1, water: 0 }, chemical: { contact: 1, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: false, vital: false,
@@ -407,7 +418,7 @@ export const BODY_MAPS = {
     { key: 'mid_loco_l', name: 'Mid-Loco-Left Limb', targetWeight: 0.10,
       exposure: ['left', 'rear_left', 'rear'],
       muscle: 0.5, structural: 0.08, neural: 0.028, sensory: 0.02, connective: 0.102, mass: 0.73,
-      fiberRatio: 0.70, substrate: 2.50, substrateMax: 2.50,
+      fiberRatio: 0.70,
       neuralAllocation: { motorControl: 0.012, vibrationProcessing: 0.008, patternLibrary: 0.008 },
       transducers: { vibration: { ground: 3, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -416,7 +427,7 @@ export const BODY_MAPS = {
     { key: 'mid_loco_r', name: 'Mid-Loco-Right Limb', targetWeight: 0.10,
       exposure: ['right', 'rear_right', 'rear'],
       muscle: 0.5, structural: 0.08, neural: 0.028, sensory: 0.02, connective: 0.102, mass: 0.73,
-      fiberRatio: 0.70, substrate: 2.50, substrateMax: 2.50,
+      fiberRatio: 0.70,
       neuralAllocation: { motorControl: 0.012, vibrationProcessing: 0.008, patternLibrary: 0.008 },
       transducers: { vibration: { ground: 3, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -425,7 +436,7 @@ export const BODY_MAPS = {
     { key: 'rear_l', name: 'Rear-Left Limb', targetWeight: 0.15,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 0.75, structural: 0.10, neural: 0.030, sensory: 0.02, connective: 0.140, mass: 1.04,
-      fiberRatio: 0.80, substrate: 3.75, substrateMax: 3.75,
+      fiberRatio: 0.80,
       neuralAllocation: { motorControl: 0.014, vibrationProcessing: 0.008, patternLibrary: 0.008 },
       transducers: { vibration: { ground: 3, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -434,7 +445,7 @@ export const BODY_MAPS = {
     { key: 'rear_r', name: 'Rear-Right Limb', targetWeight: 0.15,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 0.75, structural: 0.10, neural: 0.030, sensory: 0.02, connective: 0.140, mass: 1.04,
-      fiberRatio: 0.80, substrate: 3.75, substrateMax: 3.75,
+      fiberRatio: 0.80,
       neuralAllocation: { motorControl: 0.014, vibrationProcessing: 0.008, patternLibrary: 0.008 },
       transducers: { vibration: { ground: 3, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -465,7 +476,7 @@ export const BODY_MAPS = {
     { key: 'front_l', name: 'Front-Left Limb', targetWeight: 0.08,
       exposure: ['front', 'front_left', 'left'],
       muscle: 5.00, structural: 4.20, neural: 0.10, sensory: 0.15, connective: 5.55, mass: 15.0,
-      fiberRatio: 0.15, substrate: 3.0, substrateMax: 3.0,
+      fiberRatio: 0.15,
       neuralAllocation: { motorControl: 0.08, chemicalProcessing: 0.02 },
       transducers: { chemical: { contact: 3, airborne: 0, dissolved: 3 }, vibration: { ground: 0, air: 0, water: 3 }, visual: 0 },
       locomotion: true, vital: false,
@@ -474,7 +485,7 @@ export const BODY_MAPS = {
     { key: 'front_r', name: 'Front-Right Limb', targetWeight: 0.08,
       exposure: ['front', 'front_right', 'right'],
       muscle: 5.00, structural: 4.20, neural: 0.10, sensory: 0.15, connective: 5.55, mass: 15.0,
-      fiberRatio: 0.15, substrate: 3.0, substrateMax: 3.0,
+      fiberRatio: 0.15,
       neuralAllocation: { motorControl: 0.08, chemicalProcessing: 0.02 },
       transducers: { chemical: { contact: 3, airborne: 0, dissolved: 3 }, vibration: { ground: 0, air: 0, water: 3 }, visual: 0 },
       locomotion: true, vital: false,
@@ -483,7 +494,7 @@ export const BODY_MAPS = {
     { key: 'mid_l', name: 'Mid-Left Limb', targetWeight: 0.10,
       exposure: ['left', 'front_left', 'rear_left'],
       muscle: 9.00, structural: 3.80, neural: 0.08, sensory: 0.00, connective: 5.12, mass: 18.0,
-      fiberRatio: 0.15, substrate: 4.5, substrateMax: 4.5,
+      fiberRatio: 0.15,
       neuralAllocation: { motorControl: 0.08 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -492,7 +503,7 @@ export const BODY_MAPS = {
     { key: 'mid_r', name: 'Mid-Right Limb', targetWeight: 0.10,
       exposure: ['right', 'front_right', 'rear_right'],
       muscle: 9.00, structural: 3.80, neural: 0.08, sensory: 0.00, connective: 5.12, mass: 18.0,
-      fiberRatio: 0.15, substrate: 4.5, substrateMax: 4.5,
+      fiberRatio: 0.15,
       neuralAllocation: { motorControl: 0.08 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -501,7 +512,7 @@ export const BODY_MAPS = {
     { key: 'rear_l', name: 'Rear-Left Limb', targetWeight: 0.12,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 11.00, structural: 4.40, neural: 0.08, sensory: 0.00, connective: 5.52, mass: 21.0,
-      fiberRatio: 0.15, substrate: 5.5, substrateMax: 5.5,
+      fiberRatio: 0.15,
       neuralAllocation: { motorControl: 0.08 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -510,7 +521,7 @@ export const BODY_MAPS = {
     { key: 'rear_r', name: 'Rear-Right Limb', targetWeight: 0.12,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 11.00, structural: 4.40, neural: 0.08, sensory: 0.00, connective: 5.52, mass: 21.0,
-      fiberRatio: 0.15, substrate: 5.5, substrateMax: 5.5,
+      fiberRatio: 0.15,
       neuralAllocation: { motorControl: 0.08 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -560,7 +571,7 @@ export const BODY_MAPS = {
     { key: 'rear_limbs_a', name: 'rear limbs', targetWeight: 0.15,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 0.02, structural: 0.02, neural: 0.01, sensory: 0.01, connective: 0.02, mass: 0.08,
-      fiberRatio: 0.10, substrate: 0.10, substrateMax: 0.10,
+      fiberRatio: 0.10,
       neuralAllocation: { patternLibrary: 0.005, motorControl: 0.005 },
       transducers: { vibration: { ground: 1, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -569,7 +580,7 @@ export const BODY_MAPS = {
     { key: 'rear_limbs_b', name: 'hind limbs', targetWeight: 0.15,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 0.02, structural: 0.02, neural: 0.01, sensory: 0.01, connective: 0.02, mass: 0.08,
-      fiberRatio: 0.10, substrate: 0.10, substrateMax: 0.10,
+      fiberRatio: 0.10,
       neuralAllocation: { patternLibrary: 0.005, motorControl: 0.005 },
       transducers: { vibration: { ground: 1, air: 0, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -624,7 +635,7 @@ export const BODY_MAPS = {
     { key: 'front_l', name: 'Front-Left Limb', targetWeight: 0.10,
       exposure: ['front', 'front_left', 'left'],
       muscle: 1.10, structural: 0.35, neural: 0.22, sensory: 0.18, connective: 0.37, mass: 2.2,
-      fiberRatio: 0.75, substrate: 3.0, substrateMax: 3.0,
+      fiberRatio: 0.75,
       neuralAllocation: { vibrationProcessing: 0.10, chemicalProcessing: 0.03, motorControl: 0.05, patternLibrary: 0.04 },
       transducers: { vibration: { ground: 4, air: 1, water: 0 }, chemical: { contact: 1, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -633,7 +644,7 @@ export const BODY_MAPS = {
     { key: 'front_r', name: 'Front-Right Limb', targetWeight: 0.10,
       exposure: ['front', 'front_right', 'right'],
       muscle: 1.10, structural: 0.35, neural: 0.22, sensory: 0.18, connective: 0.37, mass: 2.2,
-      fiberRatio: 0.75, substrate: 3.0, substrateMax: 3.0,
+      fiberRatio: 0.75,
       neuralAllocation: { vibrationProcessing: 0.10, chemicalProcessing: 0.03, motorControl: 0.05, patternLibrary: 0.04 },
       transducers: { vibration: { ground: 4, air: 1, water: 0 }, chemical: { contact: 1, airborne: 0, dissolved: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -642,7 +653,7 @@ export const BODY_MAPS = {
     { key: 'rear_l', name: 'Rear-Left Limb', targetWeight: 0.12,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 1.80, structural: 0.45, neural: 0.18, sensory: 0.12, connective: 0.35, mass: 2.9,
-      fiberRatio: 0.65, substrate: 4.5, substrateMax: 4.5,
+      fiberRatio: 0.65,
       neuralAllocation: { vibrationProcessing: 0.06, visualProcessing: 0.04, motorControl: 0.05, patternLibrary: 0.03 },
       transducers: { vibration: { ground: 2, air: 1, water: 0 }, visual: { acuity: 1, placement: 'forward', fieldAngle: 120 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: true, vital: false,
@@ -651,7 +662,7 @@ export const BODY_MAPS = {
     { key: 'rear_r', name: 'Rear-Right Limb', targetWeight: 0.11,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 1.80, structural: 0.45, neural: 0.18, sensory: 0.12, connective: 0.35, mass: 2.9,
-      fiberRatio: 0.65, substrate: 4.5, substrateMax: 4.5,
+      fiberRatio: 0.65,
       neuralAllocation: { vibrationProcessing: 0.06, visualProcessing: 0.04, motorControl: 0.05, patternLibrary: 0.03 },
       transducers: { vibration: { ground: 2, air: 1, water: 0 }, visual: { acuity: 1, placement: 'forward', fieldAngle: 120 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: true, vital: false,
@@ -724,7 +735,7 @@ export const BODY_MAPS = {
     { key: 'front_l', name: 'Front-Left Limb', targetWeight: 0.09,
       exposure: ['front', 'front_left', 'left'],
       muscle: 0.85, structural: 0.35, neural: 0.05, sensory: 0.05, connective: 0.30, mass: 1.6,
-      fiberRatio: 0.35, substrate: 1.2, substrateMax: 1.2,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04, chemicalProcessing: 0.01 },
       transducers: { chemical: { contact: 1, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -733,7 +744,7 @@ export const BODY_MAPS = {
     { key: 'front_r', name: 'Front-Right Limb', targetWeight: 0.09,
       exposure: ['front', 'front_right', 'right'],
       muscle: 0.85, structural: 0.35, neural: 0.05, sensory: 0.05, connective: 0.30, mass: 1.6,
-      fiberRatio: 0.35, substrate: 1.2, substrateMax: 1.2,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04, chemicalProcessing: 0.01 },
       transducers: { chemical: { contact: 1, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 }, visual: 0 },
       locomotion: true, vital: false,
@@ -742,7 +753,7 @@ export const BODY_MAPS = {
     { key: 'mid_l', name: 'Mid-Left Limb', targetWeight: 0.10,
       exposure: ['left', 'front_left', 'rear_left'],
       muscle: 1.10, structural: 0.40, neural: 0.04, sensory: 0.00, connective: 0.36, mass: 1.9,
-      fiberRatio: 0.35, substrate: 1.5, substrateMax: 1.5,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -751,7 +762,7 @@ export const BODY_MAPS = {
     { key: 'mid_r', name: 'Mid-Right Limb', targetWeight: 0.10,
       exposure: ['right', 'front_right', 'rear_right'],
       muscle: 1.10, structural: 0.40, neural: 0.04, sensory: 0.00, connective: 0.36, mass: 1.9,
-      fiberRatio: 0.35, substrate: 1.5, substrateMax: 1.5,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -760,7 +771,7 @@ export const BODY_MAPS = {
     { key: 'rear_l', name: 'Rear-Left Limb', targetWeight: 0.09,
       exposure: ['rear', 'rear_left', 'left'],
       muscle: 1.30, structural: 0.42, neural: 0.04, sensory: 0.00, connective: 0.34, mass: 2.1,
-      fiberRatio: 0.35, substrate: 1.8, substrateMax: 1.8,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -769,7 +780,7 @@ export const BODY_MAPS = {
     { key: 'rear_r', name: 'Rear-Right Limb', targetWeight: 0.08,
       exposure: ['rear', 'rear_right', 'right'],
       muscle: 1.30, structural: 0.42, neural: 0.04, sensory: 0.00, connective: 0.34, mass: 2.1,
-      fiberRatio: 0.35, substrate: 1.8, substrateMax: 1.8,
+      fiberRatio: 0.35,
       neuralAllocation: { motorControl: 0.04 },
       transducers: { chemical: { contact: 0, airborne: 0, dissolved: 0 }, vibration: { ground: 1, air: 0, water: 0 } },
       locomotion: true, vital: false,
@@ -1181,6 +1192,11 @@ export function initBodyMap(entity) {
     zone.maxHp = Math.max(1, Math.floor(z.mass * HP_PER_KG));
     zone.hp = zone.maxHp;
     zone.destroyed = false;
+    // Fast-contracting fuel stored in the muscle (Muscle-Fiber-Design)
+    if (z.fiberRatio != null) {
+      zone.substrateMax = (z.muscle || 0) * SUBSTRATE_PER_KG_MUSCLE;
+      zone.substrate = zone.substrateMax;
+    }
     // Blood system — clotting per zone
     zone.clotting = 0.0;
     return zone;

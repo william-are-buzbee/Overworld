@@ -169,10 +169,10 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] Hunt funnel in the harness (`js/hunt-funnel.js`): per predator–animal pair, episodes from detection to kill, why each ended, what the predator did instead, strikes and damage; hunger, trail bouts, body speed, the active radius. Instrumentation only
 - [ ] Predators rarely finish a kill (funnel findings; the person decided, one pull request each):
   - [x] Rule 4: brace only against a source that moves or closes, not a still one, not recognised kin
-  - [ ] Fast-twitch fuel per kg of muscle (`SUBSTRATE_PER_KG_MUSCLE`, Muscle-Fiber-Design): a hare's sprint lasts ~90 actions, the doc says 8–10
+  - [x] Fast-twitch fuel per kg of muscle (`SUBSTRATE_PER_KG_MUSCLE` 5 → 0.5, derived in `initBodyMap`, Muscle-Fiber-Design): a hare's sprint ~100 → ~10 actions
   - [ ] Stalking gait chosen in integration tissue (approach intensity)
   - [x] Detours round obstacles: pathfinding as a marked placeholder for route memory (`stepRoundObstacles`)
-  - [ ] Contact geometry replaces the `rollHit` dice
+  - [x] Contact geometry replaces the `rollHit` dice (aim at the percept; getting clear needs senses, room and a faster body, and burns sprint fuel)
   - [ ] Longer harness runs for natural predation (hunger rises slowly)
 - [ ] Retune behaviour once 1–8 land (against the harness and the person's preview impressions)
 

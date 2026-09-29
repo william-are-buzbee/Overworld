@@ -7,10 +7,9 @@ Include this alongside Body-Sim-Design.md, Mutation-Design.md, and Ecology-Found
 **Status (Sep 2026): the seven-stat table is gone from the code.** Neither the player nor any creature carries
 `siz/strength/chem/vib/vis/central/distributed`, `weaponAtk`, `def`, `xp`, `gold`, `percept` or `hpMax`; `monsters.js` holds
 species records only (name, sprite, habitat, territory, clade, wander profile). What is implemented from "Derived Combat
-Values" below: dodge and stealth from total mass (`combat-constants.js dodgeChance/stealthProfile`, reference mass 250 kg,
-not the 2500 floated below, so that a 200 kg wader dodges about 6% and a 5 kg grazer 29%); accuracy as the bridge, from the
-attacker's best signal-to-noise ratio on the target at the moment of the strike (`combat.js accuracyOf`, via `canDetect`);
-damage from the striking zone; one hit roll for every strike (`combat.js rollHit`). There is no critical hit. View radius
+Values" below: stealth from total mass (`combat-constants.js stealthProfile`, reference mass 250 kg); damage from the
+striking zone; whether a strike connects from contact geometry (`combat.js strikeContact`, "Contact" below), which replaced
+the dodge and accuracy percentages and the hit roll in Sep 2026. There is no critical hit. View radius
 reads the best surviving eye's acuity. The examine-depth gating reads the player's cognitive tier. The legacy
 `canSeePlayer` vision path and the stealth-detection roll it carried were dead code and are deleted; the F key's "lower your
 profile" is cosmetic until movement intensity gives it a physical meaning.
@@ -224,6 +223,59 @@ This is the biologically impossible signal. No native organism transitions betwe
 
 ## Derived Combat Values
 
+### Contact (replaces Dodge and Accuracy, Sep 2026)
+
+Whether a strike connects is geometry, decided by the two bodies and what each senses, with no roll (`combat.js
+strikeContact`). The dodge and accuracy sections below are kept as history.
+
+- **Aim.** A strike goes where the attacker perceives the target: its percept, or the trace its integration tissue holds.
+  The player strikes the tile it moves into. If the target is not on that tile the strike meets air. Perception is the
+  accuracy: a misplaced percept is a miss, a correct one is not.
+- **Getting clear.** The defender slips the strike only if all of these hold:
+  - its senses deliver the attacker at that moment (`canDetect`); a strike it does not sense always lands;
+  - it can move: not immobilized, and a passable tile beside it (cornered prey is hit);
+  - it clears its own length faster than the strike covers the attacker's:
+
+```
+evasion = getBodyPTW(defender, 1.0) / cbrt(defenderMass)          // locomotion at a sprint, fuel included
+strike  = (zone.muscle × zoneHpFrac × (1 − bleedPenalty) / zone.mass) / cbrt(attackerMass)
+clear   = sensed && canMove && evasion > strike
+```
+
+- **Cost.** Getting clear is a burst of locomotion that goes nowhere. It burns one sprint action's fast-twitch fuel
+  (`physiology.js spendBurst`), so a tired body stops getting clear. Each slipped strike brings the next one closer to
+  landing.
+
+Fresh bodies:
+
+| evasion | value |
+|---|---|
+| grazer | 0.225 |
+| prowler | 0.104 |
+| lurker | 0.084 |
+| ravager | 0.063 |
+| shaleback | 0.043 |
+
+| strike | value |
+|---|---|
+| prowler bite | 0.081 |
+| prowler claw | 0.189 |
+| ravager bite | 0.056 |
+| ravager claw | 0.106 |
+| lurker hook | 0.178 |
+| lurker kick | 0.222 |
+| shaleback shove | 0.057 |
+| shaleback kick | 0.090 |
+
+So an alert, fresh grazer slips everything once. Jaws (a heavy head moved by little muscle) are slipped by most bodies;
+claws and hooks only by a grazer.
+
+The old model was accuracy from SNR against dodge from mass, clamped to 5–95% and rolled. It had the same two ingredients,
+perception and the target's body, behind dice.
+
+Still random in a strike: which of the attacker's available attacks it uses, which zone a creature-on-creature strike lands
+on (`selectHitZone`), and the `randi(3)` on damage.
+
 ### Dodge
 
 ```
@@ -233,6 +285,8 @@ dodgeChance = ((DODGE_REFERENCE_MASS - totalMass) / DODGE_REFERENCE_MASS) * MAX_
 Smaller creatures dodge more because there's physically less of them to hit. DODGE_REFERENCE_MASS is the mass at which dodge reaches 0% (250 kg in code; MAX_DODGE_PERCENT 30). There are no armor items, so no flat subtractions.
 
 Dodge is resolved. It's total-mass-inverted, nothing else. No separate dodge stat, no Distributed contribution. The clade difference in combat comes from reflexive defense (Clade B limbs strike back when you attack from outside their attention arc), not from an abstract dodge modifier.
+
+*Superseded (Sep 2026) by Contact above.*
 
 ### Speed
 
@@ -267,6 +321,8 @@ accuracy = BASE_ACCURACY + (zoneDetectionQuality * SENSE_ACCURACY_COEFF)
 Bridge formula — reads the detecting zone's transducer quality or best SNR for the channel that led to detection, not a creature-level aggregated sense value. The attacker uses the sense that led to detection (airborne chemical for scent-tracking Clade A, ground vibration for ground-sensing Clade B, visual for sight-based attacks).
 
 Implemented (Sep 2026) as `BASE_ACCURACY (70) + ACCURACY_PER_SNR (3) × min(bestSNR, 10)`, where bestSNR is the attacker's best SNR on the target across all zones and channels right now (`canDetect`). A target the attacker cannot sense at all is struck at the base chance.
+
+*Superseded (Sep 2026) by Contact above:* perception now sets where the strike is aimed, and a misplaced percept strikes air.
 
 ### Stealth
 
