@@ -11,7 +11,7 @@ import { getBodyMap, getNeuralArchitecture,
          OVERRIDE_SCALE, STIMULUS_RESISTANCE, CRITICAL_MAGNITUDE } from './constants.js';
 import { computeIntegrationCapacity, getTier, evaluateReactiveRules,
          processGanglionSystem,
-         canOverrideReactive, deliberativeEvaluation, updateGoalPersistence,
+         canOverrideReactive, deliberativeEvaluation, updateGoalPersistence, huntGait,
          _ruleLabel, getDominantDrive } from './cognition.js';
 import { buildAllDetectionInfo, detectThreats, applySafetyFromThreats,
          detectPrey, detectCorpses } from './detection.js';
@@ -185,6 +185,7 @@ function runCreatureAI(creature) {
   // Reset ganglion transient fields
   creature._lastGanglionIntensity = null;
   creature._ganglionTriggeredStress = false;
+  creature._gaitIntensity = null;
 
   // Immobilized creatures can't move but can still attack adjacently
   if (creature.immobilized) {
@@ -296,6 +297,11 @@ function runCreatureAI(creature) {
       finalBehavior: action.behavior,
       fromDeliberate: !!action.fromDeliberate,
     };
+  }
+
+  // The gait a hunt runs at (cognition.js huntGait): set where the hunt is held
+  if ((action.behavior === 'approach_food' || action.behavior === 'hunt_chase') && action.target) {
+    action.gait = huntGait(creature, action.target, action.fromDeliberate ? 0 : action.magnitude);
   }
 
   // Step 3: Execute the selected action

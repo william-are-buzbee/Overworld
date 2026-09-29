@@ -175,6 +175,7 @@ const TRANSIENT_FIELDS = [
     // Ganglion system: per-turn flags (not persistent)
     '_ganglionTriggeredStress',  // flag: stress release trigger this turn
     '_lastGanglionIntensity',    // float: ganglion motor output intensity this turn
+    '_gaitIntensity',            // float: a hunt's gait this action (cognition.js huntGait)
 
     // AP system: accumulated action points and per-input action count (runtime only)
     '_accumulatedAP',            // float: AP carryover between player inputs

@@ -160,6 +160,7 @@ function executeAction(creature, action) {
     case 'approach_food': {
       // Move toward prey entity, and keep it as the goal (held in traces)
       if (action.target) creature.huntTarget = action.target;
+      if (action.gait != null) creature._gaitIntensity = action.gait;
       const pos = action.target ? perceivedPosition(creature, action.target) : null;
       if (pos) {
         const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
@@ -223,6 +224,7 @@ function executeAction(creature, action) {
     case 'hunt_chase': {
       if (action.target) {
         creature.huntTarget = action.target;
+        if (action.gait != null) creature._gaitIntensity = action.gait;
         const pos = perceivedPosition(creature, action.target);
         if (pos) moved = moveInDirection(creature, directionToward(creature.x, creature.y, pos.x, pos.y));
       }

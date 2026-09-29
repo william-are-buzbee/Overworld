@@ -1134,6 +1134,8 @@ function buildDetectionInfo(observer, target, detections) {
     // How fast a seen body closes on the observer (tiles per world tick,
     // positive = approaching); only the eyes resolve it
     closingSpeed: 0,
+    // How fast a seen body draws away (tiles per world tick); the eyes only
+    recedingSpeed: 0,
 
     // Best SNR per zone and channel, keyed as the neural wiring names its
     // inputs ('fore_l.vibration.ground', 'head.visual'), so a ganglion reads
@@ -1184,6 +1186,7 @@ function buildDetectionInfo(observer, target, detections) {
     }
     if (det.channel === 'visual' && det.moving) info.isMoving = true;
     if (det.channel === 'visual' && det.closing > info.closingSpeed) info.closingSpeed = det.closing;
+    if (det.channel === 'visual' && -det.closing > info.recedingSpeed) info.recedingSpeed = -det.closing;
 
     if (det.zone) {
       const key = `${det.zone.key}.${_WIRING_PATH[det.channel]}`;

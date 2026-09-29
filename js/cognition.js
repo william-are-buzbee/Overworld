@@ -21,7 +21,7 @@ import { getBodyMap,
          THREAT_CONF_SIZE_LARGER, THREAT_CONF_SIZE_AMBIGUOUS,
          STRESS_NEURAL_SENSITIVITY, STRESS_MAX, SPECIES_DISPLAY_CONFIDENCE,
          LOOM_WINDOW_ACTIONS, REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
-         GROUND_EMISSION_BASE } from './constants.js';
+         GROUND_EMISSION_BASE, CREEP_INTENSITY, WALK_INTENSITY } from './constants.js';
 import { getBodyPTW } from './physiology.js';
 import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
@@ -1040,6 +1040,33 @@ function deliberativeEvaluation(creature) {
   }
 }
 
+// ==================== HUNTING GAIT ====================
+// The gait a hunt runs at. The reactive approach drives the legs flat out:
+// the hunt's urge is a sprint. Integration tissue that can hold that drive
+// down (the same suppression that overrides a reactive recommendation:
+// canOverrideReactive) holds the prey in its workspace and sets the gait from
+// what the senses say about it:
+//   rush (sprint)  the prey is perceived within RUSH_TILES, or the eyes see
+//                  it drawing away faster than the predator's own walk (it
+//                  has bolted);
+//   stalk (creep)  it is in the senses and neither: a creep drops 0.16 of a
+//                  walk's energy into the ground and a sprint 16×
+//                  (signals.js), and moves little across a watcher's eyes;
+//   walk           it is out of the senses and the tissue holds where it
+//                  was (Rule 6A): going to look.
+// A body without that tissue (a lurker's 0.014 does not hold down 0.2)
+// sprints at whatever it hunts, as before.
+const RUSH_TILES = 2;   // one step to contact and the strike
+function huntGait(creature, target, magnitude) {
+  if (!canOverrideReactive(creature, magnitude || 0)) return 1.0;
+  const p = perceptOf(creature, target);
+  if (!p) return WALK_INTENSITY;
+  if (p.distance <= RUSH_TILES) return 1.0;
+  const ownWalk = getBodyPTW(creature, WALK_INTENSITY) / (REFERENCE_SPEED * BASE_TICKS_PER_ACTION);
+  if (p.recedingSpeed > ownWalk) return 1.0;
+  return CREEP_INTENSITY;
+}
+
 // ==================== GOAL PERSISTENCE (Prompt O) ====================
 // Deliberative goals expire if target leaves detection for too long.
 
@@ -1104,6 +1131,7 @@ export {
   evaluateReactiveRules,
   processGanglionSystem,
   canOverrideReactive, deliberativeEvaluation,
+  huntGait,
   updateGoalPersistence,
   _RULE_LABELS, _ruleLabel,
 };

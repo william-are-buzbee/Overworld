@@ -151,6 +151,7 @@ function _getCirculatoryRegenEfficiency(entity) {
 function getMovementIntensity(creature) {
   if (creature.isPlayer) return creature._lastMovementIntensity ?? WALK_INTENSITY;
   if (creature._lastGanglionIntensity != null) return creature._lastGanglionIntensity;
+  if (creature._gaitIntensity != null) return creature._gaitIntensity;   // a hunt's gait (cognition.js huntGait)
   const behavior = creature.currentBehavior;
   if (behavior === 'flee' || behavior === 'flee_refuge' || behavior === 'hunt') return 1.0;
   if (behavior === 'wander' || behavior === 'forage' || behavior === 'maintain_distance' ||
