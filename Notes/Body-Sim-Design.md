@@ -121,6 +121,8 @@ DODGE_REFERENCE_MASS is the mass at which dodge reaches 0% (250 kg in code; the 
 
 Clamp to 0 minimum. There are no armor items; the target zone's structural mass is the armor.
 
+*Superseded (Sep 2026):* there is no dodge percentage and no hit roll. Whether a strike connects is contact geometry (Stat-System-Design "Contact", `combat.js strikeContact`): the strike goes where the attacker perceives the target, and the defender gets clear only if it senses the attacker, has room to move, and clears its own length faster than the striking zone covers the attacker's. Getting clear burns a sprint's fast-twitch fuel.
+
 ### Stealth
 
 ```
