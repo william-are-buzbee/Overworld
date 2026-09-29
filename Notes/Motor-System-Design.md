@@ -96,7 +96,7 @@ A sensory signal reaches a ganglion that receives input from multiple pathways. 
 
 But it's not thought. The templates are fixed physical circuits. The ganglion doesn't evaluate or choose. It runs parallel threshold checks across multiple inputs, and if a template matches, it fires. The creature doesn't "decide" to flee. A combination of sensory inputs matched a wired template and the ganglion fired its motor outputs.
 
-This is what the current "reactive layer" in the code actually describes. The reactive rules are ganglion templates. Rule 3 (adjacent + large → flee) is a hardwired circuit that fires when two specific sensory conditions are met simultaneously. The hare's flight response is this kind of process — not a cognitive decision, but a multi-input template match at the ganglion level that directly activates motor pathways.
+This is what the current "reactive layer" in the code actually describes. The reactive rules are ganglion templates. Rule 3 (adjacent + large → flee; turn and fight only when no step leads away) is a hardwired circuit that fires when two specific sensory conditions are met simultaneously. The hare's flight response is this kind of process — not a cognitive decision, but a multi-input template match at the ganglion level that directly activates motor pathways.
 
 For small creatures with low integration capacity, this is how most behavior is produced. Thousands of actions per lifetime with zero cognitive content. The ganglion matches templates and fires motor pathways. What we observe looks like behavior — approach food, flee threats, hold still when sensing — but it's hardwired template matching producing motor activation, not decisions producing actions.
 

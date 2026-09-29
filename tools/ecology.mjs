@@ -81,12 +81,14 @@ async function runSeed(seed) {
     const { state, monsters } = await import('./js/state.js');
     const L = state.player.layer;
     const t = window.__eco = {
-      start: {}, behaviour: {}, deaths: {}, seen: new Set(), killedBy: null, turns: 0,
+      start: {}, behaviour: {}, deaths: {}, kills: {}, deathDetail: [], seen: new Set(), everyone: new Set(),
+      killedBy: null, turns: 0,
     };
+    const who = (e) => !e ? 'none' : e.isPlayer ? 'player' : e.key;
     for (const m of monsters[L]) {
       if (m.hp <= 0) continue;
       t.start[m.key] = (t.start[m.key] || 0) + 1;
-      t.seen.add(m);
+      t.seen.add(m); t.everyone.add(m);
       if (hunger != null && m.diet === 'predator' && m.drives) m.drives.hunger = hunger;
     }
     window.__ecoTick = () => {
@@ -103,10 +105,20 @@ async function runSeed(seed) {
         if (!alive.has(m)) {
           const k = m.key + ':' + (m.deathCause || 'unknown');
           t.deaths[k] = (t.deaths[k] || 0) + 1;
+          // Killer: the last creature to land a blow (physiology.js _noteBlow).
+          const killer = m._lastStruckBy || null;
+          const kk = m.key + '<-' + who(killer);
+          t.kills[kk] = (t.kills[kk] || 0) + 1;
+          const f = killer && m._fights && m._fights.get(killer);
+          t.deathDetail.push({ victim: m.key, cause: m.deathCause || 'unknown', killer: who(killer), turn: t.turns,
+            victimMass: +(m.totalMass || 0).toFixed(1), killerMass: killer ? +(killer.totalMass || 0).toFixed(1) : null,
+            victimOpened: f ? f.opened : null, victimDoing: f ? f.doing : null,
+            blowsDealt: f ? f.dealt : 0, blowsTaken: f ? f.taken : 0,
+            killerDoing: killer && killer._fights && killer._fights.get(m) ? killer._fights.get(m).doing : null });
           t.seen.delete(m);
         }
       }
-      for (const m of alive) t.seen.add(m);
+      for (const m of alive) { t.seen.add(m); t.everyone.add(m); }
       t.turns++;
       return state.player.hp > 0;
     };
@@ -123,7 +135,23 @@ async function runSeed(seed) {
     const t = window.__eco;
     const end = {};
     for (const m of monsters[state.player.layer]) if (m.hp > 0) end[m.key] = (end[m.key] || 0) + 1;
-    return { start: t.start, end, behaviour: t.behaviour, deaths: t.deaths, turns: t.turns,
+    // Fights, from the side that landed the first blow: 'opener(doing)>target' and
+    // how it ended. A creature attacked by the player (never, while it rests) or
+    // by several opponents appears once per opponent.
+    const fights = {};
+    const who = (e) => e.isPlayer ? 'player' : e.key;
+    const everyone = new Set(t.everyone); if (state.player._fights) everyone.add(state.player);
+    for (const a of everyone) {
+      if (!a._fights) continue;
+      for (const [b, f] of a._fights) {
+        if (!f.opened) continue;
+        const end = a.hp <= 0 && b.hp <= 0 ? 'both died' : a.hp <= 0 ? 'opener died' : b.hp <= 0 ? 'target died' : 'both lived';
+        const k = `${who(a)}(${f.doing || '?'})>${who(b)}: ${end}`;
+        fights[k] = (fights[k] || 0) + 1;
+      }
+    }
+    return { start: t.start, end, behaviour: t.behaviour, deaths: t.deaths, kills: t.kills, fights,
+             deathDetail: t.deathDetail, turns: t.turns,
              playerDeath: state.player.hp > 0 ? null : (state.player.deathCause || 'unknown') };
   });
   out.seed = seed; out.errors = errors;
@@ -165,6 +193,8 @@ const report = {
   playerKilled: runs.filter(r => r.playerDeath).map(r => ({ seed: r.seed, turn: r.turns, cause: r.playerDeath })),
   behaviourPer100Turns: table('behaviour', true),
   deathsPerRun: table('deaths', false),
+  killsPerRun: table('kills', false),
+  fightsPerRun: table('fights', false),
   startCounts: table('start', false),
   endCounts: table('end', false),
   pageErrors: runs.reduce((a, r) => a + r.errors.length, 0),
@@ -183,6 +213,22 @@ if (!report.deathsPerRun.length) console.log('  none');
 for (const r of report.deathsPerRun) {
   const total = runs.reduce((a, run) => a + (run.deaths[r.key] || 0), 0);
   console.log(`  ${r.key.padEnd(28)}${f(r)}   total ${total}`);
+}
+// Who killed whom: the last creature to land a blow on the dead one ('none' is
+// hunger, or a death with no blow landed).
+const totals = (field) => report[field + 'PerRun'].map(r => [r.key, runs.reduce((a, run) => a + (run[field][r.key] || 0), 0)]);
+console.log('\nkills, victim<-killer (total over runs)');
+if (!report.killsPerRun.length) console.log('  none');
+for (const [k, n] of totals('kills')) console.log(`  ${k.padEnd(40)}${String(n).padStart(4)}`);
+console.log('\nfights, opener(what it was doing)>target: outcome (total over runs)');
+if (!report.fightsPerRun.length) console.log('  none');
+for (const [k, n] of totals('fights')) console.log(`  ${k.padEnd(56)}${String(n).padStart(4)}`);
+const detail = runs.flatMap(r => r.deathDetail.map(d => ({ seed: r.seed, ...d })));
+if (detail.length) {
+  console.log('\neach death: seed turn victim(mass) cause <- killer(mass), victim opened?, doing, blows dealt/taken');
+  for (const d of detail) console.log(`  s${d.seed} t${d.turn} ${d.victim}(${d.victimMass}) ${d.cause} <- ${d.killer}` +
+    (d.killerMass != null ? `(${d.killerMass})` : '') +
+    (d.victimOpened != null ? `, ${d.victimOpened ? 'opened' : 'was attacked'}, doing ${d.victimDoing}, killer doing ${d.killerDoing}, ${d.blowsDealt}/${d.blowsTaken}` : ''));
 }
 if (report.pageErrors) console.log(`\n${report.pageErrors} page errors (see --json for details)`);
 if (args.json) { fs.writeFileSync(args.json, JSON.stringify(report, null, 1)); console.log(`\nwrote ${args.json}`); }

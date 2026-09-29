@@ -193,6 +193,8 @@ const TRANSIENT_FIELDS = [
     '_perceivedAt',              // Map<tile, {creature, species}>: player's display percepts (pass 5)
     'plume',                     // this action's airborne reading (pass 6b-2)
     '_scentTrace',               // lost-scent memory for casting (pass 6b-2)
+    '_fights',                   // Map<entity, fight>: blows dealt and taken (tools/ecology.mjs)
+    '_lastStruckBy',             // entity: last to land a blow (tools/ecology.mjs)
 ];
 
 /** Create a shallow copy with all transient per-turn fields removed. */

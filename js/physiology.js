@@ -15,6 +15,7 @@ import { getBodyMap, computeBleedPenalty, getPathways,
          STRESS_RELEASE_AMOUNT, STRESS_CLEARANCE_BASE, STRESS_MAX,
          HEAL_BASE_RATE, HEAL_REST_MULTIPLIER } from './constants.js';
 import { log, LOG_CATEGORIES } from './log.js';
+import { state } from './state.js';
 
 /** Locomotion muscle / total mass — physics-derived power-to-weight ratio.
  *  Used by the speed system so player and NPCs of the same species are at parity.
@@ -456,6 +457,27 @@ function applyTurningCost(creature, facingStepsChanged) {
 
 // ==================== ZONE DAMAGE — THE ONE RESOLVER ====================
 /**
+ * Bookkeeping for tools/ecology.mjs, read by nothing in play: who has landed
+ * blows on whom. Each side of a fight keeps an entry for the other in
+ * `_fights` (a Map, transient): whether it opened the fight (landed the first
+ * blow), what it was doing when that blow landed, and blows dealt and taken.
+ * `_lastStruckBy` names the last creature to land a blow, so a death by blood
+ * loss turns later still has a killer.
+ */
+function _noteBlow(attacker, defender) {
+  const turn = state.turnCount;
+  const a = attacker._fights || (attacker._fights = new Map());
+  const d = defender._fights || (defender._fights = new Map());
+  if (!a.has(defender) && !d.has(attacker)) {
+    a.set(defender, { opened: true,  doing: attacker.currentBehavior || null, turn, dealt: 0, taken: 0 });
+    d.set(attacker, { opened: false, doing: defender.currentBehavior || null, turn, dealt: 0, taken: 0 });
+  }
+  a.get(defender).dealt++;
+  d.get(attacker).taken++;
+  defender._lastStruckBy = attacker;
+}
+
+/**
  * Apply damage to one zone of an entity and resolve every physical
  * consequence in one place: clotting torn open, zone destruction, the
  * zone's blood share dumped plus a severance burst through its pathways,
@@ -486,6 +508,7 @@ function applyZoneDamage(entity, hitZone, dmg, opts = {}) {
   const name = entity.name || 'creature';
   const poss = isPlayer ? 'Your' : `${name}'s`;
   const say = (msg) => { if (!opts.quiet) log(msg, LOG_CATEGORIES.COMBAT); };
+  if (opts.by) _noteBlow(opts.by, entity);
 
   hitZone.hp = Math.max(0, hitZone.hp - Math.round(dmg));
   // New damage tears open any clotting progress

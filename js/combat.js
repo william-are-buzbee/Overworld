@@ -120,7 +120,7 @@ function playerAttack(mon){
       const share = (totalContactedMass > 0) ? (zone.mass / totalContactedMass) : (1 / contactedZones.length);
       const zoneArmor = (zone.structural || 0) * ARMOR_PER_STRUCTURAL_KG;
       const zoneDmg = Math.max(1, dmg * share - zoneArmor);
-      if (applyZoneDamage(mon, zone, zoneDmg).died) died = true;
+      if (applyZoneDamage(mon, zone, zoneDmg, { by: player }).died) died = true;
     }
   }
 
