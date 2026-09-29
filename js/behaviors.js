@@ -11,7 +11,7 @@ import { getBodyMap, getAvailableAttacks, selectHitZone,
          BITE_MASS_FRACTION, GRAZE_HUNGER_REDUCTION,
          REST_RECOVERY_NORMAL, REST_RECOVERY_WEAKENED, REST_RECOVERY_CRITICAL,
          REST_EATING_BONUS,
-         SAFETY_DECAY_RATE, facingSteps } from './constants.js';
+         SAFETY_DECAY_RATE, facingSteps, MIN_SEEK, SEEK_SCALE } from './constants.js';
 import { rand, randi } from './rng.js';
 import { DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { chebyshev } from './world-state.js';
@@ -22,10 +22,21 @@ import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          canMoveTo, moveInDirection, isNearWater, findNearestWaterTile,
          getCreatureMass, weightedRandomChoice, movesCloserTo,
          wouldExceedTerritory, hasCladeTerritory, tileIsFood,
-         findNearestFoodTile, getCorpseAt } from './ai-utils.js';
-import { getAdjacentPrey, applySafetyFromDamage, perceivedPosition, perceptOf } from './detection.js';
+         findNearestFoodTile, getCorpseAt, stepRoundObstacles } from './ai-utils.js';
+import { getAdjacentPrey, applySafetyFromDamage, perceivedPosition, perceptOf, traceHoldTurns } from './detection.js';
 import { applyTurningCost, applyZoneDamage } from './physiology.js';
 import { noteStrike } from './hunt-funnel.js';
+
+/** A chase step toward where the prey is perceived or held. A body whose
+ *  integration tissue holds a trace (a turn or more) goes round terrain in the
+ *  way, within its deliberative seek range (ai-utils.stepRoundObstacles, a
+ *  marked placeholder for route memory); one without steps straight at it. */
+function chaseStep(creature, pos) {
+  if (traceHoldTurns(creature) >= 1) {
+    return stepRoundObstacles(creature, pos.x, pos.y, MIN_SEEK + (creature.integrationCapacity || 0) * SEEK_SCALE);
+  }
+  return moveInDirection(creature, directionToward(creature.x, creature.y, pos.x, pos.y));
+}
 
 // ==================== ACTION DISPATCHER (Prompt O) ====================
 // Translates reactive/deliberative output into existing behavior functions.
@@ -161,10 +172,7 @@ function executeAction(creature, action) {
       // Move toward prey entity, and keep it as the goal (held in traces)
       if (action.target) creature.huntTarget = action.target;
       const pos = action.target ? perceivedPosition(creature, action.target) : null;
-      if (pos) {
-        const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
-        moved = moveInDirection(creature, dir);
-      }
+      if (pos) moved = chaseStep(creature, pos);
       creature.currentBehavior = 'hunt';
       break;
     }
@@ -224,7 +232,7 @@ function executeAction(creature, action) {
       if (action.target) {
         creature.huntTarget = action.target;
         const pos = perceivedPosition(creature, action.target);
-        if (pos) moved = moveInDirection(creature, directionToward(creature.x, creature.y, pos.x, pos.y));
+        if (pos) moved = chaseStep(creature, pos);
       }
       creature.currentBehavior = 'hunt';
       break;

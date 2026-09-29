@@ -171,7 +171,7 @@ Perception as inference from received signal, not truth with error bars. Decisio
   - [x] Rule 4: brace only against a source that moves or closes, not a still one, not recognised kin
   - [x] Fast-twitch fuel per kg of muscle (`SUBSTRATE_PER_KG_MUSCLE` 5 → 0.5, derived in `initBodyMap`, Muscle-Fiber-Design): a hare's sprint ~100 → ~10 actions
   - [ ] Stalking gait chosen in integration tissue (approach intensity)
-  - [ ] Detours round obstacles: pathfinding as a marked placeholder for route memory
+  - [x] Detours round obstacles: pathfinding as a marked placeholder for route memory (`stepRoundObstacles`)
   - [x] Contact geometry replaces the `rollHit` dice (aim at the percept; getting clear needs senses, room and a faster body, and burns sprint fuel)
   - [ ] Longer harness runs for natural predation (hunger rises slowly)
 - [ ] Retune behaviour once 1–8 land (against the harness and the person's preview impressions)

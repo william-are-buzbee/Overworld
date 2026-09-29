@@ -142,6 +142,18 @@ function getPlayerDiet() {
 
 /** Check if a creature can move to a tile. */
 function canMoveTo(mon, tx, ty) {
+  if (!groundPassable(mon, tx, ty)) return false;
+  const layer = state.player.layer;
+  // Can't step on another monster
+  if (monsterAt(tx, ty, layer)) return false;
+  // Can't step on the player
+  if (tx === state.player.x && ty === state.player.y) return false;
+  return true;
+}
+
+/** The ground half of canMoveTo: terrain, water and the territory leash,
+ *  not the bodies standing on it (they move). */
+function groundPassable(mon, tx, ty) {
   const layer = state.player.layer;
   if (!inBounds(layer, tx, ty)) return false;
   const ground = worlds[layer][ty][tx];
@@ -159,14 +171,60 @@ function canMoveTo(mon, tx, ty) {
   }
   // Water-locked creatures can't leave water
   if (isWaterLocked(mon) && !WATER_TILES.has(ground)) return false;
-  // Can't step on another monster
-  if (monsterAt(tx, ty, layer)) return false;
-  // Can't step on the player
-  if (tx === state.player.x && ty === state.player.y) return false;
   // Territory radius check (clade-based)
   if (wouldExceedTerritory(mon, tx, ty) && !mon.threatSource) return false;
-
   return true;
+}
+
+/**
+ * A step toward a tile that goes round what is in the way.
+ *
+ * PLACEHOLDER for route memory (the person, Sep 2026): a predator that has
+ * lived on its ground holds a map of it in integration tissue and knows the
+ * way round a lake. Nothing in the body map holds such a map yet, so this
+ * searches the true ground: a breadth-first search over passable ground
+ * (bodies ignored, they move) within `radius` tiles, to any tile beside the
+ * goal. It reads terrain the creature may never have seen. Replace with
+ * learned routes when episodic/spatial memory exists (Cognition-Design,
+ * Memory Architecture). Callers gate it on integration tissue.
+ *
+ * The straight step is taken when the ground allows it (open ground is
+ * unchanged); the search runs only when terrain blocks the straight line.
+ * Returns true if the creature moved.
+ */
+function stepRoundObstacles(creature, gx, gy, radius) {
+  const dir = directionToward(creature.x, creature.y, gx, gy);
+  const d0 = DIRECTION_DELTAS[dir];
+  if (groundPassable(creature, creature.x + d0.x, creature.y + d0.y)) return moveInDirection(creature, dir);
+  const first = _searchFirstStep(creature, gx, gy, Math.max(1, Math.ceil(radius)));
+  if (first != null && moveInDirection(creature, first)) return true;
+  return moveInDirection(creature, dir);
+}
+
+function _searchFirstStep(creature, gx, gy, radius) {
+  const sx = creature.x, sy = creature.y;
+  const size = 2 * radius + 1;
+  const firstDir = new Int8Array(size * size).fill(-1);
+  const idx = (x, y) => (y - sy + radius) * size + (x - sx + radius);
+  const queue = [[sx, sy]];
+  firstDir[idx(sx, sy)] = 8;   // the start: no first step
+  for (let q = 0; q < queue.length; q++) {
+    const [x, y] = queue[q];
+    const fd = firstDir[idx(x, y)];
+    for (let d = 0; d < 8; d++) {
+      const nx = x + DIRECTION_DELTAS[d].x, ny = y + DIRECTION_DELTAS[d].y;
+      if (Math.abs(nx - sx) > radius || Math.abs(ny - sy) > radius) continue;
+      const i = idx(nx, ny);
+      if (firstDir[i] !== -1) continue;
+      const step = fd === 8 ? d : fd;
+      if (Math.max(Math.abs(nx - gx), Math.abs(ny - gy)) <= 1 &&
+          (nx !== gx || ny !== gy) && groundPassable(creature, nx, ny)) return step;
+      if (!groundPassable(creature, nx, ny)) { firstDir[i] = 9; continue; }
+      firstDir[i] = step;
+      queue.push([nx, ny]);
+    }
+  }
+  return null;
 }
 
 /** Move in a direction with fallback to adjacent directions. */
@@ -341,7 +399,7 @@ export {
   WATER_TILES, isWaterTile, isNearWater, isWaterLocked,
   hasCladeTerritory, wouldExceedTerritory,
   getCreatureMass, getPlayerDiet,
-  canMoveTo, moveInDirection,
+  canMoveTo, groundPassable, stepRoundObstacles, moveInDirection,
   findNearestWaterTile, findNearestFoodTile, tileIsFood,
   getCorpseAt,
   rebuildSpatialGrid, getNearbyCreatures,
