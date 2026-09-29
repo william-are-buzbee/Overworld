@@ -41,6 +41,8 @@ zone.substrateMax = zone.muscle × SUBSTRATE_PER_KG_MUSCLE
 
 `SUBSTRATE_PER_KG_MUSCLE` is a game-wide constant. Substrate initializes to max after rest and depletes independently per zone based on that zone's activity.
 
+*Status (Sep 2026, hunt funnel):* the formula is now what the code does (`initBodyMap`). Until then each zone's store was written by hand in the body map, at 5 per kg of muscle for the hare and less for the predators, and depletion at a full sprint is `fastMass × (1 − FAST_TWITCH_RECRUIT_THRESHOLD) × SUBSTRATE_DEPLETION_HIGH` = 0.072 × fast mass per action, so a bolting hare kept most of its top speed for ~100 actions against the 8–10 turns the species profile below gives, and no predator ran one down (harness hunt funnel). `SUBSTRATE_PER_KG_MUSCLE` is now 0.5: a zone empties in 0.5 / (fiberRatio × 0.072) actions at a full sprint, so a hare in ~10 (its force falling from 0.40 to 0.07 force-to-weight, the 6× cliff below), a lurker in ~11, a ravager in ~18, a prowler in ~20, a shaleback in ~47. `SUBSTRATE_REGEN_BASE` scaled by the same tenth (0.08 → 0.008), so the time to refill is unchanged. A save restores the store's level, not its size. Harness, seeds 1–8 × 500 turns, predators at hunger 0.9: hares killed 1 → 7 (wolf>hare episodes reaching contact 3 → 9); natural drives: 1 → 2 hares, and a lurker.
+
 ### Depletion
 
 When a zone's fast-contracting fibers are activated (the zone receives a high-intensity activation signal through its motor pathway), the fibers consume substrate proportional to the fast-contracting mass recruited and the duration of activation:
