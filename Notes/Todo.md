@@ -163,7 +163,8 @@ Perception as inference from received signal, not truth with error bars. Decisio
 - [x] 7. Identification by body-map features against wired templates (mass, locomotion limbs, integument, volatile mix; margin confidence); recognised species sets the size prior and brings its diet; display and examine show the perceived species
 - [x] 8. Persistence held in tissue: traces (last-known position) held for integrationCapacity × PERSISTENCE_SCALE turns, contact traces, evidence summation sqrt(1 + turns held); goal persistence and threat memory run on traces; predators go to where the prey was
 - [ ] 9. Head facing separate from heading (orienting response)
-- [ ] Retune behaviour once 1–8 land
+- [x] Multi-seed ecology harness (`tools/ecology.mjs`): behaviour and deaths as mean ± sd across seeds, for before/after comparisons
+- [ ] Retune behaviour once 1–8 land (against the harness and the person's preview impressions)
 
 ## Near-Term Plans (no particular order)
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
