@@ -35,24 +35,13 @@ export function computeStrikeDamage(attacker, atkZone, attack) {
 }
 
 // ==================== DERIVED COMBAT VALUES ====================
-// Stat-System-Design "Derived Combat Values". Dodge and stealth are read from
-// total mass: there is physically less of a small creature to connect with or
-// to notice. Accuracy is read from the attacker's detection of the target at
-// the moment of the strike (combat.js accuracyOf): the better it senses the
-// target, the better it aims. There is no crit; damage noise is the randi(3)
-// on the strike.
-export const DODGE_REFERENCE_MASS   = 250;  // kg at which dodge reaches 0% (the design doc floats 2500; see Stat-System-Design)
-export const MAX_DODGE_PERCENT      = 30;   // a weightless creature's dodge
+// Stat-System-Design "Derived Combat Values". Stealth is read from total mass:
+// there is physically less of a small creature to notice. Whether a strike
+// connects is contact geometry (combat.js strikeContact), not a roll: the
+// accuracy and dodge percentages that were here (Sep 2026) are gone. There is
+// no crit; damage noise is the randi(3) on the strike.
 export const STEALTH_REFERENCE_MASS = 250;  // kg at which the stealth profile reaches 0
 export const MAX_STEALTH_PERCENT    = 40;
-export const BASE_ACCURACY          = 70;   // hit chance with no sense of the target beyond contact
-export const ACCURACY_PER_SNR       = 3;    // added per unit of the attacker's best SNR on the target
-export const ACCURACY_SNR_CAP       = 10;   // SNR beyond this aims no better
-
-export function dodgeChance(entity){
-  const mass = entity.totalMass || 0;
-  return Math.max(0, (DODGE_REFERENCE_MASS - mass) / DODGE_REFERENCE_MASS) * MAX_DODGE_PERCENT;
-}
 
 export function stealthProfile(entity){
   const mass = entity.totalMass || 0;

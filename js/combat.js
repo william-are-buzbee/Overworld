@@ -10,32 +10,75 @@ import { render } from './rendering.js';
 import { state, monsters } from './state.js';
 import { getBodyMap, selectHitZone, getAvailableAttacks, ARMOR_PER_STRUCTURAL_KG,
          getAttackDirection, getExposedZones, selectContactedZones,
-         computeStrikeDamage, dodgeChance,
-         BASE_ACCURACY, ACCURACY_PER_SNR, ACCURACY_SNR_CAP } from './constants.js';
-import { randi, roll100 } from './rng.js';
-import { canDetect, applySafetyFromDamage } from './detection.js';
+         computeStrikeDamage } from './constants.js';
+import { randi } from './rng.js';
+import { canDetect, applySafetyFromDamage, perceivedPosition } from './detection.js';
 import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
-import { applyZoneDamage } from './physiology.js';
+import { applyZoneDamage, getBodyPTW, getEntityTotalMass, spendBurst } from './physiology.js';
+import { canMoveTo, DIRECTION_DELTAS } from './ai-utils.js';
 import { placeItem, generateItemId } from './ground-items.js';
 
 function monstersHere(){ return monsters[state.player.layer]; }
 
-// Accuracy is how well the attacker senses the target right now: the best
-// signal-to-noise ratio any of its zones has on the target, on any channel
-// (Stat-System-Design "Accuracy"). Something it cannot sense at all is struck
-// blind at BASE_ACCURACY.
-function accuracyOf(attacker, target){
-  const det = canDetect(attacker, target);
-  const snr = det && det.detected ? Math.min(det.bestSNR || 0, ACCURACY_SNR_CAP) : 0;
-  return BASE_ACCURACY + ACCURACY_PER_SNR * snr;
+// ==================== CONTACT GEOMETRY ====================
+// Whether a strike connects is geometry, not a roll (Stat-System-Design
+// "Contact"). A strike is a zone driven at a point in space.
+//
+// Aim: it goes where the attacker perceives the target (its percept, or the
+// trace its tissue holds); the player strikes the tile it moves into. If the
+// target is not on that tile, the strike meets air.
+//
+// Getting clear: the defender slips the strike only if its senses deliver
+// the attacker at that moment (a strike it does not sense always lands), it
+// can move (not immobilized, a free tile beside it), and it clears its own
+// body length faster than the striking zone covers the attacker's. Both are
+// force-to-weight over a length: the defender's locomotion at a sprint
+// (getBodyPTW at full intensity, so its fast-twitch fuel counts) over
+// cbrt(its mass), against the striking zone's working muscle over the zone's
+// mass over cbrt(the attacker's mass). Getting clear is a burst: it burns a
+// sprint action's fuel (physiology.js spendBurst), so a tired body stops
+// getting clear. Fresh bodies: a grazer (0.225) slips every current strike;
+// a prowler (0.104) slips bites (0.056-0.081) but not claws (0.189); a
+// ravager (0.063) only the slowest jaws.
+//
+// Replaces the hit roll (accuracy from SNR, dodge from mass, 5-95%): the
+// same two things, perception and the target's body, without the dice.
+
+/** A striking zone's rate: working muscle over the zone's mass, over the
+ *  attacker's length. Infinity for a strike from no zone (nothing to time). */
+function strikeRate(attacker, atkZone){
+  if (!atkZone || !(atkZone.mass > 0)) return Infinity;
+  const hpFrac = atkZone.maxHp > 0 ? atkZone.hp / atkZone.maxHp : 1;
+  const muscle = (atkZone.muscle || 0) * hpFrac * (1 - (attacker.bleedPenalty || 0));
+  return (muscle / atkZone.mass) / Math.cbrt(getEntityTotalMass(attacker));
 }
 
-// The one hit roll for every strike: attacker's accuracy against the
-// defender's mass-derived dodge, clamped to 5..95%.
-function rollHit(attacker, defender){
-  const c = Math.max(5, Math.min(95, accuracyOf(attacker, defender) - dodgeChance(defender)));
-  return roll100() <= c;
+/** How fast the defender's body gets clear of where it stands right now. */
+function evasionRate(defender){
+  return getBodyPTW(defender, 1.0) / Math.cbrt(getEntityTotalMass(defender));
+}
+
+/** { contact: 'hit' | 'air' (aimed where the target is not) | 'clear' (it got
+ *  clear), why } — why it landed or not, for the harness (hunt-funnel.js).
+ *  The caller has already checked that the target is on a neighbouring tile. */
+function strikeContact(attacker, defender, atkZone){
+  if (!attacker.isPlayer){
+    const aim = perceivedPosition(attacker, defender);
+    if (!aim || aim.x !== defender.x || aim.y !== defender.y) return { contact: 'air', why: 'misplaced percept' };
+  }
+  if (defender.immobilized) return { contact: 'hit', why: 'immobilized' };
+  const sensed = canDetect(defender, attacker);
+  if (!sensed || !sensed.detected) return { contact: 'hit', why: 'unsensed' };
+  let room = false;
+  for (const d of DIRECTION_DELTAS){
+    if (canMoveTo(defender, defender.x + d.x, defender.y + d.y)) { room = true; break; }
+  }
+  if (!room) return { contact: 'hit', why: 'no room' };
+  const ev = evasionRate(defender), st = strikeRate(attacker, atkZone);
+  if (ev <= st) return { contact: 'hit', why: 'too slow' };
+  spendBurst(defender);
+  return { contact: 'clear', why: 'got clear' };
 }
 
 // Strike verb from the attack that lands (mirrors monsterMelee's table).
@@ -58,20 +101,21 @@ function playerAttack(mon){
     return false;
   }
 
-  if (!rollHit(player, mon)){
-    log(`You miss ${mon.name}.`, LOG_CATEGORIES.COMBAT);
+  // Pick the attack first: whether it connects depends on the zone that strikes.
+  let usedAttack = null, attackingZone = null;
+  if (availAtks.length > 0){
+    usedAttack = availAtks[randi(availAtks.length)];
+    attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
+  }
+
+  if (strikeContact(player, mon, attackingZone).contact !== 'hit'){
+    log(`${mon.name} gets clear of your ${usedAttack ? usedAttack.name.toLowerCase() : 'strike'}.`, LOG_CATEGORIES.COMBAT);
     mon.wasAttacked = true;
     mon.alerted = true;
     mon.lastSeenX = player.x; mon.lastSeenY = player.y;
     return false;
   }
 
-  // Pick the attack first so damage comes from the zone that actually strikes.
-  let usedAttack = null, attackingZone = null;
-  if (availAtks.length > 0){
-    usedAttack = availAtks[randi(availAtks.length)];
-    attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
-  }
   const dmg = Math.max(1, computeStrikeDamage(player, attackingZone, usedAttack) + randi(3));
 
   // ─── Footprint-based zone resolution on the defender ───
@@ -230,5 +274,5 @@ function endStealth(msg){
   if (msg) log(msg, LOG_CATEGORIES.COMBAT);
 }
 
-export { rollHit, accuracyOf, playerAttack, alertNearby, killMonster,
+export { strikeContact, strikeRate, evasionRate, playerAttack, alertNearby, killMonster,
          toggleStealth, endStealth };
