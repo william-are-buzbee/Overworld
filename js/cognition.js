@@ -27,7 +27,7 @@ import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
 import { dist, dirFromDelta, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
-import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition,
+import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition, perceptOf, traceOf,
          readPreyTrailStep, meatEaterUnderfoot } from './detection.js';
 
 // ==================== COGNITIVE TIER SYSTEM (Prompt M-A1) ====================
@@ -62,7 +62,7 @@ function getTier(integrationCapacity) {
 /** Is this entity perceived on a tile next to the creature? */
 function _adjacentPerceived(creature, entity) {
   const pos = perceivedPosition(creature, entity);
-  return chebyshev(creature.x, creature.y, pos.x, pos.y) <= 1;
+  return !!pos && chebyshev(creature.x, creature.y, pos.x, pos.y) <= 1;
 }
 
 /** Does movement compromise the creature's dominant sense? */
@@ -373,6 +373,20 @@ function evaluateReactiveRules(creature) {
     if (nearFood && dist(creature.x, creature.y, nearFood.x, nearFood.y) <= 3) {
       return { behavior: 'approach_food_tile', magnitude: 0.2, target: nearFood };
     }
+  }
+
+  // RULE 6A — WHERE THE PREY WAS
+  // A hungry predator that has lost its prey from its senses, and whose
+  // integration tissue still holds where it was (pass 8), goes there. If it
+  // arrives and nothing is there it lets go, and trail and air take over.
+  if (diet === 'predator' && cc.canFight && hungry && creature.huntTarget &&
+      !perceptOf(creature, creature.huntTarget)) {
+    const t = traceOf(creature, creature.huntTarget);
+    if (t && (t.x !== creature.x || t.y !== creature.y)) {
+      return { behavior: 'approach_food', magnitude: 0.2, target: creature.huntTarget };
+    }
+    if (creature._traces) creature._traces.delete(creature.huntTarget);
+    creature.huntTarget = null;
   }
 
   // RULE 6B — PREY TRAIL
@@ -1003,23 +1017,12 @@ function deliberativeEvaluation(creature) {
 // ==================== GOAL PERSISTENCE (Prompt O) ====================
 // Deliberative goals expire if target leaves detection for too long.
 
+// A hunt goal lasts as long as the integration tissue holds where the prey
+// was (detection.js traces, pass 8): perceived now, or held. It used to count
+// turns with a floor of one, so a body with no integration kept its goal too.
 function updateGoalPersistence(creature) {
-  if (!creature.huntTarget) {
-    creature._goalLostTurns = 0;
-    return;
-  }
-  // Check if hunt target is still detected
-  const detections = creature.detectionInfo || [];
-  const found = detections.find(d => d.entity === creature.huntTarget);
-  if (found) {
-    creature._goalLostTurns = 0;
-  } else {
-    creature._goalLostTurns = (creature._goalLostTurns || 0) + 1;
-    const maxPersistence = Math.max(1, Math.round(creature.integrationCapacity * PERSISTENCE_SCALE));
-    if (creature._goalLostTurns > maxPersistence) {
-      creature.huntTarget = null;
-      creature._goalLostTurns = 0;
-    }
+  if (creature.huntTarget && (creature.huntTarget.hp <= 0 || !perceivedPosition(creature, creature.huntTarget))) {
+    creature.huntTarget = null;
   }
 }
 
