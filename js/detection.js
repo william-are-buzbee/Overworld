@@ -20,7 +20,7 @@ import { getBodyMap,
          BURST_COEFF, BLOOD_DEATH_THRESHOLD, ARMOR_PER_STRUCTURAL_KG,
          selectHitZone,
          MOTION_CONCEALMENT_REDUCTION, BODY_PLAN_HEIGHT_COEFF,
-         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS, SCENT_FLOOR, SCENT_PROFILES,
+         OCCLUSION_BUDGET_COEFF, BINOCULAR_DEPTH_BONUS, SCENT_FLOOR, SCENT_PROFILES, PERSISTENCE_SCALE,
          MOTION_ANCHOR_SPEED, MOTION_RADIAL_WEIGHT, SELF_FOOTFALL_DISTANCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          VIS_RESOLVE_SNR, VIB_RESOLVE_SNR, CHEM_RESOLVE_SNR,
@@ -1029,22 +1029,91 @@ function perceptOf(observer, entity) {
   return null;
 }
 
-/** Where this observer perceives an entity to be: its percept's tile, or, for a
- *  body no sense delivers this action (a threat that struck from outside the
- *  senses, a hunt target kept by goal persistence), its true tile.
- *  PLACEHOLDER for that fallback: perception pass 8 replaces it with a
- *  last-known position held in integration tissue. Until then a creature keeps
- *  tracking an undetected goal as it always has; a strike from an unseen
- *  attacker is at least felt at the contact. */
+/** Where this observer perceives an entity to be: its percept's tile, or,
+ *  for a body no sense delivers this action, where its integration tissue
+ *  holds it was last perceived (traces, below), or null: out of mind. */
 function perceivedPosition(observer, entity) {
   const p = perceptOf(observer, entity);
-  return p ? { x: p.x, y: p.y } : { x: entity.x, y: entity.y };
+  if (p) return { x: p.x, y: p.y };
+  const t = traceOf(observer, entity);
+  return t ? { x: t.x, y: t.y } : null;
+}
+
+// ==================== TRACES (perception pass 8) ====================
+// Persistence needs tissue that can hold it (Design-Principles). A percept
+// leaves a trace in the observer's integration tissue: the tile it was
+// perceived on, the turn, and how many consecutive turns it has been
+// perceived. The tissue holds a trace for integrationCapacity ×
+// PERSISTENCE_SCALE turns, the scale goal persistence uses: about four turns
+// for a meso-predator, eight for an apex predator, none for a hare, whose
+// threat and food circuits hold nothing. A strike is felt where it lands:
+// contact writes a trace for the turn it happens, tissue or not.
+
+/** Turns this creature's integration tissue holds a trace. */
+function traceHoldTurns(creature) {
+  return (creature.integrationCapacity || 0) * PERSISTENCE_SCALE;
+}
+
+/** The trace this creature holds of an entity, or null: one written this
+ *  turn (a percept or a contact), or one no older than its tissue holds. */
+function traceOf(creature, entity) {
+  const traces = creature._traces;
+  const t = traces && traces.get(entity);
+  if (!t) return null;
+  const age = state.turnCount - t.turn;
+  return (age <= 0 || age <= traceHoldTurns(creature)) ? t : null;
+}
+
+/** Write this action's percepts into the tissue and let go of what it can no
+ *  longer hold. */
+function _updateTraces(creature, infos) {
+  if (!creature._traces) creature._traces = new Map();
+  const traces = creature._traces;
+  const turn = state.turnCount;
+  for (const info of infos) {
+    const prev = traces.get(info.entity);
+    let streak = 1;
+    if (prev) streak = prev.turn === turn ? prev.streak : (prev.turn === turn - 1 ? prev.streak + 1 : 1);
+    traces.set(info.entity, { x: info.x, y: info.y, turn, streak,
+      dietType: info.dietType, dietConfidence: info.dietConfidence, species: info.species });
+  }
+  const hold = traceHoldTurns(creature);
+  for (const [entity, t] of traces) {
+    if (entity.hp <= 0 || turn - t.turn > hold) traces.delete(entity);
+  }
+}
+
+/** A strike felt: the attacker is where the blow came from, this turn. */
+function recordContact(creature, attacker) {
+  if (!attacker) return;
+  if (!creature._traces) creature._traces = new Map();
+  const prev = creature._traces.get(attacker);
+  creature._traces.set(attacker, { ...(prev || { streak: 0 }), x: attacker.x, y: attacker.y, turn: state.turnCount });
+}
+
+/** Evidence summation: an observer that has kept a source in its senses over
+ *  consecutive turns, and has the tissue to hold what it saw, has summed the
+ *  looks. Independent looks add their signal in quadrature, so the SNR the
+ *  inference works with grows as sqrt(1 + turns held). It sharpens size, place
+ *  and identity; it does not make anything detectable that is not. */
+function _evidenceGain(observer, target) {
+  const t = observer._traces && observer._traces.get(target);
+  if (!t) return 1;
+  const turn = state.turnCount;
+  const prior = (t.turn === turn || t.turn === turn - 1) ? t.streak - (t.turn === turn ? 1 : 0) : 0;
+  const n = Math.min(Math.max(0, prior), Math.floor(traceHoldTurns(observer)));
+  return Math.sqrt(1 + n);
+}
+
+function _gained(detections, g) {
+  return g === 1 ? detections : detections.map(d => ({ ...d, snr: d.snr * g }));
 }
 
 /** Build continuous-uncertainty detection info from per-zone detections.
  *  Produces narrowing size ranges and confidence curves instead of binary flags. */
 function buildDetectionInfo(observer, target, detections) {
-  const tile = _inferPercept(observer, target, detections);
+  const gain = _evidenceGain(observer, target);
+  const tile = _inferPercept(observer, target, _gained(detections, gain));
   const info = {
     detected: true,
     // Perceived tile, and distance and bearing to it
@@ -1132,9 +1201,9 @@ function buildDetectionInfo(observer, target, detections) {
   info.chemicalSNR  = bestChemSNR;
 
   // Size estimate: the inferred size (pass 6), its bracket narrowing with
-  // the best SNR from any channel
+  // the best SNR from any channel, summed over the turns watched (pass 8)
   if (bestSNR > 0) {
-    const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
+    const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / (bestSNR * gain);
     const rawEstimate = tile.mass;
     info.sizeEstimate = {
       estimated: rawEstimate,
@@ -1254,6 +1323,7 @@ function buildAllDetectionInfo(creature) {
   // The air on its tile, and what integration can tie it to
   creature.plume = readPlume(creature);
   bindPlumes(creature);
+  _updateTraces(creature, creature.detectionInfo);
 }
 
 /** Assess how threatening a target is to the creature. Returns 0 if not threatening. */
@@ -1337,8 +1407,11 @@ function detectThreats(creature) {
   // lingering jumpiness comes from the stress chemistry. (Before
   // this, threatSource was never cleared, so the territory leash in
   // ai-utils.canMoveTo stayed off for good after a creature's first scare.)
+  // Since pass 8 a creature whose integration tissue still holds where the
+  // threat was keeps it as the threat source (and flees from that spot).
   if (creature.threatSource && !creature.tookDamageThisTurn &&
-      !threats.some(t => t.source === creature.threatSource)) {
+      !threats.some(t => t.source === creature.threatSource) &&
+      !traceOf(creature, creature.threatSource)) {
     creature.threatSource = null;
   }
   return threats;
@@ -1396,9 +1469,10 @@ function applySafetyFromDamage(creature, damageAmount, attacker) {
 
   creature.drives.safety = Math.min(1.0, creature.drives.safety + spike);
 
-  // Set the threat source to whoever attacked us
+  // Set the threat source to whoever attacked us, felt where the blow landed
   if (attacker) {
     creature.threatSource = attacker;
+    recordContact(creature, attacker);
   }
 }
 
@@ -1569,12 +1643,13 @@ function computePlayerPerception() {
   player.sensedCreatures = [];
   player._visuallyDetected = new Map();
   player._perceivedAt = new Map();
+  const seenNow = [];   // this turn's percepts, for the player's traces (pass 8)
 
   const fovSet = state.fovSet;
   const monocularSet = state.monocularSet;
 
   const nearby = getNearbyCreatures(player.x, player.y);
-  if (!nearby || nearby.length === 0) return;
+  if (!nearby || nearby.length === 0) { _updateTraces(player, []); return; }
 
   for (const creature of nearby) {
     if (creature.hp <= 0) continue;
@@ -1589,8 +1664,10 @@ function computePlayerPerception() {
     if (inAnyFOV) {
       const vis = _visualDetection(player, creature);
       if (vis) {
-        const visSNR = vis.snr;
-        const tile = _inferPercept(player, creature, [vis]);
+        const gain = _evidenceGain(player, creature);
+        const visSNR = vis.snr * gain;
+        const tile = _inferPercept(player, creature, _gained([vis], gain));
+        seenNow.push({ entity: creature, x: tile.x, y: tile.y, species: tile.species });
         const speciesConfidence = tile.speciesConfidence;
 
         if (speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE) {
@@ -1633,9 +1710,11 @@ function computePlayerPerception() {
     if (bestSNR <= 0) continue;
 
     // Smell is the scent field's (scent.js), not a marker: infer from the rest
-    const tile = _inferPercept(player, creature, detections.filter(d => d.channel !== 'chemicalAirborne'));
+    const gain = _evidenceGain(player, creature);
+    const tile = _inferPercept(player, creature, _gained(detections.filter(d => d.channel !== 'chemicalAirborne'), gain));
+    seenNow.push({ entity: creature, x: tile.x, y: tile.y, species: tile.species });
     const speciesConfidence = tile.speciesConfidence;
-    const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / bestSNR;
+    const uncertaintyFactor = SIZE_UNCERTAINTY_BASE / (bestSNR * gain);
     const rawEstimate = tile.mass;
     const sizeEstimate = {
       estimated: rawEstimate,
@@ -1645,6 +1724,7 @@ function computePlayerPerception() {
 
     player.sensedCreatures.push({ creature, x: tile.x, y: tile.y, bestSNR, speciesConfidence, species: tile.species, sizeEstimate });
   }
+  _updateTraces(player, seenNow);
 }
 
 export {
@@ -1670,8 +1750,8 @@ export {
   isViablePrey, getSpeciesKey, detectPrey, detectCorpses, getAdjacentPrey,
   // Player perception
   computePlayerPerception,
-  // Percepts
-  perceptOf, perceivedPosition,
+  // Percepts and traces
+  perceptOf, perceivedPosition, traceOf, traceHoldTurns, recordContact,
   // Ground trails and plumes
   readPreyTrailStep, meatEaterUnderfoot, readPlume,
 };

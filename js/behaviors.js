@@ -74,10 +74,10 @@ function executeAction(creature, action) {
     }
     case 'orient': {
       // Face toward the target without moving
-      if (action.target && creature.facing) {
-        const pos = perceivedPosition(creature, action.target);
-        creature.facing.dx = Math.sign(pos.x - creature.x);
-        creature.facing.dy = Math.sign(pos.y - creature.y);
+      const opos = action.target ? perceivedPosition(creature, action.target) : null;
+      if (opos && creature.facing) {
+        creature.facing.dx = Math.sign(opos.x - creature.x);
+        creature.facing.dy = Math.sign(opos.y - creature.y);
       } else if (action.direction != null && creature.facing) {
         // Ganglion system passes direction index — convert to facing vector
         const delta = DIRECTION_DELTAS[action.direction];
@@ -97,8 +97,8 @@ function executeAction(creature, action) {
     case 'maintain_distance': {
       // Move perpendicular to or slightly away from the target.
       // Face the competitor while spacing — posturing, not fleeing.
-      if (action.target) {
-        const pos = perceivedPosition(creature, action.target);
+      const pos = action.target ? perceivedPosition(creature, action.target) : null;
+      if (pos) {
         const awayDir = directionAwayFrom(creature.x, creature.y, pos.x, pos.y);
         // Prefer perpendicular (90°), then angled away, then directly away
         const candidates = [
@@ -155,9 +155,10 @@ function executeAction(creature, action) {
       break;
     }
     case 'approach_food': {
-      // Move toward prey entity
-      if (action.target) {
-        const pos = perceivedPosition(creature, action.target);
+      // Move toward prey entity, and keep it as the goal (held in traces)
+      if (action.target) creature.huntTarget = action.target;
+      const pos = action.target ? perceivedPosition(creature, action.target) : null;
+      if (pos) {
         const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
         moved = moveInDirection(creature, dir);
       }
@@ -220,8 +221,7 @@ function executeAction(creature, action) {
       if (action.target) {
         creature.huntTarget = action.target;
         const pos = perceivedPosition(creature, action.target);
-        const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
-        moved = moveInDirection(creature, dir);
+        if (pos) moved = moveInDirection(creature, directionToward(creature.x, creature.y, pos.x, pos.y));
       }
       creature.currentBehavior = 'hunt';
       break;
@@ -256,7 +256,9 @@ function executeAction(creature, action) {
 /** Standard flee: move away from threat source. Returns true if moved. */
 function executeStandardFlee(creature) {
   const threat = creature.threatSource;
-  if (!threat) {
+  // Where the threat is perceived, or held to have been (pass 8)
+  const tp = threat ? perceivedPosition(creature, threat) : null;
+  if (!tp) {
     // Lost track of threat, accelerate safety decay and wander
     creature.drives.safety = Math.max(0, creature.drives.safety - SAFETY_DECAY_RATE * 3);
     executeWander(creature);
@@ -264,7 +266,6 @@ function executeStandardFlee(creature) {
   }
 
   // Direction away from where the threat is perceived
-  const tp = perceivedPosition(creature, threat);
   const fleeDir = directionAwayFrom(creature.x, creature.y, tp.x, tp.y);
 
   // Try primary direction first, then +/- 1 (45° off), then +/- 2 (90° off),
@@ -459,6 +460,7 @@ function chasePrey(creature) {
 
   // Move toward where the prey is perceived
   const pos = perceivedPosition(creature, target.target);
+  if (!pos) return false;
   const dir = directionToward(creature.x, creature.y, pos.x, pos.y);
   return moveInDirection(creature, dir);
 }
@@ -941,8 +943,7 @@ function performBonusMove(mon){
   // Bonus move respects current behavior for movement direction
   if (mon.currentBehavior === 'hunt' && mon.huntTarget) {
     const pos = perceivedPosition(mon, mon.huntTarget);
-    const dir = directionToward(mon.x, mon.y, pos.x, pos.y);
-    if (!moveInDirection(mon, dir)) executeWander(mon);
+    if (!pos || !moveInDirection(mon, directionToward(mon.x, mon.y, pos.x, pos.y))) executeWander(mon);
   } else if (mon.currentBehavior === 'flee') {
     executeFlee(mon);
   } else {

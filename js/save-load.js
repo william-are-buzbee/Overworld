@@ -185,6 +185,14 @@ const TRANSIENT_FIELDS = [
     '_lastMovementIntensity',    // float: player movement intensity this turn (creep 0.1, walk 0.25, sprint 1.0)
     'sprintMode',                // boolean: player is holding sprint (Shift key)
     '_sprintWarnedLow',          // boolean: player has been warned about low substrate
+
+    // Perception passes 5-8 (runtime only; Maps and entity references do not
+    // survive JSON: a Map comes back as {} and breaks .get)
+    '_traces',                   // Map<entity, trace>: what integration tissue holds (pass 8)
+    '_visuallyDetected',         // Map<creature, percept>: player's sightings this turn (pass 5)
+    '_perceivedAt',              // Map<tile, {creature, species}>: player's display percepts (pass 5)
+    'plume',                     // this action's airborne reading (pass 6b-2)
+    '_scentTrace',               // lost-scent memory for casting (pass 6b-2)
 ];
 
 /** Create a shallow copy with all transient per-turn fields removed. */
