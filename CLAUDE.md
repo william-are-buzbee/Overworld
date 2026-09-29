@@ -37,7 +37,10 @@ run). Two automated checks run on every pull request (`.github/workflows/check.y
 module parses, every import resolves; no dependencies) and `node tools/smoke.mjs` (boots the game headless, plays, saves,
 reloads, checks seed determinism; needs Playwright, which the job installs and which a cloud session already has at
 `/opt/node22/lib/node_modules/playwright`, passed as `PLAYWRIGHT_MODULE`). They catch breakage, not design: the real check is
-playing it. From a cloud session the page can be opened in the pre-installed Chromium (Playwright) and screenshotted; the
+playing it. For behaviour, `node tools/ecology.mjs [--seeds=1-8] [--turns=500] [--hunger=0.9] [--json=out.json]` (same
+`PLAYWRIGHT_MODULE`, minutes, not in CI) runs the world over several seeds with the player standing still and reports what the
+animals did as means ± spreads per 100 turns, and deaths by species and cause; run it before and after a change. A single seed is
+an anecdote: one change anywhere reroutes the world. From a cloud session the page can be opened in the pre-installed Chromium (Playwright) and screenshotted; the
 person's own check is the pull request's preview link (below).
 
 ## Delivering a change
