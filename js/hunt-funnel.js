@@ -224,7 +224,7 @@ function noteHuntAction(predator, action, x0, y0) {
  *  (behaviors.js performNPCAttack, monsterMelee). hit: 'air' for a lunge at a
  *  misplaced percept (the animal is not on the next tile), null when it got
  *  clear (combat.js strikeContact), else
- *  { zone, raw, armour, dealt, zoneHpBefore, zoneMaxHp, destroyed, died }. */
+ *  { why (combat.js strikeContact), zone, raw, armour, dealt, zoneHpBefore, zoneMaxHp, destroyed, died }. */
 function noteStrike(attacker, defender, hit) {
   const ep = attacker._hunts && attacker._hunts.get(defender);
   if (!ep) return;

@@ -399,6 +399,9 @@ for (const p of pairs) {
       `share of struck zone's max hp ${(hits.reduce((a, h) => a + (h.zoneMaxHp ? h.dealt / h.zoneMaxHp : 0), 0) / hits.length).toFixed(2)}; ` +
       `${hits.filter(h => h.destroyed).length} zones destroyed, ${hits.filter(h => h.vital).length} on vital zones, ${hits.filter(h => h.died).length} killing blows`);
     console.log('    zones hit: ' + top(zones, 8).map(([k, n]) => `${k} ${n}`).join(', '));
+    const whys = {};
+    for (const h of hits) if (h.why) whys[h.why] = (whys[h.why] || 0) + 1;
+    if (Object.keys(whys).length) console.log('    why it landed: ' + top(whys, 6).map(([k, n]) => `${k} ${n}`).join(', '));
   }
 }
 

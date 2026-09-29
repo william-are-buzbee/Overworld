@@ -534,7 +534,7 @@ function performNPCAttack(attacker, defender) {
   // Compute damage from physics
   const dmg = computeStrikeDamage(attacker, atkZone, usedAttack);
 
-  const contact = strikeContact(attacker, defender, atkZone);
+  const { contact, why } = strikeContact(attacker, defender, atkZone);
   if (contact !== 'hit') { noteStrike(attacker, defender, contact === 'air' ? 'air' : null); return; }
 
   // Select hit zone on defender
@@ -574,7 +574,7 @@ function performNPCAttack(attacker, defender) {
   // fight, so only the kill is logged (as before).
   const zoneHpBefore = hitZone.hp;
   const result = applyZoneDamage(defender, hitZone, finalDmg, { quiet: true, by: attacker });
-  noteStrike(attacker, defender, { zone: hitZone.key, vital: !!hitZone.vital, raw: dmg, armour: +zoneArmor.toFixed(1),
+  noteStrike(attacker, defender, { why, zone: hitZone.key, vital: !!hitZone.vital, raw: dmg, armour: +zoneArmor.toFixed(1),
     dealt: finalDmg, zoneHpBefore, zoneMaxHp: hitZone.maxHp, destroyed: result.destroyed, died: result.died });
   if (result.died) {
     log(`The ${attacker.name} kills the ${defender.name}.`, LOG_CATEGORIES.COMBAT);
@@ -867,7 +867,7 @@ function monsterMelee(mon){
     usedAttack = availableAttacks[randi(availableAttacks.length)];
     attackingZone = monBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
-  const contact = strikeContact(mon, player, attackingZone);
+  const { contact, why } = strikeContact(mon, player, attackingZone);
   if (contact !== 'hit'){
     const what = usedAttack ? usedAttack.name.toLowerCase() : 'strike';
     log(contact === 'air' ? `${mon.name} strikes where you are not.` : `You get clear of ${mon.name}'s ${what}.`,
@@ -940,7 +940,7 @@ function monsterMelee(mon){
       applyZoneDamage(player, zone, zoneDmg, { by: mon });
     }
   }
-  noteStrike(mon, player, { zone: contactedZones.map(z => z.key).join('+'), vital: contactedZones.some(z => z.vital),
+  noteStrike(mon, player, { why, zone: contactedZones.map(z => z.key).join('+'), vital: contactedZones.some(z => z.vital),
     raw: dmg, armour: null, dealt: dmg, zoneHpBefore: null, zoneMaxHp: null,
     destroyed: contactedZones.some(z => z.destroyed), died: player.hp <= 0 });
 

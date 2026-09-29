@@ -59,24 +59,26 @@ function evasionRate(defender){
   return getBodyPTW(defender, 1.0) / Math.cbrt(getEntityTotalMass(defender));
 }
 
-/** 'hit', 'air' (aimed where the target is not) or 'clear' (it got clear).
+/** { contact: 'hit' | 'air' (aimed where the target is not) | 'clear' (it got
+ *  clear), why } — why it landed or not, for the harness (hunt-funnel.js).
  *  The caller has already checked that the target is on a neighbouring tile. */
 function strikeContact(attacker, defender, atkZone){
   if (!attacker.isPlayer){
     const aim = perceivedPosition(attacker, defender);
-    if (!aim || aim.x !== defender.x || aim.y !== defender.y) return 'air';
+    if (!aim || aim.x !== defender.x || aim.y !== defender.y) return { contact: 'air', why: 'misplaced percept' };
   }
-  if (defender.immobilized) return 'hit';
+  if (defender.immobilized) return { contact: 'hit', why: 'immobilized' };
   const sensed = canDetect(defender, attacker);
-  if (!sensed || !sensed.detected) return 'hit';
+  if (!sensed || !sensed.detected) return { contact: 'hit', why: 'unsensed' };
   let room = false;
   for (const d of DIRECTION_DELTAS){
     if (canMoveTo(defender, defender.x + d.x, defender.y + d.y)) { room = true; break; }
   }
-  if (!room) return 'hit';
-  if (evasionRate(defender) <= strikeRate(attacker, atkZone)) return 'hit';
+  if (!room) return { contact: 'hit', why: 'no room' };
+  const ev = evasionRate(defender), st = strikeRate(attacker, atkZone);
+  if (ev <= st) return { contact: 'hit', why: 'too slow' };
   spendBurst(defender);
-  return 'clear';
+  return { contact: 'clear', why: 'got clear' };
 }
 
 // Strike verb from the attack that lands (mirrors monsterMelee's table).
@@ -106,7 +108,7 @@ function playerAttack(mon){
     attackingZone = playerBodyMap.find(z => z.key === usedAttack.sourceZone);
   }
 
-  if (strikeContact(player, mon, attackingZone) !== 'hit'){
+  if (strikeContact(player, mon, attackingZone).contact !== 'hit'){
     log(`${mon.name} gets clear of your ${usedAttack ? usedAttack.name.toLowerCase() : 'strike'}.`, LOG_CATEGORIES.COMBAT);
     mon.wasAttacked = true;
     mon.alerted = true;
