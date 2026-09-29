@@ -568,7 +568,7 @@ function performNPCAttack(attacker, defender) {
 
   // Same resolver as every other strike. Quiet: the player is not in this
   // fight, so only the kill is logged (as before).
-  const result = applyZoneDamage(defender, hitZone, finalDmg, { quiet: true });
+  const result = applyZoneDamage(defender, hitZone, finalDmg, { quiet: true, by: attacker });
   if (result.died) {
     log(`The ${attacker.name} kills the ${defender.name}.`, LOG_CATEGORIES.COMBAT);
     // Drop a corpse for the predator (or others) to eat
@@ -925,7 +925,7 @@ function monsterMelee(mon){
       const zoneArmor = (zone.structural || 0) * ARMOR_PER_STRUCTURAL_KG;
       zoneDmg = Math.max(1, zoneDmg - zoneArmor);
 
-      applyZoneDamage(player, zone, zoneDmg);
+      applyZoneDamage(player, zone, zoneDmg, { by: mon });
     }
   }
 
