@@ -178,11 +178,12 @@ Perception as inference from received signal, not truth with error bars. Decisio
 
 ## Up Next — Nervous systems from structure types (Sep 2026)
 The ecology is left unbalanced while the systems are built; the harness checks for regressions and for systems not doing what their doc says, not for kill counts. See Neural-Architecture-Design.
-- [ ] 1. Neural-Architecture-Design: structure types, integration's functions, the wolf's draft wiring (settle with the person)
-- [ ] 2. Generic structure runner; the hare ported onto it with no behaviour change
+- [ ] 1. Neural-Architecture-Design: the node, circuit recipes, memory as writers and stores, the wolf's draft wiring (settle with the person)
+- [ ] 2. Node runner; the hare ported onto it with no behaviour change
 - [ ] 3. The wolf wired on the runner; its reactive rules retired
-- [ ] 4. Prediction in the wolf's workspace (intercept)
-- [ ] 5. Later: memory index and learned templates, the other creatures, endocrine drives, the player's generators on a hotbar
+- [ ] 4. The wolf's map: holding and prediction (intercept)
+- [ ] 5. Memory writers and stores, saved with the body; learned routes replace the detour placeholder
+- [ ] 6. Later: the other creatures, glands replacing `creature.drives`, the player's generators on a hotbar
 
 ## Near-Term Plans (no particular order)
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
