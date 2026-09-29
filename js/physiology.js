@@ -184,6 +184,19 @@ function _depleteLocomotionSubstrate(creature) {
   }
 }
 
+/** A burst of full-intensity locomotion that goes nowhere (getting clear of
+ *  a strike, combat.js strikeContact): one sprint action's fast-twitch fuel
+ *  from every locomotion zone. */
+function spendBurst(entity) {
+  const bodyMap = getBodyMap(entity);
+  if (!bodyMap) return;
+  for (const zone of bodyMap) {
+    if (zone.destroyed || !zone.locomotion || zone.fiberRatio == null) continue;
+    const cost = zone.muscle * zone.fiberRatio * (1 - FAST_TWITCH_RECRUIT_THRESHOLD) * SUBSTRATE_DEPLETION_HIGH;
+    zone.substrate = Math.max(0, (zone.substrate || 0) - cost);
+  }
+}
+
 /**
  * Regenerate substrate on all zones that are at low activity.
  * Regen rate is proportional to the zone's slow-contracting mass
@@ -575,7 +588,7 @@ function applyZoneDamage(entity, hitZone, dmg, opts = {}) {
 
 // ==================== EXPORTS ====================
 export { getBodyPTW, applyZoneDamage, getMovementIntensity, _getCirculatoryEfficiency, _getCirculatoryRegenEfficiency,
-         _depleteLocomotionSubstrate, _regenerateSubstrate,
+         _depleteLocomotionSubstrate, _regenerateSubstrate, spendBurst,
          processBleed, getHealingRate, applyHealing,
          _releaseStressChemistry, _clearStressChemistry,
          turnsToFullSpeed, getEntityTotalMass, applyTurningCost };

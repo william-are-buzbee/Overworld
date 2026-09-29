@@ -389,7 +389,7 @@ for (const p of pairs) {
   const air = list.reduce((a, e) => a + (e.airStrikes || 0), 0);
   const hits = list.flatMap(e => e.hits);
   if (atk || air) {
-    console.log(`    strikes: ${atk} thrown, ${miss} missed (rollHit), ${air} at air (misplaced percept), ${hits.length} hit`);
+    console.log(`    strikes: ${atk} thrown, ${miss} got clear of, ${air} at air (misplaced percept), ${hits.length} hit`);
   }
   if (hits.length) {
     const m = (f) => (hits.reduce((a, h) => a + (f(h) || 0), 0) / hits.length).toFixed(1);

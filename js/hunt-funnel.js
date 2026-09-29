@@ -9,7 +9,7 @@
 //   3 pursued    an action aimed at it (approach, chase, strike)
 //   4 adjacent   the two bodies on neighbouring tiles
 //   5 attacked   a strike thrown at it
-//   6 hit        the strike connects (rollHit)
+//   6 hit        the strike connects (combat.js strikeContact)
 //   7 killed     it dies with this predator the last to have struck it
 //
 // An episode closes when the predator neither perceives the animal nor holds
@@ -100,7 +100,7 @@ function _close(predator, ep, end) {
 /** Why an episode whose animal has dropped out of mind ended. */
 function _lostReason(ep) {
   if (ep.hits.length) return 'hit, then lost';
-  if (ep.attacks) return 'missed, then lost';
+  if (ep.attacks) return 'got clear, then lost';
   if (ep.pursuingLast) {
     if (ep.preyFledBeforeContact) {
       return ep.preyFleeSpeedMax > ep.predSpeedMax ? 'lost: prey fled first, faster' : 'lost: prey fled first, not faster';
@@ -222,7 +222,8 @@ function noteHuntAction(predator, action, x0, y0) {
 
 /** A strike thrown by a predator at an animal it has an episode on
  *  (behaviors.js performNPCAttack, monsterMelee). hit: 'air' for a lunge at a
- *  misplaced percept (the animal is not on the next tile), null for a miss, else
+ *  misplaced percept (the animal is not on the next tile), null when it got
+ *  clear (combat.js strikeContact), else
  *  { zone, raw, armour, dealt, zoneHpBefore, zoneMaxHp, destroyed, died }. */
 function noteStrike(attacker, defender, hit) {
   const ep = attacker._hunts && attacker._hunts.get(defender);

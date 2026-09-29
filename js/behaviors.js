@@ -16,7 +16,7 @@ import { rand, randi } from './rng.js';
 import { DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { chebyshev } from './world-state.js';
 import { log, LOG_CATEGORIES } from './log.js';
-import { rollHit } from './combat.js';
+import { strikeContact } from './combat.js';
 import { placeItem, generateItemId } from './ground-items.js';
 import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          canMoveTo, moveInDirection, isNearWater, findNearestWaterTile,
@@ -534,7 +534,8 @@ function performNPCAttack(attacker, defender) {
   // Compute damage from physics
   const dmg = computeStrikeDamage(attacker, atkZone, usedAttack);
 
-  if (!rollHit(attacker, defender)) { noteStrike(attacker, defender, null); return; } // miss
+  const contact = strikeContact(attacker, defender, atkZone);
+  if (contact !== 'hit') { noteStrike(attacker, defender, contact === 'air' ? 'air' : null); return; }
 
   // Select hit zone on defender
   const defBodyMap = getBodyMap(defender);
@@ -856,12 +857,8 @@ function monsterMelee(mon){
   mon.inCombatThisTurn = true;
   player.inCombatThisTurn = true;
 
-  if (!rollHit(mon, player)){
-    log(`${mon.name} misses.`, LOG_CATEGORIES.COMBAT);
-    noteStrike(mon, player, null);
-    return;
-  }
-  // Pick the attack first so damage comes from the zone that actually strikes.
+  // Pick the attack first: whether it connects depends on the zone that
+  // strikes, and damage comes from it.
   const playerBodyMap = getBodyMap(player);
   let contactedZones = null;
   let usedAttack = null;
@@ -869,6 +866,14 @@ function monsterMelee(mon){
   if (availableAttacks.length > 0) {
     usedAttack = availableAttacks[randi(availableAttacks.length)];
     attackingZone = monBodyMap.find(z => z.key === usedAttack.sourceZone);
+  }
+  const contact = strikeContact(mon, player, attackingZone);
+  if (contact !== 'hit'){
+    const what = usedAttack ? usedAttack.name.toLowerCase() : 'strike';
+    log(contact === 'air' ? `${mon.name} strikes where you are not.` : `You get clear of ${mon.name}'s ${what}.`,
+        LOG_CATEGORIES.COMBAT);
+    noteStrike(mon, player, contact === 'air' ? 'air' : null);
+    return;
   }
 
   const dmg = Math.max(1, computeStrikeDamage(mon, attackingZone, usedAttack) + randi(3));   // zone structural mass is the armor (below)
