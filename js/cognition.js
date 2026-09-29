@@ -25,7 +25,7 @@ import { getBodyMap,
 import { getBodyPTW } from './physiology.js';
 import { chebyshev } from './world-state.js';
 import { randi } from './rng.js';
-import { dist, dirFromDelta, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
+import { DIRECTION_DELTAS, canMoveTo, dist, dirFromDelta, getCreatureMass, findNearestWaterTile, findNearestFoodTile,
          tileIsFood, getCorpseAt, directionAwayFrom, directionToward, combatCapability } from './ai-utils.js';
 import { getDominantSenseChannel, getAdjacentPrey, getSpeciesKey, perceivedPosition, perceptOf, traceOf,
          readPreyTrailStep, meatEaterUnderfoot } from './detection.js';
@@ -63,6 +63,26 @@ function getTier(integrationCapacity) {
 function _adjacentPerceived(creature, entity) {
   const pos = perceivedPosition(creature, entity);
   return !!pos && chebyshev(creature.x, creature.y, pos.x, pos.y) <= 1;
+}
+
+/**
+ * Cornered is a physical fact: no step the body can take (terrain, water,
+ * other bodies in the way) puts more distance between it and where it
+ * perceives the threat. Having no refuge to run to is not being cornered;
+ * it only means the flight has nowhere in particular to go. (Before this,
+ * Rule 3 read "no refuge" as cornered, and a wolf near its own den opened
+ * fights with any larger animal that wandered past: in the ecology harness
+ * baseline, every predator death that was not predation was one of those.)
+ */
+function _cornered(creature, threat) {
+  const tp = perceivedPosition(creature, threat);
+  if (!tp) return false;
+  const here = dist(creature.x, creature.y, tp.x, tp.y);
+  for (const d of DIRECTION_DELTAS) {
+    const tx = creature.x + d.x, ty = creature.y + d.y;
+    if (dist(tx, ty, tp.x, tp.y) > here && canMoveTo(creature, tx, ty)) return false;
+  }
+  return true;
 }
 
 /** Does movement compromise the creature's dominant sense? */
@@ -221,34 +241,31 @@ function evaluateReactiveRules(creature) {
     if (size === 'larger' || size === 'much_larger') {
       const isMovingOrPredator = det.isMoving || det.dietType === 'predator';
       if (isMovingOrPredator || size === 'much_larger') {
-        if (!cc.canFight) {
-          if (refuge.type !== 'none') {
-            return { behavior: 'flee_refuge', magnitude: 0.6, target: refuge.target, refugeType: refuge.type };
-          }
-          return { behavior: 'flee', magnitude: 0.6 };
+        // This is what it flees from (or turns on): flight steers away from
+        // the threat source, which fleeing also frees from the territory leash
+        creature.threatSource = det.entity;
+        // Fight only when it can and no step leads away
+        if (cc.canFight && _cornered(creature, det.entity)) {
+          return { behavior: 'retaliate', magnitude: 0.6, target: det.entity };
         }
-        // Can fight but has escape route
         if (refuge.type !== 'none') {
           return { behavior: 'flee_refuge', magnitude: 0.6, target: refuge.target, refugeType: refuge.type };
         }
-        // Cornered — fight
-        return { behavior: 'retaliate', magnitude: 0.6, target: det.entity };
+        return { behavior: 'flee', magnitude: 0.6 };
       }
     }
     // Ambiguous size — could be larger or smaller
     if (size === 'ambiguous') {
       if (diet === 'herbivore') {
-        // Herbivores treat ambiguity as potentially larger — flee
-        if (!cc.canFight) {
-          if (refuge.type !== 'none') {
-            return { behavior: 'flee_refuge', magnitude: 0.6, target: refuge.target, refugeType: refuge.type };
-          }
-          return { behavior: 'flee', magnitude: 0.6 };
+        // Herbivores treat ambiguity as potentially larger — flee (as above)
+        creature.threatSource = det.entity;
+        if (cc.canFight && _cornered(creature, det.entity)) {
+          return { behavior: 'retaliate', magnitude: 0.6, target: det.entity };
         }
         if (refuge.type !== 'none') {
           return { behavior: 'flee_refuge', magnitude: 0.6, target: refuge.target, refugeType: refuge.type };
         }
-        return { behavior: 'retaliate', magnitude: 0.6, target: det.entity };
+        return { behavior: 'flee', magnitude: 0.6 };
       }
       // Predators treat ambiguous as caution — orient, don't commit
       if (cc.canFight) {

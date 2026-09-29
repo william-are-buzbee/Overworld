@@ -128,6 +128,7 @@ The reactive layer asks physical questions and the body answers:
 - **relativeMagnitude** — how does this signal compare to my own body's emissions? (Determines threat/prey assessment from signal magnitude)
 - **movementCompromisesSense** — does my dominant detection channel degrade when I move? (Determines hold vs wander as default)
 - **hasRefuge** — can I enter water? Do I have a territory to return to? (Determines flee target)
+- **cornered** — does any step my body can take (terrain, water, other bodies) put more distance between me and the threat? (Determines whether a creature that can fight turns on a larger adjacent animal. Having no refuge is not being cornered; it only means the flight has no particular destination. Until Sep 2026 Rule 3 read "no refuge" as cornered, and every predator death in the ecology harness baseline that was not predation was a predator near its own home opening a fight with a larger animal wandering past.)
 - **dietResponse** — am I a predator or herbivore? (Determines whether "bigger than me" means flee or investigate)
 
 These queries produce the full behavioral repertoire:
