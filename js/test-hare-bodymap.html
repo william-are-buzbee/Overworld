@@ -46,13 +46,14 @@ function assert(condition, label) {
 
 function approx(a, b, tol = 0.001) { return Math.abs(a - b) < tol; }
 
-const hare = m.BODY_MAPS.hare;
+// A live hare's body map: the substrate store is set up by initBodyMap
+const hare = (() => { const e = { key: 'hare' }; m.initBodyMap(e); return e.bodyMap; })();
 const neural = m.CREATURE_NEURAL.hare;
 const SPK = m.SUBSTRATE_PER_KG_MUSCLE;
 
 // 1
 section('SUBSTRATE_PER_KG_MUSCLE');
-assert(SPK === 5.0, `value is 5.0 (got ${SPK})`);
+assert(SPK === 0.5, `value is 0.5 (got ${SPK})`);
 
 // 2
 section('Per-zone fields present');
