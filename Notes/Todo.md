@@ -190,11 +190,11 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [ ] Then memory: writers and stores saved with the body, one animal, then the cast
   - [x] M1. Stores (pattern, route), writers (patterns, associations, ground), `memory:` inputs; saved with the body; damage reads off the wiring
   - [x] M2. The wolf remembers: a pattern library, danger associations (food waits for the sequence writer), a route store replacing the true-ground detour
-  - [ ] M3. The cast remembers
+  - [x] M3. The cast remembers (hare fore limbs: danger and habituation; lurker sensor limbs; shaleback head)
 - [ ] Colony (chemotroph) and the purple biome are placeholders: remove in a later pass, keep the docs (the person, Sep 2026); spend no work on them
 
 ## Near-Term Plans (no particular order)
-- [ ] Habituation (Sensory-Design, gain control and adaptation): a source that stays in the senses without closing stops registering as new
+- [ ] Habituation (Sensory-Design, gain control and adaptation): a source that stays in the senses without closing stops registering as new. (The hare's familiar-and-harmless memory, memory step 3, does some of this through memory; sensory adaptation itself is still open)
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
 - [ ] Second-pass over bleed/metabolism/healing
 - [ ] Fourth-pass over cognition/ganglia (actual pattern libraries/memory)

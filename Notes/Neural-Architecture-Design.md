@@ -242,6 +242,22 @@ episodicMemory: 0.18 kg, 900 tiles).
 - Food associations are not written yet: what it ate is a corpse, not a percept, and binding the kill to the meal is a
   sequence (the sequence writer, later).
 
+**The cast remembers (memory step 3, Sep 2026).**
+
+- **The hare** (Clade B: the limb that feels remembers). Each fore limb's pattern tissue (6 g, 30 patterns) writes what it
+  feels, and, hurt, what was in contact as dangerous. The torso reads both limbs: a known danger adds to the threat
+  template; familiar and never harmful (familiarity less twice the danger) holds the threat template down by up to its
+  whole value. This is habituation, through memory: a shaleback felt and seen day after day stops freezing a hare that
+  was never hurt by one. A meat-eater's smell is an innate template and does not habituate: it shuts the
+  familiar-and-harmless node (without it, wolves stalking habituated hares took 30 in the hungry harness, from 13).
+- **The lurker.** Each sensor limb's library (50 g, 250 patterns) writes what struck it while in reach, as dangerous, and a
+  known danger stays that limb's strike. It stays in the limbs: read in the torso it would reach the threat template a
+  hop late, the template would wait for it, and the hub could then hold the lurker's retreat. Anatomy, both ways.
+- **The shaleback.** The head's library (80 g) writes what struck it, as dangerous; a known danger reads as a threat
+  whatever its size. Struck by wolves, it retreats to water from them.
+- **Prey templates** (the pursuit predator's, the lurker's) drop a known danger past 0.3: two blows from its kind.
+- **The colony** has no memory: it is a placeholder (Todo).
+
 ---
 
 ## Where the Numbers Come From
@@ -463,7 +479,7 @@ before moving on to another system.
    The reactive rules are then gone.
 
 **Then memory**, the same way: writers and stores saved with the body (the detour placeholder replaced by a learned route
-store), then one animal, then the cast. Step 1 (the mechanics) and step 2 (the wolf) are in.
+store), then one animal, then the cast. Step 1 (the mechanics), step 2 (the wolf) and step 3 (the cast) are in.
 
 The harness (`tools/ecology.mjs`) checks each step for regressions and for systems not doing what their doc says. It does
 not set targets for the ecology.
