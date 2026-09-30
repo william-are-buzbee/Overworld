@@ -5,7 +5,7 @@
 // Split from enemy-ai.js.
 
 import { state, worlds, monsters } from './state.js';
-import { getBodyMap, getNeuralArchitecture,
+import { getBodyMap,
          BASE_AP_COST, MAX_ACTIONS_PER_INPUT, REFERENCE_SPEED, BASE_TICKS_PER_ACTION,
          HEAL_BASE_RATE, HEAL_REST_MULTIPLIER,
          SUBSTRATE_DEPLETION_MOD, SUBSTRATE_DEPLETION_HIGH, SUBSTRATE_REGEN_BASE,

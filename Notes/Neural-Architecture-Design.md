@@ -7,8 +7,14 @@ parts list and the ways parts are put together.
 
 Include it alongside Design-Principles and Cognition-Design when designing or converting any creature's nervous system.
 
-**Status (Sep 2026): settled in discussion with the person.** Nothing here is implemented yet beyond the hare's
-existing `CREATURE_NEURAL` entry (`cognition.js processGanglionSystem`), which this design replaces.
+**Status (Sep 2026): settled in discussion with the person. Step 2 is in:** `nodes.js` runs a species' wiring, `wiring.js`
+holds it, and the hare runs on it (its old `CREATURE_NEURAL` structure list and the bespoke ganglion code in cognition.js are
+gone). What is built so far: nodes (step, ramp and pass firing; sum or max; gates; vetoes), mapped and pooled evaluation, a
+pooled node reading a map takes its strongest place, blood chemistry shifting thresholds (the stress receptor), hop timing
+for inhibition (worked out per species; a late veto is inert), and the output stage (locomotion, posture, orienting, feeding,
+gland). Not yet: persistence and maps (step 4), plastic weights (memory), generators built from nodes (the output stage
+stands in for them: the strongest drive reaching the locomotion generator wins). Inspect with `window.debugWiring('hare')`
+(the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
 
@@ -208,12 +214,11 @@ A number that cannot be traced to the body is written in the wiring with a comme
 
 | in the code | in this design |
 |---|---|
-| hare `fore_ganglion_*`, `graze_ganglion_*` | reflex arcs |
-| hare `threat_classification`, `food_identification`, the looming circuit | templates (and a prediction-like motion input for looming) |
+| the hare's wiring (`wiring.js`) | fore-limb bolt arcs and relays, graze-limb relays and taste, the torso threat template with looming, flee / freeze / alert, the stress gland, the head food template: nodes |
+| `nodes.js` output stage | stands in for generators built from nodes: the strongest drive reaching the locomotion generator wins |
 | `detection.js _identify` (pass 7) | a wired pattern library, not yet housed in nodes |
-| hare `central_loco` | a pattern generator with two patterns |
-| hare `integration_workspace`, traces, evidence summation, odour binding | map nodes with persistence; combining senses |
-| `canSuppress`, `canModulate` | inhibitory and modulating weights |
+| traces, evidence summation, odour binding | map nodes with persistence; combining senses (step 4) |
+| feature functions in `nodes.js` (size, identity, looming time) | percepts delivered as features; PLACEHOLDER until perception itself is nodes |
 | `evaluateReactiveRules` | placeholder: universal templates wired to generators, written as code. Retired creature by creature |
 | `canOverrideReactive`, `deliberativeEvaluation` | placeholder for timing by hops plus inhibition |
 | `getMovementIntensity` by behaviour label | placeholder: intensity should come from the generator |

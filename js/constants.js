@@ -104,8 +104,8 @@ export const AMBIENT_DIP_OUTER      = 0.08;  // alpha for terrain pixels 2px fro
 export const AMBIENT_DIP_BLOB_SCALE = 0.5;   // multiplier for blob rendering tier
 
 // ==================== GANGLION SYSTEM (Hare Vertical Slice) ====================
-// Thresholds for the ganglion-based behavior system.  Only creatures with
-// CREATURE_NEURAL data run this path; all others use evaluateReactiveRules.
+// Thresholds for the wired nervous systems (wiring.js, run by nodes.js). Only
+// creatures with a wiring run that path; all others use evaluateReactiveRules.
 // First pass — tune during playtesting.
 export const BASE_BOLT_THRESHOLD       = 4.0;   // vibration SNR required for bolt reflex at calm
 export const BASE_FLEE_THRESHOLD       = 1.5;   // total threat confidence required for flee ganglion (excitatory, overcomes freeze)
