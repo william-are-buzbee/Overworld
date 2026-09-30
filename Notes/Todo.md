@@ -182,7 +182,7 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [x] 2. Node runner; the hare ported onto it (`nodes.js`, `wiring.js`; 22 of 8,956 actions differ, all the per-source bolt veto)
 - [x] 3. Glands and hunger: `creature.hormones` {alarm, hunger, fatigue} replaces `creature.drives` and `stressLevel`; gland nodes release, receptors read
 - [x] 3b. Gland stores: a gland releases what it holds and refills by synthesis (the hare no longer ratchets alarm on its own flight)
-- [ ] 4. Maps: bearing and distance bands, holding, prediction; threat templates per distance band
+- [x] 4. Maps: bearing and distance bands, holding, prediction; the hare's threat template per distance band
 - [ ] 5. The hub: reach, inhibition, the race, plastic hub weights, its mass as the limit per action; the player drives it (hotbar from the wiring)
 - [ ] 6. The wolf wired on the system; its reactive rules retired
 - [ ] 7. The whole cast rewired; the reactive rules gone

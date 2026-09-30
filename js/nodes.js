@@ -26,9 +26,18 @@
 //                            'pass':  input if input ≥ threshold, else 0
 //   threshold, gain, ceiling, strict
 //   receptors {alarm: s}     blood chemistry shifts the threshold: × (1 − level × s)
+//   bands [g…]               mapped: how strongly each distance band of the map
+//                            (wiring.map.bands, edges in tiles) is wired in
+//   holds                    mapped: keeps its activity at the place where it was
+//                            for mass × PERSISTENCE_SCALE turns after the senses
+//                            lose it (tissue that can sustain activity)
+//   predicts                 mapped: reports its place moved along the seen
+//                            velocity by the time this body needs to get there
 //
+// The map: every percept lands on a place (a bearing and a distance band).
 // A pooled node reading a mapped one takes its strongest place (lateral
-// inhibition across the map picks one) and carries that source with it.
+// inhibition across the map picks one), held places included, and carries
+// that place with it to the output stage.
 //
 // Timing is anatomy: a signal takes one step per pathway hop between zones.
 // Inhibition acts only if it arrives no later than what it inhibits; a late
@@ -43,7 +52,8 @@
 
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE,
-         GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG } from './constants.js';
+         GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG, PERSISTENCE_SCALE } from './constants.js';
+import { state } from './state.js';
 import { getSpeciesKey, meatEaterUnderfoot } from './detection.js';
 import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom } from './ai-utils.js';
 import { getBodyPTW, releaseHormone } from './physiology.js';
@@ -171,6 +181,11 @@ function compileWiring(wiring, pathways) {
       if (!byId.has(g)) { issues.push(`${n.id}: gate ${g} is not an earlier node`); continue; }
       t = Math.max(t, arrival.get(g) + hops(byId.get(g).zone, n.zone));
     }
+    if (n.bands && !(wiring.map && wiring.map.bands)) issues.push(`${n.id}: band gains but the wiring has no map`);
+    if (n.bands && wiring.map && n.bands.length !== wiring.map.bands.length + 1)
+      issues.push(`${n.id}: ${n.bands.length} band gains for ${wiring.map.bands.length + 1} bands`);
+    if ((n.holds || n.predicts) && n.mode !== 'mapped') issues.push(`${n.id}: only a mapped node holds or predicts a place`);
+    if (n.holds && !(n.mass > 0)) issues.push(`${n.id}: holds with no tissue`);
     byId.set(n.id, n);
     arrival.set(n.id, t);
   }
@@ -259,27 +274,53 @@ function runNodes(creature, wiring) {
   const dets = creature.detectionInfo || [];
   const S = dets.length;
 
-  // value: mapped → Float64Array per source; pooled → { v, src (index|-1), place }
+  // ── The map: where each percept lands ──
+  // A bearing (one of 8, from the creature) and a distance band (the wiring's
+  // `map.bands` edges, in tiles; beyond the last edge is the far band).
+  const edges = (wiring.map && wiring.map.bands) || [];
+  const bandOf = (d) => { let b = 0; while (b < edges.length && d > edges[b]) b++; return b; };
+  const places = dets.map(d => ({ x: d.x, y: d.y, entity: d.entity, velocity: d.velocity || null,
+    distance: d.distance, band: bandOf(d.distance),
+    bearing: (d.x !== creature.x || d.y !== creature.y) ? directionToward(creature.x, creature.y, d.x, d.y) : null }));
+  const turn = state.turnCount;
+  const stamp = creature._actionStamp = (creature._actionStamp || 0) + 1;   // this action
+  // How far a node that predicts leads a moving place: the world ticks this
+  // body needs to get there at a sprint, plus how long ago it was perceived
+  const ownSpeed = getBodyPTW(creature, 1.0) / (REFERENCE_SPEED * BASE_TICKS_PER_ACTION);
+  const reported = (n, pl, age) => {
+    if (!n.predicts || !pl.velocity) return pl;
+    const lead = (ownSpeed > 0 ? pl.distance / ownSpeed : 0) + (age || 0) * BASE_TICKS_PER_ACTION;
+    return { ...pl, x: Math.round(pl.x + pl.velocity.vx * lead), y: Math.round(pl.y + pl.velocity.vy * lead), predicted: true };
+  };
+
+  // value: mapped → Float64Array per percept; pooled → { v, place }
   const val = new Map();
+  const heldNow = new Map();   // node id → held places not perceived this action
   const pooledRead = (id) => {
     const x = val.get(id);
-    if (!x) return { v: 0, src: -1, place: null };
+    if (!x) return { v: 0, place: null };
     if (x instanceof Float64Array) {          // strongest place on the map
-      let best = 0, src = -1;
-      for (let i = 0; i < x.length; i++) if (x[i] > best) { best = x[i]; src = i; }
-      return { v: best, src, place: null };
+      const n = c.byId.get(id);
+      let best = 0, place = null;
+      for (let i = 0; i < x.length; i++) if (x[i] > best) { best = x[i]; place = reported(n, places[i], 0); }
+      for (const h of heldNow.get(id) || []) if (h.v > best) { best = h.v; place = reported(n, { ...h, held: true }, turn - h.turn); }
+      return { v: best, place };
     }
     return x;
   };
-  // A node's value as seen by a mapped node evaluating source i: its value on
-  // that source if it is mapped too, its one value if pooled
+  // A node's value as seen by a mapped node evaluating percept i: its value on
+  // that percept if it is mapped too, its one value if pooled
   const at = (id, i) => {
     const x = val.get(id);
     return x instanceof Float64Array ? x[i] : (x ? x.v : 0);
   };
 
   for (const n of wiring.nodes) {
-    if (!alive(n.zone)) { val.set(n.id, n.mode === 'mapped' ? new Float64Array(S) : { v: 0, src: -1, place: null }); continue; }
+    if (!alive(n.zone)) {
+      val.set(n.id, n.mode === 'mapped' ? new Float64Array(S) : { v: 0, place: null });
+      if (creature._held) delete creature._held[n.id];   // the tissue holding it is gone
+      continue;
+    }
     const t = _threshold(n, creature);
     const vetoes = c.liveVetoes.get(n.id) || [];
     if (n.mode === 'mapped') {
@@ -303,21 +344,24 @@ function runNodes(creature, wiring) {
         const vetoed = vetoes.some(v => at(v, i) > 0);
         let y = vetoed ? 0 : _fire(n, x, t);
         for (const g of n.gate || []) y = y === 0 ? 0 : y * at(g, i);
+        // How strongly each distance band of the map is wired in
+        if (n.bands && y > 0) y *= n.bands[Math.min(places[i].band, n.bands.length - 1)];
         out[i] = y;
       }
       val.set(n.id, out);
+      if (n.holds) _hold(creature, n, out, places, turn, stamp, heldNow);
     } else {
       let x = n.combine === 'max' ? -Infinity : 0, any = false;
-      let src = -1, place = null, srcWeight = -Infinity;
+      let place = null, placeWeight = -Infinity;
       for (const inp of n.inputs || []) {
         const r = _parseRef(inp.from);
-        let v = 0, s = -1, p = null;
+        let v = 0, p = null;
         if (r.kind === 'feature') {
           const f = POOLED_FEATURES[r.name];
           const got = f ? f(creature, r.arg) : 0;
           if (got && typeof got === 'object') { v = got.value; p = got.place || null; } else v = got || 0;
         } else if (r.kind === 'node') {
-          const pr = pooledRead(r.name); v = pr.v; s = pr.src; p = pr.place;
+          const pr = pooledRead(r.name); v = pr.v; p = pr.place;
         } else if (r.kind === 'blood') {
           v = _blood(creature, r.name);
         }
@@ -326,13 +370,13 @@ function runNodes(creature, wiring) {
         if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
         any = true;
         // The place this node is about: that of its largest input carrying one
-        if ((s >= 0 || p) && wv > srcWeight) { srcWeight = wv; src = s; place = p; }
+        if (p && wv > placeWeight) { placeWeight = wv; place = p; }
       }
       if (!any) x = 0;
       const vetoed = vetoes.some(v => pooledRead(v).v > 0);
       let v = vetoed ? 0 : _fire(n, x, t);
       for (const g of n.gate || []) v = v === 0 ? 0 : v * pooledRead(g).v;
-      val.set(n.id, { v, src: v > 0 ? src : -1, place: v > 0 ? place : null });
+      val.set(n.id, { v, place: v > 0 ? place : null });
     }
   }
 
@@ -340,15 +384,17 @@ function runNodes(creature, wiring) {
   const trace = [];
   for (const n of wiring.nodes) {
     const pr = pooledRead(n.id);
+    const e = pr.place && pr.place.entity;
     if (pr.v > 0) trace.push({ id: n.id, zone: n.zone, value: pr.v,
-      about: pr.src >= 0 && dets[pr.src].entity ? (dets[pr.src].entity.isPlayer ? 'player' : dets[pr.src].entity.key) : null });
+      about: e ? (e.isPlayer ? 'player' : e.key) : null,
+      held: pr.place && pr.place.held ? true : undefined });
   }
   creature._nodeTrace = trace;
 
   // ── Output stage ──
   const firing = (id) => pooledRead(id);
   const outVetoed = (out) => (c.outVetoes.get(out) || []).some(v => firing(v).v > 0);
-  const where = (pr) => pr.src >= 0 ? { x: dets[pr.src].x, y: dets[pr.src].y, entity: dets[pr.src].entity } : pr.place;
+  const where = (pr) => pr.place;
   const bearing = (out, pr) => {
     const p = where(pr);
     if (!p) return null;
@@ -395,6 +441,33 @@ function runNodes(creature, wiring) {
     }
   }
   return { intensity: 0, direction: null, type: 'hold' };
+}
+
+/**
+ * Holding: a node whose tissue can sustain activity keeps it at the place
+ * where it was, for its mass × PERSISTENCE_SCALE turns (the rule traces use:
+ * integration tissue holds ~30 turns per kg). What the senses deliver now
+ * overwrites it: a source perceived again moves its activity to where it is
+ * now, and one perceived where the node does not fire is let go. Held places
+ * not perceived this action are added to the map for this action (heldNow).
+ * Stored on the creature (`_held`, transient: a reload is a fresh mind).
+ */
+function _hold(creature, n, out, places, turn, stamp, heldNow) {
+  const holdTurns = (n.mass || 0) * PERSISTENCE_SCALE;
+  const all = creature._held || (creature._held = {});
+  const held = all[n.id] || (all[n.id] = []);
+  const perceived = new Set();
+  for (let i = 0; i < places.length; i++) {
+    const e = places[i].entity;
+    if (e) perceived.add(e);
+  }
+  const kept = held.filter(h => !(h.entity && perceived.has(h.entity)) && turn - h.turn <= holdTurns &&
+                                !(h.entity && h.entity.hp <= 0));
+  for (let i = 0; i < places.length; i++) {
+    if (out[i] > 0) kept.push({ ...places[i], v: out[i], turn, stamp });
+  }
+  all[n.id] = kept;
+  heldNow.set(n.id, kept.filter(h => h.stamp < stamp));
 }
 
 /** What a gland node can hold: its tissue × GLAND_STORE_PER_KG. */

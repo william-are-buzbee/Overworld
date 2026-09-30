@@ -12,8 +12,12 @@ holds it, and the hare runs on it (its old `CREATURE_NEURAL` structure list and 
 gone). What is built so far: nodes (step, ramp and pass firing; sum or max; gates; vetoes), mapped and pooled evaluation, a
 pooled node reading a map takes its strongest place, blood chemistry shifting thresholds (the stress receptor), hop timing
 for inhibition (worked out per species; a late veto is inert), and the output stage (locomotion, posture, orienting, feeding,
-gland). Not yet: persistence and maps (step 4), plastic weights (memory), generators built from nodes (the output stage
-stands in for them: the strongest drive reaching the locomotion generator wins). **Step 3 is in:** blood chemistry
+gland). Not yet: plastic weights (memory), generators built from nodes (the output stage stands in for them: the
+strongest drive reaching the locomotion generator wins). **Step 4 is in:** the map (every percept lands on a bearing and a
+distance band, `wiring.map.bands`), per-band gains on a mapped node (`bands`), holding (`holds`: activity kept at the place
+where it was for mass × PERSISTENCE_SCALE turns, the traces' rule; `creature._held`, transient) and prediction (`predicts`:
+the place moved along the velocity the eyes resolve, by the ticks this body needs to get there). The hare's threat template
+is wired in by band; nothing in the hare holds or predicts, having no tissue for it. **Step 3 is in:** blood chemistry
 (`creature.hormones`), gland nodes that release into it, from a store their tissue holds and refills (`creature.glandStores`),
 `blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
@@ -219,7 +223,7 @@ A number that cannot be traced to the body is written in the wiring with a comme
 | the hare's wiring (`wiring.js`) | fore-limb bolt arcs and relays, graze-limb relays and taste, the torso threat template with looming, flee / freeze / alert, the stress gland, the head food template: nodes |
 | `nodes.js` output stage | stands in for generators built from nodes: the strongest drive reaching the locomotion generator wins |
 | `detection.js _identify` (pass 7) | a wired pattern library, not yet housed in nodes |
-| traces, evidence summation, odour binding | map nodes with persistence; combining senses (step 4) |
+| traces (`detection.js`), evidence summation, odour binding | still how creatures on the reactive rules hold and combine; a wired creature holds with `holds` nodes on its map (step 4). Evidence summation and odour binding stay in perception until perception is nodes |
 | feature functions in `nodes.js` (size, identity, looming time) | percepts delivered as features; PLACEHOLDER until perception itself is nodes |
 | `evaluateReactiveRules` | placeholder: universal templates wired to generators, written as code. Retired creature by creature |
 | `canOverrideReactive`, `deliberativeEvaluation` | placeholder for timing by hops plus inhibition |
@@ -338,6 +342,8 @@ not set targets for the ecology.
 ## Open Questions
 
 - Which nodes are hub nodes: every node in integration tissue, or the wiring names them?
+- Band gains are written by hand (the hare's fall off as an image does, about 3 / distance beyond 4 tiles). Should they come
+  from the eyes' resolution instead, once perception is nodes?
 - Does the player see why a reflex won (the log line), or only feel it?
 
 ## What NOT to Change

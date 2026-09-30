@@ -25,6 +25,9 @@ const CHANNEL = 1 / (CONFIDENCE_NORMALIZATION * 2);      // SNR → template evi
 // the locomotion generator and the alarm gland. Head: eyes, and the food
 // template. No integration tissue: nothing here holds anything past the action.
 const HARE = {
+  // The map: 8 bearings × 4 distance bands (touching, near, mid, far; edges
+  // in tiles). Nothing in the hare holds a place: it has no tissue for it.
+  map: { bands: [1.5, 4, 8] },
   nodes: [
     // Fore-limb ganglia: pass on their limb's footfall signal, and fire the
     // bolt arc when it spikes past threshold
@@ -83,7 +86,10 @@ const HARE = {
       gate: ['heavy'], fn: 'ramp' },
     { id: 'meat_eater', zone: 'torso', mass: 0.0005, mode: 'mapped',
       inputs: [{ from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3, strict: true, gain: 0.3 },
-    { id: 'threat', zone: 'torso', mass: 0.002, mode: 'mapped',
+    // Wired in per distance band as a body's image falls off with distance:
+    // full out to pouncing range, then about 3 / distance (band middles 6 and
+    // 12 tiles). A shaleback grazing far off reads as little; one near as much.
+    { id: 'threat', zone: 'torso', mass: 0.002, mode: 'mapped', bands: [1, 1, 0.5, 0.25],
       inputs: [{ from: 'node:heavy_evidence' },
                { from: 'feature:sizeMuchLarger', weight: THREAT_CONF_SIZE_MUCH_LARGER },
                { from: 'feature:sizeLarger', weight: THREAT_CONF_SIZE_LARGER },
