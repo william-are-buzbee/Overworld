@@ -10,7 +10,7 @@ Reference document for creature design, biome logic, and world-building. These a
 
 **Intensity:** ~60-70% of Earth. The world feels like perpetual late afternoon — warm-toned, dim, soft shadows. Not dark, but no harsh midday glare. Night is genuinely dark due to low ambient light.
 
-**Spectrum:** Yellow-orange peak (slightly cooler than Sol). Photosynthetic organisms evolve pigments that absorb blue, green, and violet, reflecting reds and deep browns. The raw photosynthetic pigment is deep red-violet; under the amber starlight, this shifts to the deep crimson and dark red-brown the player sees. Trunks are not photosynthetic — they're mineral-impregnated structural material tinted by local chemistry (iron-red, copper-green, manganese-dark). Chemotrophic organisms (which don't photosynthesize) may actually be *lighter* in color than photosynthetic ones — their pigmentation comes from mineral chemistry, not light absorption. See the Color Interpretation Guide section for the three-layer color model (material × starlight × creature perception) and specific hex values.
+**Spectrum:** Yellow-orange peak (slightly cooler than Sol). Photosynthetic organisms evolve pigments that absorb blue, green, and violet, reflecting reds and deep browns. The photosynthetic pigment reflects red and a little violet: deep crimson-maroon. Trunks are not photosynthetic — they're mineral-impregnated structural material tinted by local chemistry (iron-red, copper-green, manganese-dark). Chemotrophic organisms (which don't photosynthesize) may actually be *lighter* in color than photosynthetic ones — their pigmentation comes from mineral chemistry, not light absorption. Every colour is computed spectrally — what a surface is made of, the light on it, the eye looking — see Spectral-Color-Design.md.
 
 **Consistency:** Very steady. The star barely fluctuates. No boom-bust energy cycles. Evolution favors efficiency over resilience: slow metabolisms, long lifespans, complex symbioses, minimal waste. Sudden disruptions (like the demigod's wipes) are catastrophic precisely because nothing evolved to handle them.
 
@@ -169,18 +169,9 @@ Descended from photosynthetic microbial mats. Scaled up into large sessile organ
 
 **Color — the photosynthetic anchor.**
 
-The color of living photosynthetic tissue is the visual anchor of this world. Understanding it requires separating three layers:
+The color of living photosynthetic tissue is the visual anchor of this world. The photosynthetic pigments absorb blue, green, and violet aggressively under any light. The tissue itself is deep red-violet: under white light a frond looks deep crimson-maroon. There is no green anywhere in the photosynthetic flora. The trunks are separate — built from mineral-impregnated structural material (dense, ceramic-like, not woody), colored by whatever minerals are locally incorporated: iron-red, copper-green, manganese-dark. Trunk color varies by region; frond/mat color does not.
 
-1. **Material color (color in a vacuum):** The photosynthetic pigments absorb blue, green, and violet aggressively under any light. The material itself — the actual tissue — is deep red-violet. This is the base pigment. In neutral white light, a frond would look deep crimson-maroon. There is no green anywhere in the photosynthetic flora. The trunks are separate — built from mineral-impregnated structural material (dense, ceramic-like, not woody), colored by whatever minerals are locally incorporated: iron-red, copper-green, manganese-dark. Trunk color varies by region; frond/mat color does not.
-
-2. **Environmental modification (what light does to it):** The yellow-orange star warms and dims everything. The deep red-violet pigment, lit by amber starlight, shifts darker and browner. Under full open-sky illumination, living photosynthetic surface appears deep red-brown — still visibly red, but warmer and darker than the raw pigment. Under forest canopy shade (low ceiling, 3-8m), the same material darkens further to near-black. The amount of light reaching the surface is the primary driver of apparent brightness. A frond catching open sky looks deep crimson. The same frond under canopy shadow looks almost black.
-
-3. **Perceptual interpretation (what the animal sees):** The creatures on this planet evolved under this dim star. Their visual transducers compensate by amplifying the signal — brightening the visual field to extract usable contrast from a dark world. What the player sees on screen is this post-perceptual version: the creature's visual system has brightened a near-black world into something navigable. The raw reflected light is much darker than what's rendered. The warm brown tones of the ground, the visible crimson of the trees — these are the creature's interpretation, not the "true" color of the surface under raw starlight.
-
-**In-game reference colors (what the player's creature perceives):**
-- Living photosynthetic surface (fronds, tree canopy): deep crimson-red. Game hex: forest fg `#6a2c24`.
-- Forest floor under canopy: near-black with red undertone. Game hex: forest bg `#2e160e`.
-- Open-ground photosynthetic mats (grassland): warm red-brown, noticeably lighter than forest floor. Game hex: plains fg `#7a4c38` on bg `#342818`.
+What an animal sees of it depends on the light and on its eyes (Spectral-Color-Design.md). Two physical consequences matter here. Eyes evolved under this star adapt to it, so to a native the amber starlight is white and the crimson looks crimson; the star's warmth shows only in changing light (a low star, a shadow). And a crimson canopy transmits red: the forest floor is dim and red-lit, not just darker.
 
 **Ground cover** is mat-forming: low, continuous photosynthetic surfaces carpeting the ground. Not individual grass blades — continuous mats, like moss scaled up. But the ground is NOT uniform red, and it is NOT the same color as the living canopy above it. The ground surface is a mix of:
 
@@ -283,7 +274,7 @@ Consequences:
 
 ## Summary — What the Player Sees
 
-**Important: what the player "sees" is three layers deep.** The raw material colors of this world are very dark — the dim star produces a near-black landscape in absolute terms. The player never sees raw color. They see the creature's perceptual interpretation: a visual system evolved under this star, brightening and contrast-enhancing a dark world into something navigable. The warm brown grounds, the visible crimson trees, the amber-gold water highlights — these are post-perceptual. The "true" world in raw reflected light is much darker than what's on screen.
+**What the player sees is the world through their creature's eyes.** A surface's colour is its reflectance spectrum; the light on it and the eye looking at it decide what is seen (Spectral-Color-Design.md). At ~65% of Earth's light, noon is broad daylight to any eye, and eyes adapted to the star see its light as white; dusk, night and the forest floor are where photons run short and colour goes first.
 
 A dim, amber-lit world of islands and shallow seas. Soft light, mild temperatures, damp air. Three independent lineages of life — microbial-descended flora (the producers) and two unrelated animal clades (the consumers) — overlap everywhere.
 
@@ -301,9 +292,9 @@ Ice and cold are alien on this planet. Creatures adapted to frozen environments 
 
 | Decision | Constrained by |
 |---|---|
-| Biome color palettes | Star spectrum (yellow-orange) + crustal chemistry (mixed metallic) + flora pigmentation + three-layer color model (see Color Interpretation Guide) |
+| Biome color palettes | Star spectrum (yellow-orange) + crustal chemistry (mixed metallic) + flora pigmentation + the viewing eye (Spectral-Color-Design) |
 | Flora form factor | Dim diffuse light (broad/low, not tall) + no insect pollinators (spore-based, no flowers) |
-| Flora color | Star spectrum (photosynthetic pigment = deep red-violet in vacuum, shifted darker/browner by amber starlight, brightened by creature perception) + mineral substrate (chemotrophic flora = mineral-tinted). Three-layer model: material × starlight × perception. |
+| Flora color | Star spectrum (the photosynthetic pigment absorbs where the star gives the most photons, reflecting red) + mineral substrate (chemotrophic flora = mineral-tinted). Computed spectrally: material × light × eye (Spectral-Color-Design). |
 | Biome identity and placement | Which flora type dominates, determined by local mineral chemistry and light availability |
 | Creature body plans | Two ancestral animal clades + Cambrian-level divergence + archipelago isolation |
 | Creature materials (armor, shells) | Water mineral concentration (moderate) + pH (neutral, both calcium and metallic biology) |
@@ -326,48 +317,14 @@ Ice and cold are alien on this planet. Creatures adapted to frozen environments 
 
 ## Color Interpretation Guide
 
-**The three-layer model — apply this to all visual design decisions:**
+Colour is spectral: a surface's reflectance (from what it is made of) × the light reaching it (star, atmosphere, canopy, shadow, water) × one eye's receptor classes. Only the last step, drawing the player's eye on a screen, is a convention. The design, the materials, the proposed eyes and what they can and cannot tell apart are in Spectral-Color-Design.md; the code is `js/spectra.js`. It replaced the three-layer RGB model (30 Sep 2026).
 
-```
-What the player sees = material color × environmental modification × perceptual interpretation
-```
+The game's current hand-set palettes (`ecology-data.js`) and creature tints (`monsters.js`) stay until the renderer draws from `spectra.js`.
 
-**Layer 1 — Material color (color in a vacuum):** The actual pigment or surface chemistry of the object. Photosynthetic tissue is deep red-violet. Mineral-impregnated trunk material varies by local chemistry. Dead organic material is amber-brown. Soil is mineral-tinted. This is the "true" color under neutral white light.
-
-**Layer 2 — Environmental modification:** The yellow-orange star shifts everything warmer and darker. Shade from canopy darkens further. Moisture changes reflectance (wet surfaces are darker and slightly more reflective). Atmospheric haze at distance washes out contrast. This is physics acting on the material.
-
-**Layer 3 — Perceptual interpretation:** The creature's visual transducers evolved under this star. They compensate for the dim light by amplifying signal — brightening the visual field. What's rendered on screen is this post-perceptual version. The raw world is much darker. The creature sees a brighter, more contrast-enhanced version of reality.
-
-**Current game hex colors (layer 3 — what the creature perceives, what's on screen):**
-
-Terrain palettes (each has bg = base fill, fg = foreground detail, mid = midtone detail):
-```
-Plains/grassland:   bg #342818   fg #7a4c38   mid #583a28    (warm brown with red-brown accent)
-Forest:             bg #2e160e   fg #6a2c24   mid #4a2018    (near-black floor, deep crimson features)
-Mud:                bg #2c2010   fg #7a5c28   mid #54401c    (dark to warm amber-brown)
-Dirt:               bg #362a14   fg #7e6840   mid #5e482c    (warm brown-gold)
-Rock:               bg #3a3228   fg #a89a84   mid #786c58    (dark gray-brown with light warm gray detail)
-Beach:              bg #403628   fg #a89474   mid #786a50    (medium brown with light tan detail)
-Water:              bg #302a1c   fg #b09868   mid #6e5c3c    (dark with amber-gold wave marks — brackish, mineral-rich)
-Deep water:         bg #221c14   fg #786a50   mid #443a28    (very dark with muted amber)
-Mushroom/fungal:    bg #241c30   fg #806898   mid #583c68    (dark purple — mineral chemistry visible)
-```
-
-Creature tint colors (species body color — also layer 3, post-perceptual):
-```
-Meso-predator:      #5a4a40    (warm medium brown — generalist, moderate match to most terrain)
-Apex predator:      #3a302a    (very dark brown, nearly black — forest specialist)
-Large herbivore:    #4a5040    (olive-greenish brown — amphibious, muddy coastal match)
-Small herbivore:    #7a8070    (light gray-green — currently too light for background matching; review when implementing visual detection)
-Ambush predator:    #5a5048    (dark warm gray-brown — close to forest floor values)
-```
-
-**Key relationships:**
-- The apex predator (`#3a302a`) is very close to the forest bg (`#2e160e`). It should be hard to see in forest. This is correct.
-- The ambush predator (`#5a5048`) is moderately close to forest floor tones. Combined with stillness and cover, it should be nearly invisible in its habitat.
-- The meso-predator (`#5a4a40`) is a generalist brown — decent but not perfect match anywhere. Visible if you're looking, easy to miss if you're not.
-- The small herbivore (`#7a8070`) is currently the lightest creature — it stands out against most terrain. This may be intentional (prey animals are visible when moving) or may need revisiting for the visual detection system.
-- Cyan blood (the planet's oxygen-carrier chemistry) against any of these backgrounds is extremely high contrast. Wounds are beacons.
+**Key relationships (physical):**
+- Cyan-blue blood (hemocyanin) against the crimson mat is many just-noticeable differences apart for every proposed eye, even at dusk. Wounds are beacons.
+- Brown detritus on brown iron soil is barely distinguishable to any eye: good ground for anything the colour of dead mat.
+- A two-class eye (the proposed prowler) tells the crimson mat from iron soil by brightness, hardly by colour.
 
 ---
 
@@ -378,7 +335,7 @@ When designing creatures, biomes, or environments, include this file so the chat
 - Flora is NOT descended from either animal clade — it's a separate, older lineage
 - Photosynthetic flora: dark, fern-like, broad/low canopy, spore-reproducing, no flowers
 - Chemotrophic flora: mounded colonies, bracket shelving, fruiting spires, mineral-colored
-- **Three-layer color model:** material color (pigment/chemistry in vacuum) × environmental modification (starlight, shade, moisture) × perceptual interpretation (creature's visual system brightening a dark world). What the player sees on screen is layer 3. The raw world is much darker.
+- **Spectral color:** a surface's reflectance × the light on it × one eye's receptors; the screen shows the player's eye. See Spectral-Color-Design.md.
 - The photosynthetic anchor is deep red-violet pigment. Ground is NOT uniform red — it's a mix of living mat, dead detritus, and mineral substrate producing warm brown tones with red accent. Trees/fronds are the most visibly red element.
 - Chemotrophic zones provide the strongest color contrast (purple, blue-green, ochre depending on mineral chemistry)
 - Regional mineral zones create visual variation: photosynthetic fronds are constant dark red everywhere, but trunks vary by local surface soil mineral incorporation (iron-red, copper-green, manganese-dark). Surface chemistry loosely correlates with underground chemistry near active geological features, but the relationship is not reliable.

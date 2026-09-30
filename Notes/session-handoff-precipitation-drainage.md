@@ -125,7 +125,7 @@ If the precipitation gradients are still too compressed after the first tuning p
 ### Documents to Include
 
 - **Always**: Design-Principles.md, Ecology-Foundations.md
-- **For generation tuning**: three-layer-color-system.md, drainage-chunk-generator-design.md
+- **For generation tuning**: Spectral-Color-Design.md (then three-layer-color-system.md), drainage-chunk-generator-design.md
 - **For reference**: tile-body-map-spec.md, this handoff document, Todo.md
 - **The planet viewer HTML file** (current version with Session 19 fixes applied)
 

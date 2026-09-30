@@ -24,10 +24,11 @@ shared mutable state every module imports. Each file's first lines say what it o
 | combat | combat.js, combat-constants.js |
 | the world | world-gen.js (coordination), surface-gen.js, underground-gen.js, terrain.js, ecology-data.js, gen-utils.js, world-logic.js, world-state.js, time-cycle.js |
 | player | player.js, player-actions.js, hub.js (the player plays the hub: its body runs first, the body screen), chargen.js (species selection), ground-items.js (corpses on the ground), interactions.js (the help screen) |
-| drawing and UI | rendering.js, display.js, sprites.js, sprites-32.js, texture-picker.js, modal.js, ui.js, log.js, log-ui.js, worldmap.js, debug.js; sprite-select.js and palette-compute.js are standalone (CommonJS, not yet imported by the game) |
+| colour | spectra.js: the one colour pipeline, reflectance × light × one eye's receptors → contrast or screen (`Notes/Spectral-Color-Design.md`; pure, not yet read by the game; the planet viewer is to carry a copy) |
+| drawing and UI | rendering.js, display.js, sprites.js, sprites-32.js, texture-picker.js, modal.js, ui.js, log.js, log-ui.js, worldmap.js, debug.js; sprite-select.js and palette-compute.js (superseded by spectra.js) are standalone (CommonJS, not yet imported by the game) |
 
-`Utils/planet-viewer.html` is a standalone planet tool (the Planet-Viewer repo is its own project); `js/test-hare-bodymap.html`
-is a test page.
+`Utils/planet-viewer.html` is a standalone planet tool (the Planet-Viewer repo is its own project); `Utils/spectra.html` shows every
+material through every proposed eye; `js/test-hare-bodymap.html` is a test page.
 
 ## Run and look
 
@@ -40,7 +41,9 @@ reloads, checks seed determinism; needs Playwright, which the job installs and w
 playing it. For behaviour, `node tools/ecology.mjs [--seeds=1-8] [--turns=500] [--hunger=0.9] [--json=out.json]` (same
 `PLAYWRIGHT_MODULE`, minutes, not in CI) runs the world over several seeds with the player standing still and reports what the
 animals did as means ± spreads per 100 turns, and deaths by species and cause, who killed whom and which side opened each fight, and the hunt funnel (per predator–animal
-pair: detected, viable, pursued, adjacent, attacked, hit, killed, and why each episode ended); run it before and after a change. A single seed is
+pair: detected, viable, pursued, adjacent, attacked, hit, killed, and why each episode ended); run it before and after a change.
+`node tools/spectra.mjs` (plain node, seconds) prints what `spectra.js` makes of the materials: reference colours, each eye in
+each light, contrast in JNDs; `--calibrate` refits the display's chroma scale. A single seed is
 an anecdote: one change anywhere reroutes the world. From a cloud session the page can be opened in the pre-installed Chromium (Playwright) and screenshotted; the
 person's own check is the pull request's preview link (below).
 

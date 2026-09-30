@@ -128,7 +128,7 @@ Result: four clades from two branching events.
 
 **Tissue structure:** Mineralized and slightly glossy. Grith precipitates a thin mineral layer on its upper surface as a metabolic byproduct, creating a protective crust. The active cells live beneath this mineral cap. Old grith surfaces are essentially thin layers of mineral rock with living cells underneath.
 
-**Texture:** Geological rather than biological. Fine concentric growth arcs radiating from expansion centers. Ridge lines where two spreading grith sheets have met and can't interdigitate (competitive boundaries). The three-layer color doc's chemotrophic_mat texture profile — "near-uniform mineral crust with concentric growth arcs and ridge lines" — describes grith.
+**Texture:** Geological rather than biological. Fine concentric growth arcs radiating from expansion centers. Ridge lines where two spreading grith sheets have met and can't interdigitate (competitive boundaries). Material-Textures' chemotrophic_mat texture profile — "near-uniform mineral crust with concentric growth arcs and ridge lines" — describes grith.
 
 **Growth rate:** Slow. Centimeters per year on typical substrate. Cannot outrun pela for colonizing open ground. Wins by persistence: tolerates conditions pela cannot (no light, extreme mineral concentrations, very low water on bare rock).
 
@@ -216,7 +216,7 @@ A "mixotrophic zone" in the viewer is an area where dual-energy metabolism is co
 
 **Niche:** Margins of mineral seeps, mineral-enriched stream banks — zones where pure pela would struggle because mineral concentration is toxic. Solk metabolizes the excess, turning toxic mineral load into energy source. Double energy input (light + minerals) gives competitive advantage over either specialist alone.
 
-**Color:** Crimson top surface tinted by chemotrophic byproducts leaching upward from the base layer. In manganese zones: red-purple. In copper zones: dark muted mauve. In iron zones: deep warm red (barely distinguishable from pure pela). The three-layer color doc's mixotrophic tissue colors are solk colors.
+**Color:** Crimson top surface tinted by chemotrophic byproducts leaching upward from the base layer. In manganese zones: red-purple. In copper zones: dark muted mauve. In iron zones: deep warm red (barely distinguishable from pure pela). Spectral-Color-Design's mixotroph (photosynthetic tissue mixed into a mineral colony) is solk.
 
 **Abundance:** Probably the most common mixotrophic organism because pela is the most common photosynthetic organism and the metabolic addition is simple.
 

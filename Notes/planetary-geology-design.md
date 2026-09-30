@@ -2,7 +2,7 @@
 
 Design document for the bottom-up world generation system. The planet generates the geology, the geology generates the chemistry, the chemistry generates the biology, the biology generates what the player sees. Biomes are outputs, not inputs.
 
-Include this alongside Ecology-Foundations.md, Underground-Chemotrophic-Ecology.md, and three-layer-color-system.md for any world generation, terrain, or biome work.
+Include this alongside Ecology-Foundations.md, Underground-Chemotrophic-Ecology.md, and Spectral-Color-Design.md for any world generation, terrain, or biome work.
 
 ---
 
@@ -169,7 +169,7 @@ The chemistry layer is the heart of the system. Everything visible to the player
 
 ### Mineral Channels
 
-Each cell carries concentrations for three mineral channels (matching the three-layer color system):
+Each cell carries concentrations for three mineral channels (the minerals whose chromophores colour materials, Spectral-Color-Design):
 
 ```
 cell.minerals = {
@@ -532,4 +532,4 @@ Compute carrying capacity from flora density. Replace spawn tables with populati
 
 **Regional mineral zones match the ecology doc.** The doc describes mineral zones at multiple scales: large basaltic regions (200-500+ tiles), mineral deposits (40-150 tiles), hydrothermal patches (15-40 tiles). The planetary-to-regional-to-tile resolution cascade produces exactly this: planetary cells give the large-scale chemistry, regional noise creates deposit-scale variation, and tile-level noise creates patch-scale detail.
 
-**Trunk color variation for free.** The ecology doc describes tree trunks varying by local mineral chemistry (iron-red, copper-green, manganese-dark). With this system, trunk color is a direct lookup: read the mineral chemistry at the tree's tile, select the corresponding structural_wood color from the three-layer material table. No special system needed — it falls out of the architecture.
+**Trunk color variation for free.** The ecology doc describes tree trunks varying by local mineral chemistry (iron-red, copper-green, manganese-dark). With this system, trunk color is a direct lookup: read the mineral chemistry at the tree's tile, the trunk is `mineralMaterial('wood', minerals)` (Spectral-Color-Design). No special system needed — it falls out of the architecture.

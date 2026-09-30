@@ -2,7 +2,7 @@
 
 Design document for the physical terrain generation system that bridges the planetary map to tile-level gameplay. The drainage network is the organizing skeleton of the landscape. Water flows downhill, carves channels, deposits sediment, and determines what grows where. Every tile the player walks through exists because of water.
 
-Include this alongside planetary-geology-design.md, Ecology-Foundations.md, three-layer-color-system.md, and Design-Principles.md for any terrain generation, chunk loading, or world integration work.
+Include this alongside planetary-geology-design.md, Ecology-Foundations.md, Spectral-Color-Design.md, and Design-Principles.md for any terrain generation, chunk loading, or world integration work.
 
 ---
 
@@ -525,7 +525,7 @@ In order of frequency across all land tiles:
 
 ## Step 6: Palette Selection
 
-Each tile's palette (bg color, fg color, mid color) is derived from its physical state through the three-layer color pipeline documented in three-layer-color-system.md.
+Each tile's palette (bg color, fg color, mid color) is derived from its physical state through the spectral colour pipeline documented in Spectral-Color-Design.md.
 
 The key inputs to palette selection:
 

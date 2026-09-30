@@ -128,7 +128,9 @@ dimension (cube root of mass) × motion (3.5 moving, 0.45 still) × contrast aga
 animal was seen only twice as far as a still one and a conspicuous one 2.3× as far as a matched one; now a still hare on
 grass is seen by the prowler at ~5.5 tiles (as before) and a moving one at the 40-tile ceiling, and a hare sees a moving
 prowler at ~14 instead of ~4. Note that no creature's integument hue matches any terrain hue except the ravager's in forest, so the hue-mismatch
-penalty is on almost everywhere; the hare's "grassland camouflage" is not yet a match in the tables. SNR adds a second computation for HOW MUCH INFORMATION the detection provides. Both use the same transducer quality values.
+penalty is on almost everywhere; the hare's "grassland camouflage" is not yet a match in the tables. The contrast term is
+to be replaced by `contrast()` from `js/spectra.js`: JNDs between integument and tile for that observer's eye in that light
+(Spectral-Color-Design, "Next passes" 2). SNR adds a second computation for HOW MUCH INFORMATION the detection provides. Both use the same transducer quality values.
 
 ### Signal Emission (Prompt L-A)
 Emission values are the signal source. Signal strength at the observer = emission attenuated by distance. The attenuation model (currently implicit in the range formula) determines how signal strength relates to distance for each medium. Ground vibration attenuates differently than airborne chemical.
