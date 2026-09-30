@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hare Body Map Validation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a1a; color: #ccc; font: 14px/1.6 'Consolas', 'Monaco', monospace; padding: 20px; }
+  h1 { color: #e8e8e8; font-size: 18px; margin-bottom: 12px; }
+  .section { color: #7aa2f7; margin-top: 14px; font-weight: bold; }
+  .pass { color: #9ece6a; }
+  .fail { color: #f7768e; font-weight: bold; }
+  .info { color: #e0af68; margin-left: 20px; }
+  .line { margin-left: 20px; white-space: pre; }
+  #summary { margin-top: 20px; padding: 10px; font-size: 16px; font-weight: bold; border-top: 1px solid #333; }
+  .summary-pass { color: #9ece6a; }
+  .summary-fail { color: #f7768e; }
+</style>
+</head>
+<body>
+<h1>Hare Body Map — Data Validation</h1>
+<div id="log"></div>
+<div id="summary"></div>
+<!-- the node runner imports the game's modules, one of which reads the viewport canvas at load -->
+<canvas id="viewport" hidden></canvas>
+
+<script type="module">
+import * as m from './constants.js';
+import { CREATURE_WIRING, getWiring } from './wiring.js';
+import { runNodes, refillGlands, validateWiring } from './nodes.js';
+import { state } from './state.js';
+
+const log = document.getElementById('log');
+const summaryEl = document.getElementById('summary');
+let passed = 0, failed = 0;
+
+function emit(cls, text) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = text;
+  log.appendChild(d);
+}
+
+function section(name) { emit('section', `── ${name} ──`); }
+function info(text) { emit('info', text); }
+
+function assert(condition, label) {
+  if (condition) { passed++; emit('line pass', `✓ ${label}`); }
+  else           { failed++; emit('line fail', `✗ ${label}`); }
+}
+
+function approx(a, b, tol = 0.001) { return Math.abs(a - b) < tol; }
+
+// A live hare's body map: the substrate store is set up by initBodyMap
+const hare = (() => { const e = { key: 'hare' }; m.initBodyMap(e); return e.bodyMap; })();
+const wiring = CREATURE_WIRING.hare;
+const SPK = m.SUBSTRATE_PER_KG_MUSCLE;
+
+// 1
+section('SUBSTRATE_PER_KG_MUSCLE');
+assert(SPK === 0.5, `value is 0.5 (got ${SPK})`);
+
+// 2
+section('Per-zone fields present');
+for (const z of hare) {
+  assert(typeof z.fiberRatio === 'number', `${z.key} has fiberRatio`);
+  assert(z.fiberRatio >= 0 && z.fiberRatio <= 1, `${z.key} fiberRatio in [0,1] (${z.fiberRatio})`);
+  if (z.muscle > 0) {
+    assert(typeof z.substrate === 'number', `${z.key} has substrate`);
+    assert(typeof z.substrateMax === 'number', `${z.key} has substrateMax`);
+  }
+}
+
+// 3
+section('Substrate derivation');
+for (const z of hare) {
+  if (z.muscle > 0) {
+    const expected = z.muscle * SPK;
+    assert(approx(z.substrateMax, expected), `${z.key} substrateMax = ${z.substrateMax} (expected ${expected.toFixed(2)})`);
+    assert(z.substrate === z.substrateMax, `${z.key} substrate starts full`);
+  }
+}
+
+// 4
+section('Fiber ratio values');
+const expectedFR = {
+  head: 0.15, torso: 0.40, fore_l: 0.10, fore_r: 0.10,
+  mid_graze_l: 0.15, mid_graze_r: 0.15, mid_loco_l: 0.70, mid_loco_r: 0.70,
+  rear_l: 0.80, rear_r: 0.80,
+};
+for (const z of hare) {
+  assert(z.fiberRatio === expectedFR[z.key], `${z.key} fiberRatio = ${z.fiberRatio} (expected ${expectedFR[z.key]})`);
+}
+
+// 5
+section('Locomotion power budget');
+const locoZones = hare.filter(z => z.locomotion);
+assert(locoZones.length === 4, `4 locomotion zones (got ${locoZones.length})`);
+const totalFast = locoZones.reduce((s, z) => s + z.muscle * z.fiberRatio, 0);
+const totalSlow = locoZones.reduce((s, z) => s + z.muscle * (1 - z.fiberRatio), 0);
+const totalLocoSub = locoZones.reduce((s, z) => s + z.substrate, 0);
+const powerFull = totalFast + totalSlow * 0.65;
+const powerEmpty = totalSlow * 0.65;
+const cliff = powerFull / powerEmpty;
+info(`fast-contracting loco muscle: ${totalFast.toFixed(3)} kg`);
+info(`slow-contracting loco muscle: ${totalSlow.toFixed(3)} kg`);
+info(`total loco substrate pool:    ${totalLocoSub.toFixed(2)}`);
+info(`power at full substrate:      ${powerFull.toFixed(2)} (open-circ)`);
+info(`power at empty substrate:     ${powerEmpty.toFixed(2)}`);
+info(`power cliff ratio:            ${cliff.toFixed(1)}×`);
+assert(totalFast > 1.5, `fast-contracting mass > 1.5kg (${totalFast.toFixed(3)})`);
+assert(cliff > 4.0, `power cliff > 4× (${cliff.toFixed(1)})`);
+
+// 6
+section('Sensory-zone fiber ratio sanity');
+for (const key of ['fore_l', 'fore_r']) {
+  const z = hare.find(z => z.key === key);
+  assert(z.fiberRatio <= 0.15, `${key} (primary sensor) has low fiberRatio (${z.fiberRatio})`);
+}
+
+// 7
+section('Every body carries fast-twitch fuel (Muscle-Fiber-Design, Sep 2026)');
+for (const ck of ['wolf', 'dire_wolf', 'cave_crab', 'ambush_pred']) {
+  const e = { key: ck }; m.initBodyMap(e);
+  const loco = e.bodyMap.filter(z => z.locomotion && z.muscle > 0);
+  assert(loco.length > 0 && loco.every(z => typeof z.fiberRatio === 'number' && approx(z.substrateMax, z.muscle * SPK)),
+         `${ck}: locomotion zones have fiberRatio and substrateMax = muscle × ${SPK}`);
+}
+
+// 8
+section('Wiring (wiring.js, run by nodes.js)');
+assert(wiring != null, 'CREATURE_WIRING.hare exists');
+const issues = validateWiring({ key: 'hare' }, wiring);
+assert(issues.length === 0, 'wiring fits the body, all inhibition arrives in time' + (issues.length ? ': ' + issues.join('; ') : ''));
+const node = {}; for (const n of wiring.nodes) node[n.id] = n;
+for (const id of ['bolt_arc_l', 'bolt_arc_r', 'bolt', 'low_threat', 'threat', 'threat_level', 'flee', 'freeze', 'alert',
+                  'alarm_gland', 'hungry', 'food_ahead', 'food_underfoot'])
+  assert(node[id] != null, `node '${id}' exists`);
+
+// 9
+section('Where the wiring sits');
+assert(node.bolt_arc_l.zone === 'fore_l' && node.bolt_arc_r.zone === 'fore_r', 'bolt arcs sit in the fore-limbs');
+assert(node.bolt_arc_l.inputs[0].from === 'sense:fore_l.vibration.ground', 'fore_l arc hears only its own limb');
+assert(node.bolt.vetoedBy.includes('low_threat'), 'the threat template can hold the bolt down');
+assert(node.threat.zone === 'torso' && node.food_ahead.zone === 'head', 'threat template in the torso, food template in the head');
+assert(node.flee.receptors && node.flee.receptors.alarm > 0, 'alarm chemistry lowers the flee threshold');
+assert(node.hungry.inputs[0].from === 'blood:hunger', 'the food template reads the hunger hormone through its own receptors');
+assert(node.alarm_gland.inputs.some(i => i.from === 'feature:pain'), 'pain drives the alarm gland');
+assert(!wiring.nodes.some(n => n.zone === 'rear_l' || n.zone === 'rear_r'), 'the rear limbs feed nothing (their footfalls reach no template)');
+
+// 10
+section('initBodyMap propagation');
+const fakeHare = { key: 'hare' };
+const bm = m.initBodyMap(fakeHare);
+for (const z of bm) {
+  assert(typeof z.fiberRatio === 'number', `instance ${z.key} has fiberRatio`);
+  if (z.muscle > 0) {
+    assert(typeof z.substrate === 'number', `instance ${z.key} has substrate`);
+    assert(z.substrate === z.substrateMax, `instance ${z.key} substrate full`);
+  }
+  assert(z.maxHp > 0, `instance ${z.key} has HP (${z.maxHp})`);
+}
+
+// 11
+section('The wiring dies with its zones');
+// No world is loaded here: an empty layer (no food, no scent on the ground)
+if (!state.player) state.player = { layer: 0, x: -1, y: -1 };
+function woundedHare(destroyed) {
+  const e = { key: 'hare', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0, fatigue: 0 } };
+  m.initBodyMap(e);
+  for (const z of e.bodyMap) if (destroyed.includes(z.key)) z.destroyed = true;
+  // A heavy footfall on both fore-limbs, from something wolf-sized four tiles off
+  e.detectionInfo = [{ entity: { key: 'wolf' }, x: 54, y: 50, distance: 4, sizeRelative: 'larger',
+    sizeEstimate: { estimated: 22, lower: 15, upper: 30 }, zoneSNR: { 'fore_l.vibration.ground': 9, 'fore_r.vibration.ground': 9 },
+    closingSpeed: 0, dietConfidence: 0 }];
+  return e;
+}
+assert(runNodes(woundedHare([]), wiring).type === 'bolt', 'intact: a heavy footfall bolts it');
+assert(runNodes(woundedHare(['fore_l']), wiring).type === 'bolt', 'one fore-limb gone: the other still bolts');
+assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'both fore-limbs gone: no bolt arc left to fire');
+// Chemistry
+{
+  const e = woundedHare([]);
+  runNodes(e, wiring);
+  assert(e.hormones.alarm > 0, 'a bolt releases alarm into the blood');
+  const calm = woundedHare([]); calm.detectionInfo = []; calm.tookDamageThisTurn = true;
+  runNodes(calm, wiring);
+  assert(calm.hormones.alarm > 0, 'pain alone releases alarm');
+  const jumpy = woundedHare([]); jumpy.hormones.alarm = 1.0;
+  jumpy.detectionInfo[0].zoneSNR = { 'fore_l.vibration.ground': 2.5, 'fore_r.vibration.ground': 2.5 };
+  const calm2 = woundedHare([]); calm2.detectionInfo[0].zoneSNR = { 'fore_l.vibration.ground': 2.5, 'fore_r.vibration.ground': 2.5 };
+  assert(runNodes(calm2, wiring).type !== 'bolt' && runNodes(jumpy, wiring).type === 'bolt',
+         'a footfall too faint to bolt a calm hare bolts an alarmed one');
+}
+// Gland store: three full releases, then dry; synthesis refills it
+{
+  const e = woundedHare([]);
+  const levels = [];
+  for (let k = 0; k < 4; k++) { runNodes(e, wiring); levels.push(e.hormones.alarm); }
+  assert(approx(levels[2], 0.9, 1e-6) && approx(levels[3], levels[2], 1e-9),
+         `a gland runs dry: alarm ${levels.map(v => v.toFixed(2)).join(' → ')} over four bolts`);
+  refillGlands(e, wiring, 50);
+  assert(approx(e.glandStores.alarm_gland, 0.45, 1e-6), `50 ticks of synthesis refill half the store (${e.glandStores.alarm_gland.toFixed(3)})`);
+}
+assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
+assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');
+
+// 12
+section('Existing systems undamaged');
+assert(m.CREATURE_PATHWAYS.hare.length === 19, `hare pathways: 19`);
+assert(m.CREATURE_PATHWAYS.wolf.length === 7, `wolf pathways: 7`);
+assert(typeof m.computeStrikeDamage === 'function', 'computeStrikeDamage exists');
+assert(typeof m.selectHitZone === 'function', 'selectHitZone exists');
+assert(typeof m.getPathways === 'function', 'getPathways exists');
+
+// Summary
+summaryEl.textContent = `${passed} passed, ${failed} failed`;
+summaryEl.className = failed > 0 ? 'summary-fail' : 'summary-pass';
+</script>
+</body>
+</html>
