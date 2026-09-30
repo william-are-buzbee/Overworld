@@ -180,7 +180,7 @@ Perception as inference from received signal, not truth with error bars. Decisio
 The ecology is left unbalanced while the systems are built; the harness checks for regressions and for systems not doing what their doc says, not for kill counts. See Neural-Architecture-Design.
 - [x] 1. Neural-Architecture-Design: the node, circuit recipes, memory as writers and stores, the hub and the player
 - [x] 2. Node runner; the hare ported onto it (`nodes.js`, `wiring.js`; 22 of 8,956 actions differ, all the per-source bolt veto)
-- [ ] 3. Glands and hunger: hormones in the blood replace `creature.drives`
+- [x] 3. Glands and hunger: `creature.hormones` {alarm, hunger, fatigue} replaces `creature.drives` and `stressLevel`; gland nodes release, receptors read
 - [ ] 4. Maps: bearing and distance bands, holding, prediction
 - [ ] 5. The hub: reach, inhibition, the race, plastic hub weights, its mass as the limit per action; the player drives it (hotbar from the wiring)
 - [ ] 6. The wolf wired on the system; its reactive rules retired

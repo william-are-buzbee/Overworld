@@ -13,7 +13,8 @@ gone). What is built so far: nodes (step, ramp and pass firing; sum or max; gate
 pooled node reading a map takes its strongest place, blood chemistry shifting thresholds (the stress receptor), hop timing
 for inhibition (worked out per species; a late veto is inert), and the output stage (locomotion, posture, orienting, feeding,
 gland). Not yet: persistence and maps (step 4), plastic weights (memory), generators built from nodes (the output stage
-stands in for them: the strongest drive reaching the locomotion generator wins). Inspect with `window.debugWiring('hare')`
+stands in for them: the strongest drive reaching the locomotion generator wins). **Step 3 is in:** blood chemistry
+(`creature.hormones`), gland nodes that release into it, `blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
@@ -223,7 +224,8 @@ A number that cannot be traced to the body is written in the wiring with a comme
 | `canOverrideReactive`, `deliberativeEvaluation` | placeholder for timing by hops plus inhibition |
 | `getMovementIntensity` by behaviour label | placeholder: intensity should come from the generator |
 | `ai-utils.js stepRoundObstacles` | placeholder for a learned route store (sequence and pattern writers) |
-| `creature.drives` | placeholder for glands and hormone levels |
+| `creature.hormones` {alarm, hunger, fatigue} | blood chemistry (step 3). Wired creatures release alarm from gland nodes; the reactive placeholder releases for the rest. Hunger and fatigue are released by body tissue, not neural glands |
+| `getDominantDrive` | placeholder: the reactive rules comparing blood levels against thresholds |
 
 ---
 

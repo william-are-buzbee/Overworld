@@ -257,7 +257,7 @@ Species identification from a single sensory channel requires hardware quality (
 
 Neural signals are fast, targeted, specific — a phone call between two zones through a pathway. Hormones are slow, global, broadcast — a PA announcement through the blood that reaches every cell with the right receptors.
 
-**Drives ARE circulating hormone concentrations.** Hunger = ghrelin-equivalent in the blood. Safety = adrenaline-equivalent. Rest = adenosine-equivalent.
+**Drives ARE circulating hormone concentrations.** Hunger = ghrelin-equivalent in the blood. Safety = adrenaline-equivalent. Rest = adenosine-equivalent. *Status (Sep 2026):* now literally so: `creature.hormones` {alarm, hunger, fatigue} replaced the drive floats (Endocrine-Design).
 
 ### Clade Difference in Hormonal Delivery
 
