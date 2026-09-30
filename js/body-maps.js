@@ -203,6 +203,53 @@ export function getIntegument(entity) {
 // Design note: Clade A heads are NOT vital (recent change).
 // Only torso is vital on Clade A creatures.
 
+// ==================== EYES ====================
+// What each species' eyes are made of, spread into the visual transducer of
+// every zone that carries eyes (Spectral-Color-Design "The eye in the body
+// map"; read by js/spectra.js). Cones are the colour classes { lambdaMax nm,
+// share of the cones }; rods are the dim-light class, pooled over many
+// receptors; the lens passes half its light at lensCutoffNm; apertureMm is the
+// fully open pupil, focalMm the focal length, coneUm the cone width,
+// integrationMs how long a cone sums photons; tapetum is the fraction of light
+// a mirror behind the retina sends back through it (eyeshine). A smaller eye
+// of the same species keeps its opsins and scales its optics.
+// Clade A: vision secondary to smell, two cone classes, no tapetum. Clade B:
+// four eyes "dark and reflective" (Ecology-Foundations), so a tapetum, and
+// ancestrally a UV class.
+const EYE_PROWLER = {
+  cones: [{ lambdaMax: 455, share: 0.15 }, { lambdaMax: 570, share: 0.85 }],
+  rods: { lambdaMax: 500, pool: 500, receptorUm: 2, integrationMs: 100 },
+  lensCutoffNm: 400, apertureMm: 6, focalMm: 14, coneUm: 3, integrationMs: 30, tapetum: 0,
+};
+// The forest-interior hunter: long class moved into the red light under the
+// canopy; big slow eyes and heavy rod pooling for the dim floor.
+const EYE_RAVAGER = {
+  cones: [{ lambdaMax: 470, share: 0.12 }, { lambdaMax: 595, share: 0.88 }],
+  rods: { lambdaMax: 505, pool: 1500, receptorUm: 2.5, integrationMs: 120 },
+  lensCutoffNm: 410, apertureMm: 9, focalMm: 18, coneUm: 3.5, integrationMs: 40, tapetum: 0,
+};
+// Motion and pattern: fast integration; a UV class behind a clear lens.
+const EYE_GRAZER = {
+  cones: [{ lambdaMax: 365, share: 0.1 }, { lambdaMax: 470, share: 0.25 }, { lambdaMax: 575, share: 0.65 }],
+  rods: { lambdaMax: 495, pool: 300, receptorUm: 2, integrationMs: 80 },
+  lensCutoffNm: 330, apertureMm: 5, focalMm: 9, coneUm: 3, integrationMs: 20, tapetum: 0.5,
+};
+// The best eyes on the surface: a fourth cone class, big eyes.
+const EYE_SHALEBACK = {
+  cones: [{ lambdaMax: 370, share: 0.08 }, { lambdaMax: 455, share: 0.17 }, { lambdaMax: 525, share: 0.35 }, { lambdaMax: 600, share: 0.4 }],
+  rods: { lambdaMax: 495, pool: 500, receptorUm: 2, integrationMs: 100 },
+  lensCutoffNm: 340, apertureMm: 10, focalMm: 20, coneUm: 2.5, integrationMs: 30, tapetum: 0.5,
+};
+// Waits in the substrate: lost UV, wide receptors, long integration, heavy
+// pooling and a strong tapetum for dim ground and night.
+const EYE_LURKER = {
+  cones: [{ lambdaMax: 490, share: 0.3 }, { lambdaMax: 580, share: 0.7 }],
+  rods: { lambdaMax: 500, pool: 2000, receptorUm: 3, integrationMs: 150 },
+  lensCutoffNm: 400, apertureMm: 7, focalMm: 12, coneUm: 4, integrationMs: 50, tapetum: 0.8,
+};
+// The lurker's small rear eyes: the same retina behind a much smaller lens.
+const EYE_LURKER_REAR = { ...EYE_LURKER, apertureMm: 2.5, focalMm: 4 };
+
 export const BODY_MAPS = {
 
   // ═══════════════════════════════════════════════════════
@@ -213,7 +260,7 @@ export const BODY_MAPS = {
       exposure: ['front', 'front_left', 'front_right'],
       muscle: 0.80, structural: 0.60, neural: 0.85, sensory: 0.50, connective: 0.75, mass: 3.5,
       neuralAllocation: { chemicalProcessing: 0.25, visualProcessing: 0.10, episodicMemory: 0.18, integration: 0.15, motorCoordination: 0.08, threatAssessment: 0.04, patternLibrary: 0.05 },
-      transducers: { chemical: { contact: 2, airborne: 6, dissolved: 0 }, visual: { acuity: 3, placement: 'forward', fieldAngle: 120 }, vibration: { ground: 0, air: 2, water: 0 } },
+      transducers: { chemical: { contact: 2, airborne: 6, dissolved: 0 }, visual: { acuity: 3, placement: 'forward', fieldAngle: 120, ...EYE_PROWLER }, vibration: { ground: 0, air: 2, water: 0 } },
       locomotion: false, vital: false,
       attacks: [{ key: 'bite', name: 'Bite', damageType: 'puncture', damageModifier: 1.2, canReflex: false, footprintModifier: 0.15 }],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -289,7 +336,7 @@ export const BODY_MAPS = {
       exposure: ['front', 'front_left', 'front_right'],
       muscle: 2.00, structural: 1.60, neural: 1.26, sensory: 0.90, connective: 2.24, mass: 8.0,
       neuralAllocation: { chemicalProcessing: 0.38, visualProcessing: 0.20, episodicMemory: 0.26, integration: 0.20, motorCoordination: 0.10, threatAssessment: 0.06, patternLibrary: 0.06 },
-      transducers: { chemical: { contact: 2, airborne: 7, dissolved: 0 }, visual: { acuity: 4, placement: 'forward', fieldAngle: 120 }, vibration: { ground: 0, air: 3, water: 0 } },
+      transducers: { chemical: { contact: 2, airborne: 7, dissolved: 0 }, visual: { acuity: 4, placement: 'forward', fieldAngle: 120, ...EYE_RAVAGER }, vibration: { ground: 0, air: 3, water: 0 } },
       locomotion: false, vital: false,
       attacks: [{ key: 'bite', name: 'Bite', damageType: 'puncture', damageModifier: 1.2, canReflex: false, footprintModifier: 0.15 }],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -366,7 +413,7 @@ export const BODY_MAPS = {
       muscle: 0.04, structural: 0.06, neural: 0.042, sensory: 0.08, connective: 0.058, mass: 0.28,
       fiberRatio: 0.15,
       neuralAllocation: { visualProcessing: 0.020, vibrationProcessing: 0.010, patternLibrary: 0.008, motorControl: 0.004 },
-      transducers: { visual: { acuity: 4, placement: 'lateral', fieldAngle: 170 }, vibration: { ground: 0, air: 1, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
+      transducers: { visual: { acuity: 4, placement: 'lateral', fieldAngle: 170, ...EYE_GRAZER }, vibration: { ground: 0, air: 1, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: false, vital: false,
       attacks: [],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -461,7 +508,7 @@ export const BODY_MAPS = {
       exposure: ['front', 'front_left', 'front_right'],
       muscle: 2.50, structural: 2.80, neural: 1.10, sensory: 1.00, connective: 4.60, mass: 12.0,
       neuralAllocation: { chemicalProcessing: 0.28, visualProcessing: 0.26, episodicMemory: 0.22, integration: 0.14, motorCoordination: 0.10, patternLibrary: 0.08, threatAssessment: 0.02 },
-      transducers: { chemical: { contact: 4, airborne: 5, dissolved: 0 }, visual: { acuity: 5, placement: 'lateral', fieldAngle: 150 }, vibration: { ground: 0, air: 2, water: 0 } },
+      transducers: { chemical: { contact: 4, airborne: 5, dissolved: 0 }, visual: { acuity: 5, placement: 'lateral', fieldAngle: 150, ...EYE_SHALEBACK }, vibration: { ground: 0, air: 2, water: 0 } },
       locomotion: false, vital: false,
       attacks: [],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -604,7 +651,7 @@ export const BODY_MAPS = {
       exposure: ['front', 'front_left', 'front_right'],
       muscle: 0.40, structural: 0.50, neural: 0.28, sensory: 0.35, connective: 0.67, mass: 2.2,
       neuralAllocation: { visualProcessing: 0.12, vibrationProcessing: 0.06, integration: 0.05, motorControl: 0.03, patternLibrary: 0.02 },
-      transducers: { visual: { acuity: 3, placement: 'forward', fieldAngle: 120 }, vibration: { ground: 0, air: 2, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
+      transducers: { visual: { acuity: 3, placement: 'forward', fieldAngle: 120, ...EYE_LURKER }, vibration: { ground: 0, air: 2, water: 0 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: false, vital: false,
       attacks: [{ key: 'bite', name: 'Bite', damageType: 'puncture', damageModifier: 1.2, canReflex: false, footprintModifier: 0.15 }],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -655,7 +702,7 @@ export const BODY_MAPS = {
       muscle: 1.80, structural: 0.45, neural: 0.18, sensory: 0.12, connective: 0.35, mass: 2.9,
       fiberRatio: 0.65,
       neuralAllocation: { vibrationProcessing: 0.06, visualProcessing: 0.04, motorControl: 0.05, patternLibrary: 0.03 },
-      transducers: { vibration: { ground: 2, air: 1, water: 0 }, visual: { acuity: 1, placement: 'forward', fieldAngle: 120 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
+      transducers: { vibration: { ground: 2, air: 1, water: 0 }, visual: { acuity: 1, placement: 'forward', fieldAngle: 120, ...EYE_LURKER_REAR }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: true, vital: false,
       attacks: [{ key: 'kick', name: 'Kick', damageType: 'blunt', damageModifier: 0.8, canReflex: true, footprintModifier: 0.35 }],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -664,7 +711,7 @@ export const BODY_MAPS = {
       muscle: 1.80, structural: 0.45, neural: 0.18, sensory: 0.12, connective: 0.35, mass: 2.9,
       fiberRatio: 0.65,
       neuralAllocation: { vibrationProcessing: 0.06, visualProcessing: 0.04, motorControl: 0.05, patternLibrary: 0.03 },
-      transducers: { vibration: { ground: 2, air: 1, water: 0 }, visual: { acuity: 1, placement: 'forward', fieldAngle: 120 }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
+      transducers: { vibration: { ground: 2, air: 1, water: 0 }, visual: { acuity: 1, placement: 'forward', fieldAngle: 120, ...EYE_LURKER_REAR }, chemical: { contact: 0, airborne: 0, dissolved: 0 } },
       locomotion: true, vital: false,
       attacks: [{ key: 'kick', name: 'Kick', damageType: 'blunt', damageModifier: 0.8, canReflex: true, footprintModifier: 0.35 }],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -720,7 +767,7 @@ export const BODY_MAPS = {
       exposure: ['front', 'front_left', 'front_right'],
       muscle: 0.80, structural: 0.60, neural: 0.85, sensory: 0.50, connective: 0.75, mass: 3.5,
       neuralAllocation: { chemicalProcessing: 0.25, visualProcessing: 0.10, episodicMemory: 0.18, integration: 0.15, motorCoordination: 0.08, threatAssessment: 0.04, patternLibrary: 0.05 },
-      transducers: { chemical: { contact: 2, airborne: 6, dissolved: 0 }, visual: { acuity: 3, placement: 'forward', fieldAngle: 120 }, vibration: { ground: 0, air: 2, water: 0 } },
+      transducers: { chemical: { contact: 2, airborne: 6, dissolved: 0 }, visual: { acuity: 3, placement: 'forward', fieldAngle: 120, ...EYE_PROWLER }, vibration: { ground: 0, air: 2, water: 0 } },
       locomotion: false, vital: false,
       attacks: [],
       bleedRate: 0.5, bleedThreshold: 0.3, destroyed: false },
@@ -1004,6 +1051,15 @@ export function getVisualConfig(zone) {
     placement: v.placement || 'forward',
     fieldAngle: v.fieldAngle || 120,
   };
+}
+
+/**
+ * The eye a zone carries, as spectra.js reads it (its opsins, rods, lens,
+ * optics), or null if the zone has none or only a legacy acuity number.
+ */
+export function getEye(zone) {
+  const v = zone?.transducers?.visual;
+  return (v && typeof v === 'object' && v.cones) ? v : null;
 }
 
 // Initialize a per-instance body map for a creature or player.

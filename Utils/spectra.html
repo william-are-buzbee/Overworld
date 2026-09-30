@@ -24,9 +24,9 @@
 </head>
 <body>
 <h1>Spectra</h1>
-<p>Each surface as each proposed eye draws it, from <code>js/spectra.js</code>: reflectance × light × receptors → screen.
+<p>Each surface as each species' eye draws it, from <code>js/spectra.js</code>: reflectance × light × receptors → screen.
 The first column is the reference: a human under Earth's noon sun. Click a surface to plot its spectrum.
-Proposed eyes are placeholders (Notes/Spectral-Color-Design.md).</p>
+Each species' eyes are read from its body map (Notes/Spectral-Color-Design.md).</p>
 <div class="controls">
   <label>Light <select id="light"></select></label>
   <label>Eye adapted to <select id="adapt"><option value="same">the same light</option><option value="noon">open noon</option></select></label>
@@ -37,6 +37,7 @@ Proposed eyes are placeholders (Notes/Spectral-Color-Design.md).</p>
 <div class="legend" id="legend"></div>
 <script type="module">
 import * as S from '../js/spectra.js';
+import { BODY_MAPS, getEye } from '../js/body-maps.js';
 
 const surf = [
   ['photosynthetic tissue', S.reflectance(S.namedMaterial('photosynthetic_tissue'))],
@@ -58,11 +59,13 @@ const lights = {
   'low star (15°)': S.total(S.daylight(15)),
   'star on horizon': S.total(S.daylight(0)),
   'dusk (−4°)': S.total(S.daylight(-4)),
-  'night': S.total(S.daylight(-30)),
+  'night (no moon)': S.total(S.daylight(-30)),
   'forest floor': S.underCanopy(noon, S.namedMaterial('photosynthetic_tissue'), 0.15),
   'rock shadow': S.inShadow(noon),
 };
-const eyes = { human: S.HUMAN_EYE, ...S.PROPOSED_EYES };
+const SPECIES = { prowler: 'wolf', ravager: 'dire_wolf', grazer: 'hare', shaleback: 'cave_crab', lurker: 'ambush_pred' };
+const headEye = key => BODY_MAPS[key].map(getEye).filter(Boolean).sort((a, b) => b.acuity - a.acuity)[0];
+const eyes = { human: S.HUMAN_EYE, ...Object.fromEntries(Object.entries(SPECIES).map(([n, k]) => [n, headEye(k)])) };
 const optics = Object.fromEntries(Object.entries(eyes).map(([k, e]) => [k, S.eyeOptics(e)]));
 
 const $ = id => document.getElementById(id);
@@ -77,7 +80,7 @@ function render() {
   g.innerHTML = '';
   const head = g.insertRow();
   head.innerHTML = '<th></th><th>reference</th>' + Object.entries(eyes).map(([k, e]) =>
-    `<th>${k}<br>${e.receptors.map(r => r.lambdaMax).join('/')}</th>`).join('');
+    `<th>${k}<br>${e.cones.map(r => r.lambdaMax).join('/')}</th>`).join('');
   surf.forEach(([name, R], i) => {
     const tr = g.insertRow();
     if (i === selected) tr.className = 'sel';
@@ -109,8 +112,9 @@ function plot([name, R], light, eye) {
   const o = S.eyeOptics(eye);
   const cols = ['#9b7bd6', '#5b9bd6', '#6fc27a', '#e0b050', '#e07060'];
   o.classes.forEach((cl, i) => line(cl.sens, cols[Math.min(cols.length - 1, i + (5 - o.classes.length))], 1));
+  if (o.rods) { x.setLineDash([4, 3]); line(o.rods.sens, '#c8c8c8', 1); x.setLineDash([]); }
   line(R, S.hex(S.referenceColor(R)) === '#000000' ? '#fff' : '#f2ede4', 2.5);
-  $('legend').textContent = `${name}: reflectance (bold), light (grey, scaled to its peak), receptor classes of the plotted eye (thin).`;
+  $('legend').textContent = `${name}: reflectance (bold), light (grey, scaled to its peak), cone classes of the plotted eye (thin), its rods (dashed).`;
 }
 
 $('light').onchange = $('adapt').onchange = $('ploteye').onchange = render;

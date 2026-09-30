@@ -196,8 +196,9 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 ## Up Next — Spectral colour (Sep 2026)
 Colour as spectra: reflectance × light × one eye's receptors; the screen is the only convention. See Spectral-Color-Design. One pull request per pass.
 - [x] 1. Canon: `js/spectra.js` (chromophores, Kubelka–Munk materials, star and atmosphere, canopy, water, opsin template, receptor-noise contrast, the display convention calibrated against human colorimetry), `tools/spectra.mjs`, `Utils/spectra.html`; replaces the three-layer doc; texture profiles moved to Material-Textures
-- [ ] The person decides: receptor sets per species (proposed in `PROPOSED_EYES`), star temperature, night-sky light, whether the screen draws the player's eye or reference colours
-- [ ] 2. Eyes into the body maps (receptor classes, lens, aperture, focal length, receptor width, integration time)
+- [x] The person decided (30 Sep 2026): receptor sets as proposed; the screen draws the player's eye; star stays 4800 K; a realistic night; "warm-toned, dim" dropped
+- [x] 2. Eyes into the body maps (cones, rods, lens, aperture, focal length, receptor width, integration time, tapetum); a moonless night sky (starlight and airglow) seen by rods
+- [ ] The person decides: a moon (phase-cycled bright nights) or none
 - [ ] 3. Integument as material per zone; detection contrast from `contrast()` (retire hue strings, `TERRAIN_VISUAL`, `HUE_MISMATCH_PENALTY`, the bleed bonus); harness before and after
 - [ ] 4. Light from the sky: star elevation from the day cycle, canopy and shadow per tile, adaptation held in the eye with a time course
 - [ ] 5. Renderer draws tiles and creatures through `screenColor` (with the tile body map); `palette-compute.js` retires

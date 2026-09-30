@@ -7,6 +7,7 @@
 //   node tools/spectra.mjs --calibrate  refit DISPLAY's chroma scale against
 //                                       human colorimetry and print it
 import * as S from '../js/spectra.js';
+import { BODY_MAPS, getEye } from '../js/body-maps.js';
 
 const args = process.argv.slice(2);
 
@@ -37,12 +38,15 @@ const LIGHTS = {
   'low star (15°)': S.total(S.daylight(15)),
   'star on horizon': S.total(S.daylight(0)),
   'dusk (−4°)': S.total(S.daylight(-4)),
-  'night': S.total(S.daylight(-30)),
+  'night (no moon)': S.total(S.daylight(-30)),
   'forest floor': S.underCanopy(noon, S.namedMaterial('photosynthetic_tissue'), 0.15),
   'rock shadow': S.inShadow(noon),
 };
 
-const EYES = { human: S.HUMAN_EYE, ...S.PROPOSED_EYES };
+// Each species' head eyes, read from its body map (the eye with the best acuity).
+const SPECIES = { prowler: 'wolf', ravager: 'dire_wolf', grazer: 'hare', shaleback: 'cave_crab', lurker: 'ambush_pred' };
+const headEye = key => BODY_MAPS[key].map(getEye).filter(Boolean).sort((a, b) => b.acuity - a.acuity)[0];
+const EYES = { human: S.HUMAN_EYE, ...Object.fromEntries(Object.entries(SPECIES).map(([name, key]) => [name, headEye(key)])) };
 
 if (args.includes('--calibrate')) {
   calibrate();
@@ -58,7 +62,7 @@ function tables() {
 
   for (const [en, eye] of Object.entries(EYES)) {
     const o = S.eyeOptics(eye);
-    out.push(`\n## ${en} — ${eye.receptors.map(r => r.lambdaMax).join(' / ')} nm\n`);
+    out.push(`\n## ${en} — cones ${eye.cones.map(r => r.lambdaMax).join(' / ')} nm${eye.rods ? `, rods ${eye.rods.lambdaMax}` : ''}${eye.tapetum ? `, tapetum ${eye.tapetum}` : ''}\n`);
     const lights = Object.keys(LIGHTS);
     out.push(`| surface | ${lights.join(' | ')} |`, `|---|${lights.map(() => '---').join('|')}|`);
     for (const n of Object.keys(R)) {
@@ -66,8 +70,9 @@ function tables() {
     }
   }
 
-  out.push('\n## Contrast in JNDs (chromatic / achromatic), noon and dusk\n');
+  out.push('\n## Contrast in JNDs (chromatic / achromatic), noon, dusk and night\n');
   const PAIRS = [
+    ['calcium structure', 'soil, iron'],
     ['hemolymph', 'photosynthetic tissue'],
     ['photosynthetic tissue', 'soil, iron'],
     ['dead organic', 'soil, iron'],
@@ -77,7 +82,7 @@ function tables() {
   const eyes = Object.keys(EYES);
   out.push(`| pair | light | ${eyes.join(' | ')} |`, `|---|---|${eyes.map(() => '---').join('|')}|`);
   for (const [a, b] of PAIRS) {
-    for (const l of ['noon (60°)', 'dusk (−4°)']) {
+    for (const l of ['noon (60°)', 'dusk (−4°)', 'night (no moon)']) {
       const cells = eyes.map(e => {
         const c = S.contrast(S.eyeOptics(EYES[e]), R[a], R[b], LIGHTS[l]);
         return `${c.chromatic.toFixed(1)} / ${c.achromatic.toFixed(1)}`;
