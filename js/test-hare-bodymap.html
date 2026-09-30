@@ -21,9 +21,14 @@
 <h1>Hare Body Map — Data Validation</h1>
 <div id="log"></div>
 <div id="summary"></div>
+<!-- the node runner imports the game's modules, one of which reads the viewport canvas at load -->
+<canvas id="viewport" hidden></canvas>
 
 <script type="module">
 import * as m from './constants.js';
+import { CREATURE_WIRING, getWiring } from './wiring.js';
+import { runNodes, validateWiring } from './nodes.js';
+import { state } from './state.js';
 
 const log = document.getElementById('log');
 const summaryEl = document.getElementById('summary');
@@ -48,7 +53,7 @@ function approx(a, b, tol = 0.001) { return Math.abs(a - b) < tol; }
 
 // A live hare's body map: the substrate store is set up by initBodyMap
 const hare = (() => { const e = { key: 'hare' }; m.initBodyMap(e); return e.bodyMap; })();
-const neural = m.CREATURE_NEURAL.hare;
+const wiring = CREATURE_WIRING.hare;
 const SPK = m.SUBSTRATE_PER_KG_MUSCLE;
 
 // 1
@@ -114,55 +119,32 @@ for (const key of ['fore_l', 'fore_r']) {
 }
 
 // 7
-section('Other creatures uncontaminated');
-for (const ck of ['wolf', 'dire_wolf', 'cave_crab', 'mushroom', 'ambush_pred']) {
-  const bm = m.BODY_MAPS[ck];
-  if (!bm) continue;
-  const hasNew = bm.some(z => z.fiberRatio !== undefined || z.substrate !== undefined);
-  assert(!hasNew, `${ck} has no fiberRatio/substrate`);
+section('Every body carries fast-twitch fuel (Muscle-Fiber-Design, Sep 2026)');
+for (const ck of ['wolf', 'dire_wolf', 'cave_crab', 'ambush_pred']) {
+  const e = { key: ck }; m.initBodyMap(e);
+  const loco = e.bodyMap.filter(z => z.locomotion && z.muscle > 0);
+  assert(loco.length > 0 && loco.every(z => typeof z.fiberRatio === 'number' && approx(z.substrateMax, z.muscle * SPK)),
+         `${ck}: locomotion zones have fiberRatio and substrateMax = muscle × ${SPK}`);
 }
 
 // 8
-section('Neural architecture structure');
-assert(neural != null, 'CREATURE_NEURAL.hare exists');
-assert(neural.totalNeuralMass === 0.08, `totalNeuralMass = 0.08 (got ${neural.totalNeuralMass})`);
-assert(Array.isArray(neural.structures), 'structures is array');
-assert(neural.structures.length === 8, `8 structures (got ${neural.structures.length})`);
-
-const byId = {};
-for (const s of neural.structures) byId[s.id] = s;
-
-const requiredIds = [
-  'fore_ganglion_l', 'fore_ganglion_r', 'central_loco',
-  'threat_classification', 'food_identification',
-  'graze_ganglion_l', 'graze_ganglion_r', 'integration_workspace'
-];
-for (const id of requiredIds) assert(byId[id] != null, `structure '${id}' exists`);
+section('Wiring (wiring.js, run by nodes.js)');
+assert(wiring != null, 'CREATURE_WIRING.hare exists');
+const issues = validateWiring({ key: 'hare' }, wiring);
+assert(issues.length === 0, 'wiring fits the body, all inhibition arrives in time' + (issues.length ? ': ' + issues.join('; ') : ''));
+const node = {}; for (const n of wiring.nodes) node[n.id] = n;
+for (const id of ['bolt_arc_l', 'bolt_arc_r', 'bolt', 'low_threat', 'threat', 'threat_level', 'flee', 'freeze', 'alert',
+                  'stress_gland', 'hungry', 'food_ahead', 'food_underfoot'])
+  assert(node[id] != null, `node '${id}' exists`);
 
 // 9
-section('Neural connectivity');
-const cl = byId.central_loco;
-assert(cl.receivesFrom.includes('fore_ganglion_l'), 'central_loco ← fore_ganglion_l');
-assert(cl.receivesFrom.includes('fore_ganglion_r'), 'central_loco ← fore_ganglion_r');
-assert(cl.receivesFrom.includes('threat_classification'), 'central_loco ← threat_classification');
-assert(cl.receivesFrom.includes('food_identification'), 'central_loco ← food_identification');
-for (const zk of ['mid_loco_l', 'mid_loco_r', 'rear_l', 'rear_r'])
-  assert(cl.motorOutputs.includes(zk), `central_loco → ${zk}`);
-assert(byId.fore_ganglion_l.forwardsTo.includes('threat_classification'), 'fore_l forwards to threat');
-assert(byId.fore_ganglion_r.forwardsTo.includes('threat_classification'), 'fore_r forwards to threat');
-assert(byId.fore_ganglion_l.reflexArcs.some(r => r.output === 'central_loco' && r.intensity === 'max'), 'fore_l has bolt reflex');
-const tc = byId.threat_classification;
-assert(tc.canSuppress.includes('fore_ganglion_l.reflexArcs'), 'threat suppresses fore_l bolt');
-assert(tc.canSuppress.includes('fore_ganglion_r.reflexArcs'), 'threat suppresses fore_r bolt');
-const fi = byId.food_identification;
-assert(fi.sensoryInputs.length === 1 && fi.sensoryInputs[0] === 'head.visual', 'food_identification is visual-only');
-const iw = byId.integration_workspace;
-assert(iw.canModulate.includes('central_loco.intensity'), 'integration modulates loco intensity');
-assert(iw.receivesFrom.includes('threat_classification'), 'integration ← threat');
-assert(iw.receivesFrom.includes('food_identification'), 'integration ← food');
-const gl = byId.graze_ganglion_l;
-assert(gl.reflexArcs[0].output === 'mid_graze_l', 'graze_l reflex is local');
-assert(gl.reflexArcs[0].intensity === 'low_sustained', 'graze_l reflex is low_sustained');
+section('Where the wiring sits');
+assert(node.bolt_arc_l.zone === 'fore_l' && node.bolt_arc_r.zone === 'fore_r', 'bolt arcs sit in the fore-limbs');
+assert(node.bolt_arc_l.inputs[0].from === 'sense:fore_l.vibration.ground', 'fore_l arc hears only its own limb');
+assert(node.bolt.vetoedBy.includes('low_threat'), 'the threat template can hold the bolt down');
+assert(node.threat.zone === 'torso' && node.food_ahead.zone === 'head', 'threat template in the torso, food template in the head');
+assert(node.flee.receptors && node.flee.receptors.stress > 0, 'alarm chemistry lowers the flee threshold');
+assert(!wiring.nodes.some(n => n.zone === 'rear_l' || n.zone === 'rear_r'), 'the rear limbs feed nothing (their footfalls reach no template)');
 
 // 10
 section('initBodyMap propagation');
@@ -178,10 +160,24 @@ for (const z of bm) {
 }
 
 // 11
-section('getNeuralArchitecture helper');
-assert(m.getNeuralArchitecture({ key: 'hare' }) != null, 'returns architecture for hare');
-assert(m.getNeuralArchitecture({ key: 'wolf' }) == null, 'returns null for wolf');
-assert(m.getNeuralArchitecture({}) == null, 'returns null for empty entity');
+section('The wiring dies with its zones');
+// No world is loaded here: an empty layer (no food, no scent on the ground)
+if (!state.player) state.player = { layer: 0, x: -1, y: -1 };
+function woundedHare(destroyed) {
+  const e = { key: 'hare', layer: 0, x: 50, y: 50, stressLevel: 0, drives: { hunger: 0, safety: 0, rest: 0 } };
+  m.initBodyMap(e);
+  for (const z of e.bodyMap) if (destroyed.includes(z.key)) z.destroyed = true;
+  // A heavy footfall on both fore-limbs, from something wolf-sized four tiles off
+  e.detectionInfo = [{ entity: { key: 'wolf' }, x: 54, y: 50, distance: 4, sizeRelative: 'larger',
+    sizeEstimate: { estimated: 22, lower: 15, upper: 30 }, zoneSNR: { 'fore_l.vibration.ground': 9, 'fore_r.vibration.ground': 9 },
+    closingSpeed: 0, dietConfidence: 0 }];
+  return e;
+}
+assert(runNodes(woundedHare([]), wiring).type === 'bolt', 'intact: a heavy footfall bolts it');
+assert(runNodes(woundedHare(['fore_l']), wiring).type === 'bolt', 'one fore-limb gone: the other still bolts');
+assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'both fore-limbs gone: no bolt arc left to fire');
+assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
+assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');
 
 // 12
 section('Existing systems undamaged');

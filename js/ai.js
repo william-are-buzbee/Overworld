@@ -4,7 +4,7 @@
 // Split from enemy-ai.js.
 
 import { state } from './state.js';
-import { getBodyMap, getNeuralArchitecture,
+import { getBodyMap,
          MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, SAFETY_DECAY_RATE, REST_BASE_RATE,
          REST_BLOOD_IMPAIRED, REST_BLOOD_WEAKENED, REST_BLOOD_CRITICAL, REST_WOUND_COEFF,
          HUNGER_THRESHOLD, REST_THRESHOLD, STRESS_MAX, STRESS_RELEASE_AMOUNT,
@@ -19,6 +19,7 @@ import { executeAction, adjacencyCombatCheck, monsterMelee, executeWander,
          executeFlee } from './behaviors.js';
 import { isWaterTile, canMoveTo, getCorpseAt, combatCapability } from './ai-utils.js';
 import { computeSignals } from './signals.js';
+import { getWiring } from './wiring.js';
 import { _depleteLocomotionSubstrate, _releaseStressChemistry } from './physiology.js';
 import { noteHuntAction } from './hunt-funnel.js';
 
@@ -227,13 +228,13 @@ function runCreatureAI(creature) {
 
   // ══════════════════════════════════════════════════════════════
   // ── Behavior Decision ──
-  const neural = getNeuralArchitecture(creature);
+  const neural = getWiring(creature);
   let action;
   let reactiveAction = null;
 
   if (neural) {
-    // ── Ganglion Architecture Path ──
-    // Creature has ganglion architecture — use physical system.
+    // ── Wired nervous system (nodes.js) ──
+    // Creature has a wiring: its nodes decide, not the reactive rules.
     // Pre-check: damage this turn spikes stress (pain is a physical signal
     // that bypasses the sensory ganglion pathway)
     if (creature.tookDamageThisTurn) {

@@ -3,12 +3,14 @@
 // Split from enemy-ai.js.
 
 import { state } from './state.js';
-import { getBodyMap, getNeuralArchitecture,
+import { getBodyMap,
          VASCULARITY_MIN, REGEN_UPREGULATION, SUBSTRATE_REGEN_BASE } from './constants.js';
 import { getDominantSenseChannel, getBestChemicalAirborne,
          getEffectiveVisual, getDetectionRange } from './detection.js';
 import { getBodyPTW, getMovementIntensity, _getCirculatoryRegenEfficiency } from './physiology.js';
 import { monstersHere } from './turn-loop.js';
+import { getWiring, CREATURE_WIRING } from './wiring.js';
+import { validateWiring } from './nodes.js';
 
 // ==================== DEBUG / TESTING HELPERS ====================
 // Call from console: import('./enemy-ai.js').then(m => m.debugEcology())
@@ -103,7 +105,7 @@ function debugCognition() {
 
     rows.push({
       name: m.name,
-      system: getNeuralArchitecture(m) ? 'GANGLION' : 'REACTIVE',
+      system: getWiring(m) ? 'NODES' : 'REACTIVE',
       IC: ic,
       domSense: dom.type,
       apRate: getBodyPTW(m, getMovementIntensity(m)).toFixed(4),
@@ -235,4 +237,43 @@ function debugSubstrate(filterKey) {
 }
 
 // ==================== EXPORTS ====================
-export { debugEcology, debugForceHunger, debugCognition, debugSubstrate };
+/** What each wired creature's nodes did on its last action: which fired, how
+ *  strongly, and about which source (the place on its map). Nodes that did
+ *  not fire are left out. Optional filter by creature key.
+ *  Call from console: window.debugNodes() or window.debugNodes('hare') */
+function debugNodes(filterKey) {
+  const rows = [];
+  for (const m of monstersHere()) {
+    if (m.hp <= 0 || !getWiring(m) || (filterKey && m.key !== filterKey)) continue;
+    const fired = (m._nodeTrace || []).map(n => `${n.id}=${+n.value.toFixed(2)}${n.about ? '@' + n.about : ''}`);
+    rows.push({ name: m.name, at: `${m.x},${m.y}`, did: m.currentBehavior || '—',
+                stress: (m.stressLevel || 0).toFixed(2), fired: fired.join('  ') || '(nothing)' });
+  }
+  if (!rows.length) { console.log('No wired creatures on the active layer.'); return []; }
+  console.table(rows);
+  return rows;
+}
+
+/** A species' wiring, zone by zone: each node's inputs, function and
+ *  threshold, and what its outputs drive; then anything wrong with it
+ *  against the body (late inhibition, nodes over their zone's tissue).
+ *  Call from console: window.debugWiring('hare') */
+function debugWiring(key = 'hare') {
+  const wiring = CREATURE_WIRING[key];
+  if (!wiring) { console.log(`No wiring for ${key}. Wired: ${Object.keys(CREATURE_WIRING).join(', ')}`); return null; }
+  const rows = wiring.nodes.map(n => ({
+    zone: n.zone, node: n.id, kg: n.mass, mode: n.mode,
+    inputs: (n.inputs || []).map(i => i.from.replace(/^(node|sense|feature):/, '') +
+      (i.weight != null && i.weight !== 1 ? `×${+i.weight.toFixed(3)}` : '')).join(n.combine === 'max' ? ' | ' : ' + '),
+    fn: `${n.fn || 'ramp'}${n.threshold ? ' ≥' + n.threshold : ''}${n.receptors ? ' (stress)' : ''}`,
+    gate: (n.gate || []).join(','), vetoedBy: (n.vetoedBy || []).join(','),
+  }));
+  console.table(rows);
+  console.table((wiring.outputs || []).map(o => ({ effect: o.effect, label: o.label || o.hormone,
+    node: o.node, zone: o.zone, intensity: o.intensity, bearing: o.bearing, vetoedBy: (o.vetoedBy || []).join(',') })));
+  const issues = validateWiring({ key }, wiring);
+  console.log(issues.length ? 'Issues:\n  ' + issues.join('\n  ') : 'Wiring fits the body; all inhibition arrives in time.');
+  return rows;
+}
+
+export { debugEcology, debugForceHunger, debugCognition, debugSubstrate, debugNodes, debugWiring };
