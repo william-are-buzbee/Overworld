@@ -161,7 +161,7 @@ depth of 0.118 at 550 nm: Earth's 0.098 scaled by the lore's ~1.2 atm.
 - **The sky.** It is the scattered light, bluer than the beam. Shadow from an opaque thing (rock, trunk, burrow mouth) is lit
   by the sky alone.
 - **Twilight.** Below the horizon the overhead sky stays lit, falling ~10× per 3° of depression.
-- **Night sky.** After twilight, only the night sky: `NIGHT_SKY.flux` noons.
+- **Night sky.** After twilight (about −18°), only the night sky (below).
 
 On the ground at noon (star at 60°) the planet gets about 0.53 noons, 7% of it from the sky. At 15° it gets 0.14, on the
 horizon 0.0065, at −4° 3e-4.
@@ -172,6 +172,14 @@ still adapted to open ground, is `#4C3537`; in a rock's shadow it is `#15263F`. 
 is darker and red-lit.
 
 **Water.** Light at depth falls by water's absorption, red first (`underwater`).
+
+**Night.** The lore gives the planet no moon, so a night is what a clear moonless night is on Earth: the light of the other
+stars and the upper atmosphere's own glow (airglow), together about 3e-4 lux against ~1e5 lux at noon, so `NIGHT_SKY.flux` is
+3e-9 noons (`nightSky()`). Integrated starlight is a cool continuum (a 3500 K shape); airglow is emission lines, atomic oxygen
+at 557.7 nm (green) and 630.0 nm (red) and sodium at 589 nm, plus hydroxyl bands that grow into the near-infrared. That is
+millions of times below daylight: no cone of any eye here works in it. What sees at night is rods (section 3), pooled over
+many receptors, behind a big pupil, and doubled by a tapetum where there is one. A moon, if the lore ever gives one, would add
+reflected starlight on a phase cycle (a full Earth moon is ~1e-6 noons).
 
 **Underground.** Nothing here yet: no star means no light, which is what `getLightLevel` already says (0 underground). Light
 sources — lava, bioluminescence, if the lore wants them — would be emitters with their own spectra, added to the light at a
@@ -190,12 +198,8 @@ What natives *do* see is **change** in the light before they adapt to it: the lo
 shadow. The absolute level matters only once photons run short (dusk, night, the floor of a dense forest). At 0.53 noons, noon
 is broad daylight to any eye, not dim.
 
-This bears on Ecology-Foundations' "perpetual late afternoon — warm-toned, dim". Physically:
-
-- The warmth is visible only to a visitor, or in changing light.
-- The dimness is ~65% of Earth's daylight: a bright overcast day, well above where colour vision falters.
-
-"Warm-toned" can still be a presentation choice (step 4), but it isn't what a native sees. The person decides.
+So Ecology-Foundations' "perpetual late afternoon — warm-toned, dim" was a presentation choice, and it is dropped (the person,
+30 Sep 2026): the screen shows what the player's eye sees, and to a native eye noon is white daylight.
 
 ---
 
@@ -203,24 +207,27 @@ This bears on Ecology-Foundations' "perpetual late afternoon — warm-toned, dim
 
 ### The eye in the body map
 
-An eye today is `{ acuity, placement, fieldAngle }` on a zone's visual transducer. Spectral vision adds the physical parts that
-decide what light does to it. These fields go on the same visual transducer:
+An eye is the visual transducer on a zone: `{ acuity, placement, fieldAngle }` for where it looks, and the anatomy that decides
+what light does to it (`body-maps.js`, the `EYE_*` records spread into each eyed zone; `getEye(zone)` returns it):
 
 | field | what it is | what it does |
 |---|---|---|
-| `receptors[]` | receptor classes, each `{ lambdaMax, share, weber }` | `lambdaMax`: the opsin's peak (the whole absorption curve follows from it: Govardovskii 2000 template). `share`: the class's fraction of the receptors. `weber`: one receptor's noise as a Weber fraction (default 0.05) |
+| `cones[]` | colour classes, each `{ lambdaMax, share, weber }` | `lambdaMax`: the opsin's peak (the whole absorption curve follows from it: Govardovskii 2000 template). `share`: the class's fraction of the cones. `weber`: one receptor's noise as a Weber fraction (default 0.05) |
+| `rods` | the dim-light class `{ lambdaMax, pool, receptorUm, integrationMs }` | one more-sensitive opsin whose signals converge, `pool` receptors to one output (sensitivity bought with resolution); saturates in daylight. An eye without rods is blind at night |
 | `lensCutoffNm` | wavelength where the lens and cornea pass half the light | below it the eye is blind; a UV-seeing eye has a clear lens (~330) |
-| `apertureMm` | pupil diameter | light gathered ∝ aperture² |
+| `apertureMm` | the fully open pupil | light gathered ∝ aperture² (in daylight the pupil closes, but daylight vision is limited by receptor noise, not photons, so it does not matter there) |
 | `focalMm` | focal length | with receptor width, sets how much of the scene one receptor sees |
-| `receptorUm` | receptor width | wider catches more photons, resolves less |
-| `integrationMs` | how long a receptor sums photons | longer is more sensitive, worse at motion |
-| `halfSaturationPhotons` | photons per integration at which a receptor gives half its response | below it the scene goes dim |
+| `coneUm` | cone width | wider catches more photons, resolves less |
+| `integrationMs` | how long a cone sums photons | longer is more sensitive, worse at motion |
+| `tapetum` | fraction of light a mirror behind the retina sends back through it | up to double the catch in dim light; the eyeshine |
+| `halfSaturationPhotons` | photons per integration at which a cone gives half its response (default 50; rods 20 pooled, saturating at 1000 per rod) | below it the scene goes dim |
 
 Photons per receptor come from Land's formula (N ∝ D²(d/f)² × radiance × Δt), so a big-eyed, wide-receptor, slow eye sees at
-dusk where a small fast one doesn't. Destroy the zone and its eye is gone; nothing else in the body carries colour vision. That
-is the Design-Principles test.
+dusk where a small fast one doesn't. Destroy the zone and its eye is gone; nothing else in the body carries vision. That is the
+Design-Principles test. A smaller eye of the same species (the lurker's rear eyes) keeps the retina and scales the optics.
 
-Later, `acuity` itself should follow from focal length and receptor spacing, but that is its own pass.
+Later, `acuity` itself should follow from focal length and receptor spacing, and at night from rod pooling (a pooled retina
+sees coarsely), but that is its own pass.
 
 ### What the eye computes
 
@@ -235,44 +242,56 @@ Later, `acuity` itself should follow from focal length and receptor spacing, but
   - Each class's noise is its Weber fraction shared over its receptors, plus photon shot noise.
   - **Chromatic contrast**: the distance between the two catches with brightness removed (the general n-class form).
   - **Achromatic contrast**: the brightness difference against the pooled channel's noise.
+  - **Rods** add a second, independent brightness channel: pooled catch against Weber and shot noise, worth nothing once
+    each rod is saturated. Rods have one opsin, so they add no colour.
   - Below ~1 JND the eye cannot tell them apart. In dim light shot noise grows, colour goes first, and brightness contrast
-    holds longer. That is why dusk is colourless, and here it follows from the eye's photon count, not a light-level constant.
+    holds longer on the rods. That is why dusk is colourless and night grey, and here it follows from the eye's photon count,
+    not a light-level constant.
 
 `contrast` is the interface detection should read. It replaces the categorical hue test (`HUE_MISMATCH_PENALTY` if two strings
 differ), `TERRAIN_VISUAL`'s brightness/hue pairs, and the brightness-difference weight. It gives the number of JNDs between an
 integument and what is behind it, *for that observer, in that light*. Camouflage then becomes a fact about two bodies and a
 place, not a tag.
 
-### Proposed eyes
+### The eyes
 
-No doc says what the founder lineages' eyes are made of (Ecology-Foundations gives only their number and placement). These are
-proposals, in `PROPOSED_EYES`, a marked placeholder that nothing in play reads. **They are the person's to accept or change**
-before any of them moves into a body map:
+No older doc says what the founder lineages' eyes are made of (Ecology-Foundations gives only their number, placement, and
+Clade B's "dark and reflective"). These were proposed and accepted (the person, 30 Sep 2026: "right area and direction"); rods
+and tapeta were added with the night sky:
 
-| species | classes (nm) | lens | eye | reasoning |
-|---|---|---|---|---|
-| prowler (Clade A) | 455, 570 | 400 | 6 mm aperture, 14 mm focal, 3 µm, 30 ms | Clade A's vision is secondary to smell: ancestrally two classes, like most mammals |
-| ravager (Clade A) | 470, 595 | 410 | 9, 18, 3.5 µm, 40 ms | forest-interior hunter: long class moved into the red light under the canopy; big slow eyes for the dim floor |
-| grazer (Clade B) | 365, 470, 575 | 330 | 5, 9, 3 µm, 20 ms | Clade B's four eyes are for motion and pattern: fast integration; ancestrally three classes with UV |
-| shaleback (Clade B) | 370, 455, 525, 600 | 340 | 10, 20, 2.5 µm, 30 ms | "the best vision on the surface": a fourth class; big eyes |
-| lurker (Clade B) | 490, 580 | 400 | 7, 12, 4 µm, 50 ms | waits in the substrate: lost UV, wide receptors, long integration for dim ground |
+| species | cones (nm) | rods (nm, pool) | lens | eye | tapetum | reasoning |
+|---|---|---|---|---|---|---|
+| prowler (Clade A) | 455, 570 | 500, 500 | 400 | 6 mm aperture, 14 mm focal, 3 µm, 30 ms | 0 | vision secondary to smell: ancestrally two classes, like most mammals; no eyeshine in the lore |
+| ravager (Clade A) | 470, 595 | 505, 1500 | 410 | 9, 18, 3.5 µm, 40 ms | 0 | forest-interior hunter: long class moved into the red light under the canopy; big slow eyes, heavy pooling for the dim floor |
+| grazer (Clade B) | 365, 470, 575 | 495, 300 | 330 | 5, 9, 3 µm, 20 ms | 0.5 | Clade B's four eyes are for motion and pattern: fast integration; ancestrally three classes with UV; "reflective" |
+| shaleback (Clade B) | 370, 455, 525, 600 | 495, 500 | 340 | 10, 20, 2.5 µm, 30 ms | 0.5 | "the best vision on the surface": a fourth class; big eyes |
+| lurker (Clade B) | 490, 580 | 500, 2000 | 400 | 7, 12, 4 µm, 50 ms | 0.8 | waits in the substrate: lost UV, wide receptors, long integration, the strongest night eye |
+
+The human reference eye has rods at 498 nm pooled 1000 to one behind a 7 mm pupil, which puts a dark-adapted human about where
+a real one is under a moonless sky: pale things visible, dark ones not.
 
 What they imply. Chromatic / achromatic JNDs; below ~1 means "can't tell". From `node tools/spectra.mjs`:
 
 | pair | light | human | prowler | ravager | grazer | shaleback | lurker |
 |---|---|---|---|---|---|---|---|
-| hemolymph vs crimson mat | noon | 7.6 / 26 | 9.7 / 21 | 13 / 6.7 | 12 / 21 | 18 / 16 | 14 / 18 |
-| hemolymph vs crimson mat | dusk (−4°) | 1.0 / 5.1 | 3.9 / 14 | 7.7 / 9.5 | 5.2 / 14 | 7.9 / 12 | 9.7 / 20 |
-| crimson mat vs iron soil | noon | 4.4 / 19 | 1.4 / 15 | 2.9 / 6.2 | 2.6 / 13 | 9.0 / 8.3 | 3.4 / 12 |
-| dead organic vs iron soil | noon | 1.4 / 1.0 | 2.7 / 0.8 | 2.2 / 0.8 | 3.0 / 1.0 | 2.6 / 1.4 | 2.3 / 1.1 |
+| hemolymph vs crimson mat | noon | 7.7 / 26 | 9.7 / 21 | 13 / 6.7 | 12 / 21 | 18 / 16 | 14 / 18 |
+| hemolymph vs crimson mat | dusk (−4°) | 2.1 / 38 | 3.9 / 37 | 7.7 / 30 | 5.9 / 33 | 9.1 / 32 | 10 / 25 |
+| hemolymph vs crimson mat | night | 0 / 2.0 | 0 / 1.5 | 0 / 4.1 | 0 / 1.6 | 0 / 2.1 | 0.1 / 9.5 |
+| crimson mat vs iron soil | noon | 4.6 / 19 | 1.4 / 15 | 2.9 / 6.2 | 2.6 / 13 | 9.0 / 8.3 | 3.4 / 12 |
+| crimson mat vs iron soil | night | 0 / 0.9 | 0 / 0.7 | 0 / 2.0 | 0 / 0.6 | 0 / 0.8 | 0 / 4.4 |
+| bone vs iron soil | night | 0 / 2.4 | 0 / 1.8 | 0 / 4.9 | 0 / 1.9 | 0 / 2.5 | 0 / 11 |
+| dead organic vs iron soil | noon | 1.5 / 1.0 | 2.7 / 0.8 | 2.2 / 0.8 | 3.0 / 1.0 | 2.6 / 1.4 | 2.3 / 1.1 |
 
 Read off:
 
-- **Wounds are beacons** (Ecology-Foundations) to every eye, even at dusk.
+- **Wounds are beacons** (Ecology-Foundations) to every eye in daylight and at dusk; at night only by brightness, and only to
+  the big-eyed.
 - **The prowler, a dichromat, can barely tell the crimson mat from iron soil by colour** (1.4 JND): to it they differ in
   brightness. The four-class shaleback sees them 9 JND apart.
 - **Everyone sees brown detritus on brown soil as nearly the same** (1–3 JND): a hunting ground for anything the colour of
   dead mat.
+- **Night belongs to the lurker and the ravager.** On a moonless night the prowler and the grazer see pale things against dark
+  ones and little else; the lurker sees the crimson mat against soil (4.4 JND) and a bone at 11. The prowler hunts by smell.
 
 These are the kinds of fact camouflage should come from.
 
@@ -296,9 +315,10 @@ them apart** (`screenColor(eye, R, light, adaptingLight)`):
 
 Consequences, all without hand-set colours:
 
-- **A dichromat draws on one blue–yellow axis.** The prowler sees the crimson mat as olive-brown (`#6C4508`), blood as blue.
-- **Dusk and night lose colour, then brightness,** at rates set by the player's eye.
-- **An eye whose middle class sits at 470 nm (the grazer) draws hue-shifted.** Brown detritus comes out green (`#417E4D`),
+- **A dichromat draws on one blue–yellow axis.** The prowler sees the crimson mat as olive-brown (`#6C4507`), blood as blue.
+- **Dusk loses colour, then night is grey,** at rates set by the player's eye. At night the rods carry the picture, on their
+  own curve: blues hold and reds go dark (the Purkinje shift), so the crimson mat is near-black and blood a mid grey.
+- **An eye whose middle class sits at 470 nm (the grazer) draws hue-shifted.** Brown detritus comes out green (`#407E4C`),
   because what it catches most is short of its long class and long of its UV class. That is the dominant wavelength for that
   eye.
 - **Walking from open ground into the forest shifts the screen red** until the eye adapts. Only when adaptation holds a time
@@ -307,10 +327,8 @@ Consequences, all without hand-set colours:
 Only the player's eye is ever drawn. NPC eyes are never rendered, only read through `contrast`. The human reference observer
 is used for labels, for authoring materials, and for the calibration.
 
-**The person's call.** Drawing the world through the player species' eye is a large change of look: a prowler's world is
-blue–yellow, a grazer's is hue-shifted. The alternative is to draw everything in reference colours and let the eye act only
-through contrast (what is dim, what is noticed). `Utils/spectra.html` shows every material through every proposed eye in each
-light, so the choice can be made by looking.
+**Decided** (the person, 30 Sep 2026): the screen draws the world through the player species' eye. A prowler's world is
+blue–yellow, a grazer's is hue-shifted. `Utils/spectra.html` shows every material through every species' eye in each light.
 
 ---
 
@@ -318,9 +336,10 @@ light, so the choice can be made by looking.
 
 | file | what |
 |---|---|
-| `js/spectra.js` | the pipeline, the chromophores, materials, star and atmosphere, eye template and contrast, the display convention, the reference observer, and the proposed eyes (placeholder). Pure: no imports, no state. **Not yet read by the game or the renderer** |
-| `tools/spectra.mjs` | plain node: reference colours, every proposed eye in seven lights, contrast pairs; `--calibrate` refits the display's chroma scale |
-| `Utils/spectra.html` | swatches: every surface through every proposed eye, with a light and adaptation selector and a spectrum plot (on the preview at `…/Utils/spectra.html`) |
+| `js/spectra.js` | the pipeline, the chromophores, materials, star, atmosphere and night sky, eye template (cones, rods, tapetum) and contrast, the display convention, the reference observer. Pure: no imports, no state. **Not yet read by the game or the renderer** |
+| `js/body-maps.js` | the eyes: `EYE_*` records spread into each eyed zone's visual transducer; `getEye(zone)` |
+| `tools/spectra.mjs` | plain node: reference colours, every species' eye (from its body map) in seven lights, contrast pairs; `--calibrate` refits the display's chroma scale |
+| `Utils/spectra.html` | swatches: every surface through every species' eye, with a light and adaptation selector and a spectrum plot (on the preview at `…/Utils/spectra.html`) |
 | `js/palette-compute.js` | the old three-layer tile palette. Superseded, still the planet viewer's (via its own copy). Retired when the renderer draws from `spectra.js` |
 
 What the game draws today is unchanged: hand-set biome palettes (`ecology-data.js`), creature tints (`monsters.js`), the
@@ -328,7 +347,7 @@ day/night overlay (`time-cycle.js`). Detection still reads hue strings.
 
 ## Next passes (one pull request each)
 
-1. **Eyes into the body maps**, once the person settles the receptor sets. Delete `PROPOSED_EYES`.
+1. ~~Eyes into the body maps~~ (done, with rods, tapeta and the night sky).
 2. **Integument as material.** Each species' integument becomes a composition per zone. Detection's contrast factor becomes
    `contrast()` against the tile's surface in the tile's light. Retire `TERRAIN_VISUAL` hue strings, `HUE_MISMATCH_PENALTY`,
    `BRIGHTNESS_CONTRAST_WEIGHT` and the bleed bonus: blood is hemolymph on the integument, an areal mix. Run
@@ -337,18 +356,22 @@ day/night overlay (`time-cycle.js`). Detection still reads hue strings.
    - The day cycle gives a star elevation; `getLightLevel` and the tint overlay give way to `daylight()`.
    - Canopy and shadow come from the tile.
    - The receptors' adaptation state is held in the eye, with a time course.
-4. **The renderer.** Tile palettes and creature colours come from `screenColor` with the player's eye (or reference colours:
-   the person's call above), cached per material × light × eye. Tile compositions come from the tile body map
+4. **The renderer.** Tile palettes and creature colours come from `screenColor` with the player's eye, cached per material ×
+   light × eye. Night is grey and grainy: shot noise could be drawn as per-tile jitter. Tile compositions come from the tile body map
    (tile-body-map-spec). `palette-compute.js` retires.
 5. **The planet viewer** takes a copy of `spectra.js` and drops its `computeTilePalette` transform.
 
+## Decisions (the person, 30 Sep 2026)
+
+- **Receptor sets**: accepted as proposed ("right area and direction").
+- **Screen**: the world through the player species' eye.
+- **Star temperature**: 4800 K stays; revisit if it turns out to matter.
+- **Night sky**: realistic — no moon in the lore, so starlight and airglow at 3e-9 noons, seen with rods.
+- **"Warm-toned, dim"**: dropped; it was presentation, and this system decides what is seen.
+
 ## Open questions for the person
 
-- **Star temperature**: 4800 K fits "slightly cooler than Sol" and "yellow-orange". Cooler (~4300 K) is more orange.
-- **The night sky**: `NIGHT_SKY.flux` is 1e-6 noons (Earth's full moon). Moons, a bright galaxy or airglow would raise it.
-  Today's game draws night at 0.1 of day, far brighter than any natural night sky. Physically only big, slow eyes (the proposed
-  ravager and lurker) see anything at 1e-6.
-- **The receptor sets** above.
-- **Screen**: the player's eye's colours, or reference colours with the eye acting through contrast only.
-- **Ecology-Foundations' "warm-toned, dim"**: it is invisible to an adapted native. Keep it as a presentation choice, or let
-  it go.
+- **A moon?** The lore has none, so every night is moonless and only the lurker and ravager see well. A moon would give a
+  phase cycle: bright nights (~1e-6 noons at full) when the prowler and grazer can see too.
+- **Night acuity**: rods pool, so night vision should be coarse (a smaller effective acuity at night). That belongs to the
+  light pass.

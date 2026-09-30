@@ -235,12 +235,30 @@ const rayleigh = (atm = ATMOSPHERE) => fromFn(l => atm.rayleighDepth550 * (l / 5
 // path; the scattered light is the sky, which is what lights a shadow. Below
 // the horizon the sky overhead stays lit for a while (twilight: roughly ten
 // times dimmer per 3° of depression), then only the night sky is left.
-export const NIGHT_SKY = { flux: 1e-6 };        // noons; Earth's full moon is ~1e-6, a moonless sky ~1e-8
+//
+// The night sky has no moon (the lore gives none): it is the light of the
+// other stars and the upper atmosphere's own glow (airglow), which on a clear
+// moonless Earth night together give ~3e-4 lux against ~1e5 lux at noon.
+// Integrated starlight is a cool continuum; airglow is emission lines —
+// atomic oxygen at 557.7 nm (green) and 630.0 nm (red), sodium at 589 nm —
+// and hydroxyl bands that grow into the near-infrared.
+export const NIGHT_SKY = { flux: 3e-9 };        // noons over 400–700 nm
+
+export function nightSky(night = NIGHT_SKY) {
+  const line = (c, k) => WL.map(l => k * Math.exp(-0.5 * ((l - c) / 2.5) ** 2));
+  const continuum = planckPhotons(3500);
+  const cont = scale(continuum, 0.7 / integrateRange(continuum, 400, 700));
+  const lines = add(add(line(557.7, 0.15 / (2.5 * Math.sqrt(2 * Math.PI))), line(589.3, 0.05 / (2.5 * Math.sqrt(2 * Math.PI)))),
+                    line(630.0, 0.10 / (2.5 * Math.sqrt(2 * Math.PI))));
+  const hydroxyl = WL.map(l => l > 650 ? 0.004 * ((l - 650) / 50) ** 2 : 0);
+  const shape = add(add(cont, lines), hydroxyl);
+  return scale(shape, night.flux / integrateRange(shape, 400, 700));
+}
 
 export function daylight(elevationDeg, star = STAR, atm = ATMOSPHERE, night = NIGHT_SKY) {
   const top = starlight(star);
   const tau = rayleigh(atm);
-  const nightShape = scale(top, night.flux / star.flux);
+  const nightShape = nightSky(night);
   if (elevationDeg <= 0) {
     const tw = 0.01 * 10 ** (elevationDeg / 3);
     const skyShape = top.map((v, i) => v * (1 - Math.exp(-tau[i] * 10)));
@@ -299,23 +317,60 @@ export function opsin(lambdaMax) {
 // Ocular media: the lens and cornea absorb short wavelengths below `cutoff`.
 export const lens = (cutoff, width = 8) => fromFn(l => 1 / (1 + Math.exp(-(l - cutoff) / width)));
 
-// Build the working form of one eye from its body-map record (the fields are
-// listed in Spectral-Color-Design "The eye in the body map").
+// Photons one receptor absorbs in one integration time from a white surface
+// under Earth's noon sun, per unit catch (Land 1981: N = (π/4)² D² (d/f)² R Δt
+// × absorptance). R for a white Lambertian surface at Earth noon is
+// ~3.8e20 photons m⁻² s⁻¹ sr⁻¹ over 400–700 nm. A tapetum (a mirror behind
+// the retina: eyeshine) sends what passed the receptors back through them.
+function photonsPerNoon(eye, receptorUm, integrationMs) {
+  const D = eye.apertureMm * 1e-3, f = eye.focalMm * 1e-3, d = receptorUm * 1e-6;
+  return (Math.PI / 4) ** 2 * D * D * (d / f) ** 2 * 3.8e20 * (integrationMs * 1e-3) * 0.5 * (1 + (eye.tapetum || 0));
+}
+
+// The working form of one eye, from its record on a body-map zone's visual
+// transducer (the fields are in Spectral-Color-Design "The eye in the body
+// map"). Cones are the colour classes; rods, if the eye has them, are one
+// more-sensitive class whose signals pool over many receptors and which
+// saturate in daylight.
 export function eyeOptics(eye) {
+  if (eye._optics) return eye._optics;
   const media = lens(eye.lensCutoffNm ?? 390);
-  const classes = eye.receptors.map(r => ({
+  const classes = eye.cones.map(r => ({
     lambdaMax: r.lambdaMax,
     share: r.share,
     weber: r.weber ?? 0.05,
     sens: mul(opsin(r.lambdaMax), media),
   }));
-  // Photons one receptor absorbs in one integration time from a white surface
-  // under Earth's noon sun, per unit catch (Land 1981: N = (π/4)² D² (d/f)² R Δt
-  // × absorptance). R for a white Lambertian surface at Earth noon is
-  // ~3.8e20 photons m⁻² s⁻¹ sr⁻¹ over 400–700 nm.
-  const D = eye.apertureMm * 1e-3, f = eye.focalMm * 1e-3, d = eye.receptorUm * 1e-6;
-  const photonsPerNoon = (Math.PI / 4) ** 2 * D * D * (d / f) ** 2 * 3.8e20 * (eye.integrationMs * 1e-3) * 0.5;
-  return { classes, photonsPerNoon, halfSaturation: eye.halfSaturationPhotons ?? 50 };
+  let rods = null;
+  if (eye.rods) {
+    const single = photonsPerNoon(eye, eye.rods.receptorUm, eye.rods.integrationMs);
+    rods = {
+      lambdaMax: eye.rods.lambdaMax,
+      sens: mul(opsin(eye.rods.lambdaMax), media),
+      singlePerNoon: single,
+      pooledPerNoon: single * eye.rods.pool,
+      halfSaturation: eye.rods.halfSaturationPhotons ?? 20,
+      saturation: eye.rods.saturationPhotons ?? 1000,
+      weber: eye.rods.weber ?? 0.05,
+    };
+  }
+  const optics = {
+    classes, rods,
+    photonsPerNoon: photonsPerNoon(eye, eye.coneUm, eye.integrationMs),
+    halfSaturation: eye.halfSaturationPhotons ?? 50,
+  };
+  // Cached on the record but hidden from JSON, so saves and deep copies of a
+  // body map carry only the anatomy.
+  Object.defineProperty(eye, '_optics', { value: optics, enumerable: false, configurable: true });
+  return optics;
+}
+
+// How much a rod system is signalling in a light, 0–1: its pooled photons
+// against its half-saturation, and nothing once each rod is saturated
+// (daylight bleaches rods; they carry no contrast there).
+function rodGain(rods, whiteCatch) {
+  const pooled = whiteCatch * rods.pooledPerNoon, single = whiteCatch * rods.singlePerNoon;
+  return pooled / (pooled + rods.halfSaturation) / (1 + single / rods.saturation);
 }
 
 // Quantum catch of each receptor class: ∫ R(λ) I(λ) S(λ) dλ.
@@ -348,6 +403,7 @@ function noise(optics, Q) {
 // with the achromatic direction removed (general n-class form). Achromatic:
 // the difference in summed catch against the noise of the summed channel.
 export function contrast(optics, Ra, Rb, light) {
+  if (!optics.classes) optics = eyeOptics(optics);
   const Qa = catches(optics, Ra, light), Qb = catches(optics, Rb, light);
   const df = Qa.map((q, i) => Math.log(Math.max(q, 1e-12) / Math.max(Qb[i], 1e-12)));
   const w = noise(optics, Qa.map((q, i) => (q + Qb[i]) / 2));
@@ -360,7 +416,17 @@ export function contrast(optics, Ra, Rb, light) {
   const lumA = Qa.reduce((s, q, i) => s + q * optics.classes[i].share, 0);
   const lumB = Qb.reduce((s, q, i) => s + q * optics.classes[i].share, 0);
   const lumNoise = Math.sqrt(1 / sInv);           // pooled channel is quieter than any one class
-  const achromatic = Math.abs(Math.log(Math.max(lumA, 1e-12) / Math.max(lumB, 1e-12))) / lumNoise;
+  let achromatic = Math.abs(Math.log(Math.max(lumA, 1e-12) / Math.max(lumB, 1e-12))) / lumNoise;
+  // Rods add a second, independent brightness channel: the pooled signal
+  // against its Weber and shot noise, worthless once saturated.
+  if (optics.rods) {
+    const r = optics.rods;
+    const ra = integrate(mul(mul(Ra, light), r.sens)), rb = integrate(mul(mul(Rb, light), r.sens));
+    const pooled = Math.max(1e-9, (ra + rb) / 2 * r.pooledPerNoon);
+    const sat = 1 / (1 + (ra + rb) / 2 * r.singlePerNoon / r.saturation);
+    const rodJND = Math.abs(Math.log(Math.max(ra, 1e-12) / Math.max(rb, 1e-12))) / Math.sqrt(r.weber ** 2 + 1 / pooled) * sat;
+    achromatic = Math.hypot(achromatic, rodJND);
+  }
   return { chromatic, achromatic };
 }
 
@@ -382,8 +448,8 @@ export function contrast(optics, Ra, Rb, light) {
 
 export const DISPLAY = {
   exposure: 0.85,          // white draws just under full scale
-  chromaPerLog: 0.030,     // OKLab chroma per e-fold of (1 + JNDs / chromaJND): Fechner's law
-  chromaJND: 0.3,          // JNDs from grey at which chroma starts to grow logarithmically
+  chromaPerLog: 0.036,     // OKLab chroma per e-fold of (1 + JNDs / chromaJND): Fechner's law
+  chromaJND: 0.5,          // JNDs from grey at which chroma starts to grow logarithmically
   uvHueStep: 0.6,          // degrees of hue per nm below 400: UV draws as a deeper violet
   hueMatchWidth: 0.003,    // how close (cosine) a spectral light must be to share in the hue
 };
@@ -464,19 +530,34 @@ function hueFor(optics, q) {
 // `light` is what falls on the surface; `adaptingLight` what the eye is
 // adapted to (usually the light where the player stands).
 export function screenColor(optics, R, light, adaptingLight = light) {
+  if (!optics.classes) optics = eyeOptics(optics);
   const q = adapt(optics, catches(optics, R, light), adaptingLight);
   const whiteQ = catches(optics, flat(1), adaptingLight);
   const w = noise(optics, whiteQ.map((v, i) => v * Math.max(q[i], 1e-6)));
-  // Lightness: share-weighted catch; dimmed below the receptors' half-saturation.
+  // Lightness: the cones' share-weighted catch, dimmed below their
+  // half-saturation; where the cones run short, the rods' catch fills in
+  // (their own curve, so blues hold and reds go dark at night: the Purkinje
+  // shift), until the rods saturate in daylight.
   const shares = optics.classes.reduce((s, c) => s + c.share, 0);
   const Y = optics.classes.reduce((s, c, i) => s + c.share * q[i], 0) / shares;
   const photons = optics.classes.reduce((s, c, i) => s + c.share * whiteQ[i], 0) / shares * optics.photonsPerNoon;
-  const bright = photons / (photons + optics.halfSaturation);
-  const L = Math.cbrt(Math.max(0, Y * bright * DISPLAY.exposure));
+  const coneGain = photons / (photons + optics.halfSaturation);
+  let rodPart = 0;
+  if (optics.rods) {
+    const rs = optics.rods.sens;
+    const rodWhite = integrate(mul(adaptingLight, rs));
+    const Yrod = integrate(mul(mul(R, light), rs)) / Math.max(rodWhite, 1e-30);
+    rodPart = (1 - coneGain) * rodGain(optics.rods, rodWhite) * Yrod;
+  }
+  const lum = coneGain * Y + rodPart;
+  const L = Math.cbrt(Math.max(0, lum * DISPLAY.exposure));
   if (optics.classes.length < 2) return oklabToSrgb(L, 0, 0);
   const x = rnl(q, w);
   const jnd = Math.hypot(...x);
-  const C = DISPLAY.chromaPerLog * Math.log(1 + jnd / DISPLAY.chromaJND);
+  // Colour comes from the cones alone: the more of the lightness the rods
+  // carry, the less colour is left.
+  const coneFraction = lum > 0 ? coneGain * Y / lum : 0;
+  const C = DISPLAY.chromaPerLog * Math.log(1 + jnd / DISPLAY.chromaJND) * coneFraction;
   const h = jnd > 1e-9 ? hueFor(optics, q) : 0;
   return oklabToSrgb(L, C * Math.cos(h), C * Math.sin(h));
 }
@@ -517,12 +598,13 @@ export const hex = c => '#' + [c.r, c.g, c.b].map(v => v.toString(16).padStart(2
 // `humanColor` is exact colorimetry (human cone catches → sRGB), not the
 // display convention above.
 export const HUMAN_EYE = {
-  receptors: [
+  cones: [
     { lambdaMax: 420, share: 0.06 },
     { lambdaMax: 534, share: 0.32 },
     { lambdaMax: 564, share: 0.62 },
   ],
-  lensCutoffNm: 400, apertureMm: 3, focalMm: 17, receptorUm: 2.5, integrationMs: 20,
+  rods: { lambdaMax: 498, pool: 1000, receptorUm: 2, integrationMs: 100 },
+  lensCutoffNm: 400, apertureMm: 7, focalMm: 17, coneUm: 2.5, integrationMs: 20,
 };
 export const EARTH_NOON = scale(EARTH_SUN, 1 / EARTH_NORM);
 
@@ -565,30 +647,3 @@ function humanOklab(R, light = EARTH_NOON) {
           1.9779984951 * cl - 2.4285922050 * cm + 0.4505937099 * cs,
           0.0259040371 * cl + 0.7827717662 * cm - 0.8086757660 * cs];
 }
-
-// ==================== PROPOSED EYES — PLACEHOLDER ====================
-// Stand-ins for the eye records the body maps do not have yet (today an eye is
-// { acuity, placement, fieldAngle }). Each is a proposal for the person to
-// accept or change (Spectral-Color-Design "Proposed eyes"); the replacement
-// path is to move these fields onto the visual transducer of each species'
-// head zone in body-maps.js, after which this table is deleted. Nothing in
-// play reads it.
-export const PROPOSED_EYES = {
-  // Clade A: vision secondary to smell; ancestrally two classes.
-  prowler:   { receptors: [{ lambdaMax: 455, share: 0.15 }, { lambdaMax: 570, share: 0.85 }],
-               lensCutoffNm: 400, apertureMm: 6, focalMm: 14, receptorUm: 3, integrationMs: 30 },
-  // The forest-interior hunter: long class shifted into the red light that
-  // comes through the canopy; bigger eyes for the dim floor.
-  ravager:   { receptors: [{ lambdaMax: 470, share: 0.12 }, { lambdaMax: 595, share: 0.88 }],
-               lensCutoffNm: 410, apertureMm: 9, focalMm: 18, receptorUm: 3.5, integrationMs: 40 },
-  // Clade B: four eyes, motion and pattern; ancestrally three classes with UV.
-  grazer:    { receptors: [{ lambdaMax: 365, share: 0.1 }, { lambdaMax: 470, share: 0.25 }, { lambdaMax: 575, share: 0.65 }],
-               lensCutoffNm: 330, apertureMm: 5, focalMm: 9, receptorUm: 3, integrationMs: 20 },
-  // The shore grazer, the best eyes on the surface: a fourth class.
-  shaleback: { receptors: [{ lambdaMax: 370, share: 0.08 }, { lambdaMax: 455, share: 0.17 }, { lambdaMax: 525, share: 0.35 }, { lambdaMax: 600, share: 0.4 }],
-               lensCutoffNm: 340, apertureMm: 10, focalMm: 20, receptorUm: 2.5, integrationMs: 30 },
-  // The ambush hunter in the substrate: lost UV, long integration for the dim
-  // ground it waits in.
-  lurker:    { receptors: [{ lambdaMax: 490, share: 0.3 }, { lambdaMax: 580, share: 0.7 }],
-               lensCutoffNm: 400, apertureMm: 7, focalMm: 12, receptorUm: 4, integrationMs: 50 },
-};

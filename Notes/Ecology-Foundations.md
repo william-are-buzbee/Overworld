@@ -8,7 +8,7 @@ Reference document for creature design, biome logic, and world-building. These a
 
 ### 1. Star and Orbit
 
-**Intensity:** ~60-70% of Earth. The world feels like perpetual late afternoon — warm-toned, dim, soft shadows. Not dark, but no harsh midday glare. Night is genuinely dark due to low ambient light.
+**Intensity:** ~60-70% of Earth: to an eye adapted to it, broad daylight — like a bright overcast day, soft shadows under the thick atmosphere, no harsh midday glare. The star's warm colour is invisible to native eyes, which adapt to it as white (Spectral-Color-Design). There is no moon: a night is starlight and airglow, millions of times dimmer than day, colourless, and seen only by rods; big-eyed, tapetum-backed hunters own it.
 
 **Spectrum:** Yellow-orange peak (slightly cooler than Sol). Photosynthetic organisms evolve pigments that absorb blue, green, and violet, reflecting reds and deep browns. The photosynthetic pigment reflects red and a little violet: deep crimson-maroon. Trunks are not photosynthetic — they're mineral-impregnated structural material tinted by local chemistry (iron-red, copper-green, manganese-dark). Chemotrophic organisms (which don't photosynthesize) may actually be *lighter* in color than photosynthetic ones — their pigmentation comes from mineral chemistry, not light absorption. Every colour is computed spectrally — what a surface is made of, the light on it, the eye looking — see Spectral-Color-Design.md.
 
@@ -306,7 +306,7 @@ Ice and cold are alien on this planet. Creatures adapted to frozen environments 
 | Flora reproduction | Spore-based (no flowers, no fruit, no seeds). Chemotrophic flora also fragments/expands networks |
 | Speciation pattern | Clade A = gradual branching. Clade B = punctuated bursts |
 | Creature synergy/danger scaling | Clade B groups are more dangerous when nearby (synchronization). Clade A groups are more dangerous when experienced (memory) |
-| Day/night visual feel | Dim star + thick atmosphere = warm amber baseline, genuinely dark nights |
+| Day/night visual feel | Adapted eyes see daylight as white; low star, shadow and forest floor shift the light; moonless nights are grey and dark, seen by rods (Spectral-Color-Design) |
 | Sound-based detection | Slightly thick atmosphere = sound carries further |
 | Fire mechanics | Normal oxygen = fire behaves as expected |
 | Trunk color variation | Regional mineral chemistry — iron zones produce red-brown trunks, copper zones produce greenish trunks, manganese zones produce near-black trunks. Frond color is constant (photosynthetic pigment). |

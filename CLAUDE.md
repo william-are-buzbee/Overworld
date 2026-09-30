@@ -28,7 +28,7 @@ shared mutable state every module imports. Each file's first lines say what it o
 | drawing and UI | rendering.js, display.js, sprites.js, sprites-32.js, texture-picker.js, modal.js, ui.js, log.js, log-ui.js, worldmap.js, debug.js; sprite-select.js and palette-compute.js (superseded by spectra.js) are standalone (CommonJS, not yet imported by the game) |
 
 `Utils/planet-viewer.html` is a standalone planet tool (the Planet-Viewer repo is its own project); `Utils/spectra.html` shows every
-material through every proposed eye; `js/test-hare-bodymap.html` is a test page.
+material through every species' eye; `js/test-hare-bodymap.html` is a test page.
 
 ## Run and look
 
