@@ -27,7 +27,7 @@
 <script type="module">
 import * as m from './constants.js';
 import { CREATURE_WIRING, getWiring } from './wiring.js';
-import { runNodes, validateWiring } from './nodes.js';
+import { runNodes, refillGlands, validateWiring } from './nodes.js';
 import { state } from './state.js';
 
 const log = document.getElementById('log');
@@ -191,6 +191,16 @@ assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'bot
   const calm2 = woundedHare([]); calm2.detectionInfo[0].zoneSNR = { 'fore_l.vibration.ground': 2.5, 'fore_r.vibration.ground': 2.5 };
   assert(runNodes(calm2, wiring).type !== 'bolt' && runNodes(jumpy, wiring).type === 'bolt',
          'a footfall too faint to bolt a calm hare bolts an alarmed one');
+}
+// Gland store: three full releases, then dry; synthesis refills it
+{
+  const e = woundedHare([]);
+  const levels = [];
+  for (let k = 0; k < 4; k++) { runNodes(e, wiring); levels.push(e.hormones.alarm); }
+  assert(approx(levels[2], 0.9, 1e-6) && approx(levels[3], levels[2], 1e-9),
+         `a gland runs dry: alarm ${levels.map(v => v.toFixed(2)).join(' → ')} over four bolts`);
+  refillGlands(e, wiring, 50);
+  assert(approx(e.glandStores.alarm_gland, 0.45, 1e-6), `50 ticks of synthesis refill half the store (${e.glandStores.alarm_gland.toFixed(3)})`);
 }
 assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
 assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');
