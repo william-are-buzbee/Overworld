@@ -7,7 +7,7 @@ parts list and the ways parts are put together.
 
 Include it alongside Design-Principles and Cognition-Design when designing or converting any creature's nervous system.
 
-**Status (Sep 2026): draft, settled in discussion with the person.** Nothing here is implemented yet beyond the hare's
+**Status (Sep 2026): settled in discussion with the person.** Nothing here is implemented yet beyond the hare's
 existing `CREATURE_NEURAL` entry (`cognition.js processGanglionSystem`), which this design replaces.
 
 ---
@@ -144,10 +144,12 @@ gland and which nodes have receptors for its hormone is the wiring.
 
 ### Maps: combining senses, holding, predicting
 
-A **map** is a set of mapped nodes laid out by bearing (and, with enough tissue, distance), as a real midbrain maps space.
-Signals from vision, vibration and smell that arrive from the same bearing land on the same node. There is no "object":
-combining senses is two inputs arriving at the same place on the map, and the node fires on less evidence from each because
-they add.
+A **map** is a set of mapped nodes laid out around the body, as a real midbrain maps space: by **bearing**, and by
+**distance bands** (touching, striking or pouncing range, near, far) as far as the tissue allows. How many bands a map has
+is its mass; how sharp a band is depends on the senses feeding it (a nose gives bearing and little distance, eyes give
+both). A small map may be bearing-only: it can turn toward or away but cannot tell near from far. Signals from vision,
+vibration and smell that arrive from the same place land on the same node. There is no "object": combining senses is two
+inputs arriving at the same place on the map, and the node fires on less evidence from each because they add.
 
 - **Holding**: map nodes with persistence keep firing where something was after it drops out of the senses. How long is how
   much of that tissue there is (today's traces: integrationCapacity × PERSISTENCE_SCALE).
@@ -220,12 +222,35 @@ A number that cannot be traced to the body is written in the wiring with a comme
 
 ---
 
-## The Player
+## The Hub, and the Player
 
-The player's intent stands where the top of a wiring would. Reflex arcs and wired templates in the player's body fire on
-their own, as in any creature: a grazer body bolts when its forelimbs feel a heavy footfall, whatever the player intended,
-unless the body has an inhibitory wire the player's intent can drive. The player can only drive generators the body has,
-wired to zones that survive; a hotbar of the body's generators (and later its learned patterns) is the natural interface.
+Every nervous system has nodes at the top of its wiring: the nodes in its integration tissue, the most connected, reached
+last by the senses and reaching furthest into the body. That set is the **hub**. For a creature, what drives the hub is its
+own wiring (glands, templates, the map). For the player, the player's intent drives it instead. **The player plays the
+hub**: same wiring, same limits. The player's intent entering at the hub is the one non-physical input in the design, and
+it enters at one well-defined place.
+
+Everything about control follows from the wiring:
+
+- **What can be done deliberately** is what the hub reaches through existing wires. A generator with a pathway from the hub
+  is on the player's hotbar; one without is not. The hotbar is read off the wiring. Lose the pathway (a destroyed zone on its
+  route) and the action is gone; grow a wire (a mutation) and one appears.
+- **What can be stopped** is what the hub has an inhibitory wire onto. No wire, no stopping it: the body does it.
+- **Who wins a conflict** is a race and a contest. A reflex a few hops from its transducer fires before the hub's signal
+  arrives: a bolt already triggered by a close footfall cannot be stopped. A weaker or later-firing reflex can be held down
+  if the hub's inhibitory weight beats its input. The game can say so: "your legs bolt before you can stop them."
+- **Control is earned by rewiring.** Hub-to-node weights are plastic. Driving a node, or holding a reflex down, strengthens
+  that wire each time it succeeds. A new grazer player cannot hold its bolt; one who has held it forty times can hold it
+  against a moderate footfall, never against a looming predator. The strength lives in tissue and can be lost with it.
+- **How much the hub can do at once is its mass.** Each action the hub drives as many independent outputs as its tissue
+  allows: a small hub one generator at a time, a large one orienting, stalking and holding a flinch down together. The same
+  limit binds creatures: a big-brained body does more at once because it has the tissue to.
+- **Dedicating tissue to control is a build choice.** A larger hub, or more hub wiring, gives more reachable actions and
+  stronger inhibition, paid for in mass and in the food neural tissue costs.
+
+So species play differently from anatomy, not from a difficulty setting. A hare's hub is 0.01 kg with almost no wires out
+of it: playing a hare is mostly steering while the body decides the important things. A wolf's hub reaches nearly all of its
+body: playing a wolf feels deliberate.
 
 ---
 
@@ -276,15 +301,25 @@ What its reactive rules become:
 
 ## Implementation Sequence
 
-One pass per pull request.
+One pass per pull request. The order (the person, Sep 2026): the systemic work first, then one animal, then the whole cast,
+before moving on to another system.
+
+**The node system**
 
 1. This document, settled with the person.
-2. The node runner: nodes, weights, persistence, mapped and pooled evaluation, hop timing, glands, generators built from
-   nodes. Port the hare onto it with no behaviour change (harness tallies identical).
-3. The wolf's wiring on the runner; its reactive rules retired (the other predators keep them until their turns).
-4. The wolf's map: holding (replacing traces for it) and prediction.
-5. Memory writers and stores, saved with the body; the detour placeholder replaced by a learned route store.
-6. Later: the other creatures, glands replacing `creature.drives`, the player's generators on a hotbar.
+2. The node runner: nodes, weights, persistence, mapped and pooled evaluation, hop timing, generators built from nodes.
+   Port the hare onto it with no behaviour change (harness tallies identical).
+3. Glands and hunger: gland nodes, hormones in the blood, receptors shifting thresholds; hunger, alarm and rest as hormone
+   levels replacing `creature.drives` (Endocrine-Design).
+4. Maps: bearing and distance bands, holding (replacing traces), prediction.
+5. The hub: hub nodes, reach, inhibition, the race, plastic hub weights, the hub's mass as its limit per action; the player
+   driving the hub, the hotbar read off the wiring.
+6. The wolf wired on the system; its reactive rules retired.
+7. The whole cast: the ravager, the lurker, the shaleback, the chemotroph colonies, and the hare rewired to use the new parts.
+   The reactive rules are then gone.
+
+**Then memory**, the same way: writers and stores saved with the body (the detour placeholder replaced by a learned route
+store), then one animal, then the cast.
 
 The harness (`tools/ecology.mjs`) checks each step for regressions and for systems not doing what their doc says. It does
 not set targets for the ecology.
@@ -293,9 +328,8 @@ not set targets for the ecology.
 
 ## Open Questions
 
-- Glands and hunger: before the wolf, or with it?
-- How far can a player's intent inhibit its body's reflexes: only through inhibitory wires the body has, or more?
-- Distance on the map: bearing only at first, or bearing and distance?
+- Which nodes are hub nodes: every node in integration tissue, or the wiring names them?
+- Does the player see why a reflex won (the log line), or only feel it?
 
 ## What NOT to Change
 
