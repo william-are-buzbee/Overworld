@@ -228,6 +228,20 @@ amount? }`: each action it fires, it writes.
 - **Damage**: a store's zone destroyed wipes it; a writer's zone destroyed writes nothing new while the store still reads
   (anterograde amnesia). Stores are `creature.memory`, saved with the body. `window.debugMemory()` shows them.
 
+**The wolf remembers (memory step 2, Sep 2026).** The pursuit predator's recipe (the wolf, the ravager) has a pattern
+library in the head (its patternLibrary tissue: the wolf's 50 g, 250 patterns) and an episodic ground store (its
+episodicMemory: 0.18 kg, 900 tiles).
+
+- Struck by something in reach, it writes that animal's pattern and associates it with danger (a quarter of what is left
+  each time). Everything in reach when the blow lands is written: it can blame the wrong one.
+- What it knows is dangerous adds to the larger-animal template (a thing that hurt it reads as a threat whatever its size)
+  and inhibits the prey template (past half, it is no longer prey): struck by a kind of animal about three times, it stops
+  hunting it. Nothing unwrites it yet.
+- Every action it writes the ground it stands on and around it. The chase's detour (behaviors.js `chaseStep`) plans through
+  remembered ground only; the true-ground placeholder is gone. A body without a route store steps straight at its target.
+- Food associations are not written yet: what it ate is a corpse, not a percept, and binding the kill to the meal is a
+  sequence (the sequence writer, later).
+
 ---
 
 ## Where the Numbers Come From
@@ -260,7 +274,7 @@ A number that cannot be traced to the body is written in the wiring with a comme
 | ai.js `_outputToAction` / `_actToAction`, behaviors.js `executeAction` | the executor the output stage drives through `act`; PLACEHOLDER for generators built from nodes. When nothing fires, the generator's gait is the wander profile (or rest when fatigue is high) |
 | refuge flight (`flee_home`, `flee_water` acts) | the body knows where home ground and water are (the wander's home, the nearest water): PLACEHOLDER for a route store |
 | `getMovementIntensity` by behaviour label | placeholder: intensity should come from the generator |
-| `ai-utils.js stepRoundObstacles` | placeholder for a learned route store (sequence and pattern writers) |
+| `ai-utils.js stepRoundObstacles` | a detour planned through the ground the body remembers (its route store, memory step 2); the search itself (breadth-first) stands in for route planning in tissue |
 | `creature.hormones` {alarm, hunger, fatigue} | blood chemistry (step 3). Alarm comes from gland nodes (the colony has none). Hunger and fatigue are released by body tissue, not neural glands |
 
 ---
@@ -449,7 +463,7 @@ before moving on to another system.
    The reactive rules are then gone.
 
 **Then memory**, the same way: writers and stores saved with the body (the detour placeholder replaced by a learned route
-store), then one animal, then the cast. Step 1 (the mechanics) is in.
+store), then one animal, then the cast. Step 1 (the mechanics) and step 2 (the wolf) are in.
 
 The harness (`tools/ecology.mjs`) checks each step for regressions and for systems not doing what their doc says. It does
 not set targets for the ecology.
