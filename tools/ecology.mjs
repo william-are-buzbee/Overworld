@@ -319,7 +319,7 @@ console.log('\nbody speed capacity (force-to-weight; the action economy runs a b
 }
 
 // ── Hunger and trail-following ──
-console.log('\npredator actions: share hungry (>0.5, the hunger nodes' level; >0.6); trail/air bouts and how they ended');
+console.log('\npredator actions: share hungry (>0.5, where the hunger nodes fire; >0.6); trail/air bouts and how they ended');
 {
   const hs = {};
   for (const r of runs) for (const [k, v] of Object.entries(r.huntStats)) {
