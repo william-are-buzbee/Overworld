@@ -14,7 +14,8 @@ pooled node reading a map takes its strongest place, blood chemistry shifting th
 for inhibition (worked out per species; a late veto is inert), and the output stage (locomotion, posture, orienting, feeding,
 gland). Not yet: persistence and maps (step 4), plastic weights (memory), generators built from nodes (the output stage
 stands in for them: the strongest drive reaching the locomotion generator wins). **Step 3 is in:** blood chemistry
-(`creature.hormones`), gland nodes that release into it, `blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). Inspect with `window.debugWiring('hare')`
+(`creature.hormones`), gland nodes that release into it, from a store their tissue holds and refills (`creature.glandStores`),
+`blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
@@ -318,7 +319,8 @@ before moving on to another system.
    Port the hare onto it with no behaviour change (harness tallies identical).
 3. Glands and hunger: gland nodes, hormones in the blood, receptors shifting thresholds; hunger, alarm and rest as hormone
    levels replacing `creature.drives` (Endocrine-Design).
-4. Maps: bearing and distance bands, holding (replacing traces), prediction.
+4. Maps: bearing and distance bands, holding (replacing traces), prediction. Threat templates wired per distance band, so a
+   large animal far off weighs less than one near (a shaleback anywhere in view reads as a threat today).
 5. The hub: hub nodes, reach, inhibition, the race, plastic hub weights, the hub's mass as its limit per action; the player
    driving the hub, the hotbar read off the wiring.
 6. The wolf wired on the system; its reactive rules retired.
