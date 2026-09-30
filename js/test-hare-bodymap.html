@@ -527,6 +527,61 @@ worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
   assert(e.memory.ground && e.memory.ground.count > 0 && JSON.parse(JSON.stringify(e.memory)).ground.count === e.memory.ground.count,
          'the ground store is body state: it saves');
 }
+// The cast remembers (memory step 3)
+{
+  const H = CREATURE_WIRING.hare, L = CREATURE_WIRING.ambush_pred, C = CREATURE_WIRING.cave_crab;
+  const body = (key, hunger = 0.2, extra = {}) => { const e = { key, layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); return e; };
+  // Hare habituation: a shaleback felt and seen often, never harmful
+  const crabBody = { key: 'cave_crab', hp: 1 };
+  const crab = (dx) => ({ entity: crabBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'much_larger',
+    sizeEstimate: { estimated: 200, lower: 150, upper: 260 }, species: 'cave_crab', speciesConfidence: 0.9,
+    dietType: 'herbivore', dietConfidence: 0.8, isMoving: true, closingSpeed: 0,
+    zoneSNR: { 'head.visual': 6, 'fore_l.vibration.ground': 1.5, 'fore_r.vibration.ground': 1.5 } });
+  const h = body('hare'); h.detectionInfo = [crab(6)];
+  const first = runNodes(h, H).type;
+  for (let k = 0; k < 40; k++) runNodes(h, H);
+  const later = runNodes(h, H).type;
+  info(`hare, a shaleback felt and seen 6 tiles off: first ${first}; after 40 actions of it, ${later}`);
+  assert(first === 'freeze' && later !== 'freeze' && h.memory.lib_l.patterns[0].n > 40,
+         `habituation: familiar and never harmful, the threat template is held down (${first} → ${later})`);
+  // Hare danger: hurt in contact by a ravager, then felt at a distance
+  const direBody = { key: 'dire_wolf', hp: 1 };
+  const direAt = (dx) => ({ entity: direBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'much_larger',
+    sizeEstimate: { estimated: 90, lower: 70, upper: 110 }, species: 'dire_wolf', speciesConfidence: 0.9,
+    dietType: 'predator', dietConfidence: 0.8, isMoving: true, closingSpeed: 0,
+    zoneSNR: { 'fore_l.vibration.ground': 1.5, 'fore_r.vibration.ground': 1.5 } });
+  const threatOf = (e) => ((e._nodeTrace || []).find(t => t.id === 'threat_level') || { value: 0 }).value;
+  const naive = body('hare'); naive.detectionInfo = [direAt(6)];
+  runNodes(naive, H); const before = threatOf(naive);
+  const scarred = body('hare'); scarred.detectionInfo = [direAt(1)];
+  for (let k = 0; k < 3; k++) { scarred.tookDamageThisTurn = true; runNodes(scarred, H); }
+  scarred.tookDamageThisTurn = false; scarred.hormones.alarm = 0; scarred.detectionInfo = [direAt(6)];
+  runNodes(scarred, H); const afterD = threatOf(scarred);
+  assert(scarred.memory.lib_l.patterns.some(p => p.assoc && p.assoc.danger > 0.5) && afterD > before,
+         `hurt by a ravager: the fore limbs remember it as dangerous; felt 6 tiles off it reads as more threat (${before.toFixed(2)} → ${afterD.toFixed(2)})`);
+  // Lurker: struck by something its size three times; it no longer strikes that
+  const fighterBody = { key: 'fighter', hp: 1 };
+  const fighter = () => ({ entity: fighterBody, x: 51, y: 50, distance: 1, sizeRelative: 'similar',
+    sizeEstimate: { estimated: 22, lower: 18, upper: 26 }, species: 'fighter', speciesConfidence: 0.9,
+    zoneSNR: { 'sensor_l.vibration.ground': 6, 'sensor_r.vibration.ground': 6 }, isMoving: true, closingSpeed: 0 });
+  const lk = body('ambush_pred', 0.9); lk.detectionInfo = [fighter()];
+  assert(runNodes(lk, L).effect === 'strike', 'a hungry lurker, something its size in reach: strikes');
+  for (let k = 0; k < 3; k++) { lk.tookDamageThisTurn = true; runNodes(lk, L); }
+  lk.tookDamageThisTurn = false;
+  assert(runNodes(lk, L).effect !== 'strike', 'struck by it three times: its limbs know it, and stay the strike');
+  // Shaleback: struck by a wolf three times; a wolf in reach is then a threat
+  const wolfBody = { key: 'wolf', hp: 1 };
+  const wolfAt = (dx) => ({ entity: wolfBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'smaller',
+    sizeEstimate: { estimated: 22, lower: 18, upper: 26 }, species: 'wolf', speciesConfidence: 0.9,
+    dietType: 'predator', dietConfidence: 0.8, zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0 });
+  const sb = body('cave_crab'); sb.detectionInfo = [wolfAt(1)];
+  assert(runNodes(sb, C).act !== 'flee_water', 'a shaleback, a wolf in reach: 22 kg reads light, no retreat');
+  for (let k = 0; k < 3; k++) { sb.tookDamageThisTurn = true; runNodes(sb, C); }
+  sb.tookDamageThisTurn = false; sb.hormones.alarm = 0;
+  const sbAfter = runNodes(sb, C);
+  assert(sbAfter.act === 'flee_water' || sbAfter.type === 'wary', `struck by it three times: a wolf in reach reads as a threat (${sbAfter.type})`);
+}
 delete worlds[0];
 
 // 12

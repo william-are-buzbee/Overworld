@@ -35,6 +35,19 @@ const CHANNEL = 1 / (CONFIDENCE_NORMALIZATION * 2);      // SNR → template evi
 // the locomotion generator and the alarm gland. Head: eyes, and the food
 // template. No integration tissue: nothing here holds anything past the action.
 // Head: the hub, the node a player plays (below).
+function _hareLimbMemory(side) {
+  const z = 'fore_' + side;
+  return [
+    { id: 'lib_' + side, zone: z, mass: 0.006, store: 'pattern' },
+    { id: 'hurt_' + side, zone: z, mass: 0.0005, mode: 'pooled',
+      inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'felt_mark_' + side, zone: z, mass: 0.001, mode: 'mapped',
+      inputs: [{ from: `sense:${z}.vibration.ground` }], fn: 'step', threshold: 1, writes: { store: 'lib_' + side } },
+    { id: 'hurt_mark_' + side, zone: z, mass: 0.001, mode: 'mapped', bands: [1, 0, 0, 0],
+      inputs: [{ from: 'feature:present' }], gate: ['hurt_' + side], fn: 'step', threshold: 0, strict: true,
+      writes: { store: 'lib_' + side, assoc: 'danger', amount: 0.25 } },
+  ];
+}
 const HARE = {
   // The map: 8 bearings × 4 distance bands (touching, near, mid, far; edges
   // in tiles). Nothing in the hare holds a place: it has no tissue for it.
@@ -61,6 +74,11 @@ const HARE = {
     { id: 'bolt_arc_r', zone: 'fore_r', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'pass',
       threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT, innate: HUB_INNATE }] },
+    // Fore-limb memory (Clade B: the limb that feels remembers): each limb's
+    // pattern tissue holds what it has felt, and what was in contact when it
+    // was hurt, as dangerous
+    ..._hareLimbMemory('l'),
+    ..._hareLimbMemory('r'),
     // Graze-limb ganglia: pass on their ground vibration; read meat-eater
     // volatiles underfoot through their contact chemistry
     { id: 'graze_relay_l', zone: 'mid_graze_l', mass: 0.003, mode: 'mapped',
@@ -106,11 +124,20 @@ const HARE = {
       gate: ['heavy'], fn: 'ramp' },
     { id: 'meat_eater', zone: 'torso', mass: 0.0005, mode: 'mapped',
       inputs: [{ from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3, strict: true, gain: 0.3 },
+    // Memory, read in the torso: what the fore limbs know is dangerous, and
+    // what they know well and never came to harm from (habituation: familiar
+    // and harmless holds the threat template down)
+    { id: 'known_danger', zone: 'torso', mass: 0.001, mode: 'mapped', combine: 'max',
+      inputs: [{ from: 'memory:lib_l.danger' }, { from: 'memory:lib_r.danger' }], fn: 'pass', threshold: 0, strict: true },
+    { id: 'familiar_harmless', zone: 'torso', mass: 0.001, mode: 'mapped',
+      inputs: [{ from: 'memory:lib_l.familiar', weight: 0.5 }, { from: 'memory:lib_r.familiar', weight: 0.5 },
+               { from: 'node:known_danger', weight: -2 }], fn: 'ramp', ceiling: 1 },
     // Wired in per distance band as a body's image falls off with distance:
     // full out to pouncing range, then about 3 / distance (band middles 6 and
     // 12 tiles). A shaleback grazing far off reads as little; one near as much.
     { id: 'threat', zone: 'torso', mass: 0.002, mode: 'mapped', bands: [1, 1, 0.5, 0.25],
-      inputs: [{ from: 'node:heavy_evidence' },
+      inhibitedBy: [{ node: 'familiar_harmless', weight: 1 }],
+      inputs: [{ from: 'node:known_danger' }, { from: 'node:heavy_evidence' },
                { from: 'feature:sizeMuchLarger', weight: THREAT_CONF_SIZE_MUCH_LARGER },
                { from: 'feature:sizeLarger', weight: THREAT_CONF_SIZE_LARGER },
                { from: 'feature:sizeAmbiguous', weight: THREAT_CONF_SIZE_AMBIGUOUS },
@@ -219,10 +246,11 @@ function pursuitPredator({ hub, integration, patterns, episodic }) { return {
       inputs: [{ from: 'feature:herbivoreDietConfidence' }], fn: 'step', threshold: DIET_DECISION_THRESHOLD, strict: true },
 
     // Prey: anything reading smaller, not its own kind, and not what it has
-    // learned is dangerous (a known danger past half takes it off the list).
+    // learned is dangerous (a known danger past 0.3, two blows from its kind,
+    // takes it off the list).
     // Wired in by band as an image falls off, so the nearest wins the map
     { id: 'prey', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.9, 0.7, 0.5],
-      inputs: [{ from: 'feature:sizeSmaller' }], vetoedBy: ['kin'], fn: 'step', threshold: 0.5,
+      inputs: [{ from: 'feature:sizeSmaller' }], vetoedBy: ['kin'], fn: 'step', threshold: 0.7,
       inhibitedBy: [{ node: 'known_danger', weight: 1 }] },
     // The integration tissue: holds where the prey was (mass × 30 turns: the
     // wolf's 0.15 kg, 4.5) and leads it along the velocity the eyes resolve
@@ -335,6 +363,11 @@ const DIRE_WOLF = pursuitPredator({ hub: 0.04, integration: 0.20, patterns: 0.06
 function _lurkerSensor(side) {
   const z = 'sensor_' + side;
   return [
+    // The limb's pattern library (50 g, 250 patterns): what struck it while
+    // in reach, and that it was dangerous; a known danger stays its strike
+    { id: 'lib_' + side, zone: z, mass: 0.05, store: 'pattern' },
+    { id: 'danger_' + side, zone: z, mass: 0.005, mode: 'mapped',
+      inputs: [{ from: `memory:lib_${side}.danger` }], fn: 'pass', threshold: 0, strict: true },
     // The limb's own template: something its size or smaller, not its kind,
     // felt through this limb, in reach of the strike (the touching band)
     { id: 'feel_' + side, zone: z, mass: 0.01, mode: 'mapped',
@@ -343,12 +376,17 @@ function _lurkerSensor(side) {
       inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
     { id: 'prey_' + side, zone: z, mass: 0.02, mode: 'mapped', bands: [1, 0, 0, 0],
       inputs: [{ from: 'feature:sizeSmallerOrSimilar' }], gate: ['feel_' + side, 'hungry'],
-      vetoedBy: ['kin_' + side], fn: 'step', threshold: 1 },
+      vetoedBy: ['kin_' + side], fn: 'step', threshold: 0.7, inhibitedBy: [{ node: 'danger_' + side, weight: 1 }] },
     // Struck while something is in reach: strike back at it
     { id: 'struck_' + side, zone: z, mass: 0.005, mode: 'mapped', bands: [1, 0, 0, 0],
       inputs: [{ from: 'feature:present' }], gate: ['hurt'], fn: 'step', threshold: 0, strict: true },
     { id: 'strike_' + side, zone: z, mass: 0.005, mode: 'pooled', combine: 'max',
       inputs: [{ from: 'node:prey_' + side }, { from: 'node:struck_' + side }], fn: 'step', threshold: 0, strict: true },
+    { id: 'mark_' + side, zone: z, mass: 0.002, mode: 'mapped',
+      inputs: [{ from: 'node:struck_' + side }], fn: 'step', threshold: 0, strict: true, writes: { store: 'lib_' + side } },
+    { id: 'mark_danger_' + side, zone: z, mass: 0.002, mode: 'mapped',
+      inputs: [{ from: 'node:struck_' + side }], fn: 'step', threshold: 0, strict: true,
+      writes: { store: 'lib_' + side, assoc: 'danger', amount: 0.25 } },
     // Carrion under it: the limb's contact chemistry
     { id: 'carrion_' + side, zone: z, mass: 0.005, mode: 'pooled',
       inputs: [{ from: 'feature:corpseUnderfoot' }], gate: ['hungry'], fn: 'step', threshold: 1 },
@@ -375,6 +413,9 @@ const LURKER = {
     { id: 'alive_to', zone: 'torso', mass: 0.005, mode: 'mapped', combine: 'max',
       inputs: [{ from: 'feature:moving' }, { from: 'feature:sizeMuchLarger' },
                { from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3 },
+    // (What the limbs know is dangerous stays in the limbs: it stays their
+    // strike. Read here it would reach the template a hop late, and the
+    // template would wait for it.)
     { id: 'threat', zone: 'torso', mass: 0.01, mode: 'mapped', bands: [1, 0.6, 0.3, 0.1],
       inputs: [{ from: 'node:heavy' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
     { id: 'threat_level', zone: 'torso', mass: 0.005, mode: 'pooled',
@@ -418,6 +459,11 @@ const SHALEBACK = {
       inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
     { id: 'kin', zone: 'head', mass: 0.005, mode: 'mapped',
       inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
+    // Memory: the head's pattern library (80 g) holds what struck it, as
+    // dangerous; a known danger reads as a threat whatever its size
+    { id: 'patterns', zone: 'head', mass: 0.08, store: 'pattern' },
+    { id: 'known_danger', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'memory:patterns.danger' }], fn: 'pass', threshold: 0, strict: true },
     // Larger animal (as the wolf's)
     { id: 'heavy', zone: 'head', mass: 0.005, mode: 'mapped',
       inputs: [{ from: 'feature:sizeRatio' }], fn: 'ramp', threshold: 1.5, gain: 0.5, ceiling: 1 },
@@ -425,7 +471,7 @@ const SHALEBACK = {
       inputs: [{ from: 'feature:moving' }, { from: 'feature:sizeMuchLarger' },
                { from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3 },
     { id: 'threat', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.6, 0.3, 0.1],
-      inputs: [{ from: 'node:heavy' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
+      inputs: [{ from: 'node:heavy' }, { from: 'node:known_danger' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
     { id: 'threat_level', zone: 'head', mass: 0.005, mode: 'pooled',
       inputs: [{ from: 'node:threat' }], fn: 'ramp' },
     { id: 'wary', zone: 'head', mass: 0.005, mode: 'pooled',
@@ -446,6 +492,11 @@ const SHALEBACK = {
       inputs: [{ from: 'feature:present' }], gate: ['hurt'], fn: 'step', threshold: 0, strict: true },
     { id: 'shove', zone: 'head', mass: 0.005, mode: 'pooled',
       inputs: [{ from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'mark_struck', zone: 'head', mass: 0.002, mode: 'mapped',
+      inputs: [{ from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true, writes: { store: 'patterns' } },
+    { id: 'mark_danger', zone: 'head', mass: 0.002, mode: 'mapped',
+      inputs: [{ from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true,
+      writes: { store: 'patterns', assoc: 'danger', amount: 0.25 } },
     // Torso: the retreat to water, and the alarm gland
     { id: 'retreat', zone: 'torso', mass: 0.005, mode: 'pooled',
       inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: 0.8, receptors: ALARM,
