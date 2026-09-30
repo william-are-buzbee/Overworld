@@ -208,6 +208,26 @@ saved with the body (unlike traces and percepts, which are stripped). Clade A an
 the head (lose the head, lose everything); ancestral Clade B keeps pattern stores in its limbs, loosely indexed across the
 body (Cognition-Design, Memory Architecture).
 
+**As built (memory step 1, Sep 2026; `nodes.js`).** A store is a node with `store: 'pattern' | 'route'` and tissue: it
+never fires, and holds mass × MEMORY_ENTRIES_PER_KG (5000) entries. A writer is any node with `writes: { store, assoc?,
+amount? }`: each action it fires, it writes.
+
+- A **pattern** is a percept's feature combination: species where the channels identified it, the size reading, the diet
+  where resolved (PLACEHOLDER: features, until perception is nodes). A mapped pattern writer refreshes the pattern it fires
+  on (`n`, how often, and `last`) or writes it new.
+- An **association writer** (`assoc: 'danger'`, say) strengthens that association on the best-matching stored pattern
+  (matching at least half) by `amount` of what is left toward 1. With no pattern to attach to, it writes nothing.
+- A **route** store holds ground: a pooled writer firing writes the tile the body stands on and the passable ground around
+  it (`knownGround` gives it to the executor).
+- **Reading**: `memory:<store>.familiar` on a mapped node is how well the percept matches a stored pattern (similarity:
+  species a half, size and diet a quarter each, two different identified species nothing), weighted by n / (n + 3);
+  `memory:<store>.<assoc>` is the association's strength on the best match, weighted by similarity. A reader's timing is
+  its hops from the store.
+- **Full**: a pattern store overwrites the pattern written least (then longest ago); a route store forgets the ground it
+  knew longest ago.
+- **Damage**: a store's zone destroyed wipes it; a writer's zone destroyed writes nothing new while the store still reads
+  (anterograde amnesia). Stores are `creature.memory`, saved with the body. `window.debugMemory()` shows them.
+
 ---
 
 ## Where the Numbers Come From
@@ -429,7 +449,7 @@ before moving on to another system.
    The reactive rules are then gone.
 
 **Then memory**, the same way: writers and stores saved with the body (the detour placeholder replaced by a learned route
-store), then one animal, then the cast.
+store), then one animal, then the cast. Step 1 (the mechanics) is in.
 
 The harness (`tools/ecology.mjs`) checks each step for regressions and for systems not doing what their doc says. It does
 not set targets for the ecology.

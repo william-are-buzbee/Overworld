@@ -253,4 +253,26 @@ function debugWiring(key = 'hare') {
   return rows;
 }
 
-export { debugEcology, debugForceHunger, debugCognition, debugSubstrate, debugNodes, debugWiring };
+/** What each creature's stores hold (nodes.js, Memory): patterns with how
+ *  often they were written and their associations, and ground known.
+ *  Call from console: window.debugMemory() or window.debugMemory('wolf') */
+function debugMemory(filterKey) {
+  const rows = [];
+  for (const m of monstersHere()) {
+    if (m.hp <= 0 || !m.memory || (filterKey && m.key !== filterKey)) continue;
+    for (const [id, st] of Object.entries(m.memory)) {
+      if (st.patterns) {
+        const top = [...st.patterns].sort((a, b) => b.n - a.n).slice(0, 6).map(p =>
+          `${p.species || '?'}/${p.size || '?'}/${p.diet || '?'}×${p.n}` +
+          (p.assoc ? ' ' + Object.entries(p.assoc).map(([k, v]) => `${k}=${v.toFixed(2)}`).join(' ') : ''));
+        rows.push({ who: m.key, at: `${m.x},${m.y}`, store: id, holds: `${st.patterns.length} patterns`, top: top.join(' | ') });
+      } else if (st.tiles) {
+        rows.push({ who: m.key, at: `${m.x},${m.y}`, store: id, holds: `${st.count} tiles`, top: '' });
+      }
+    }
+  }
+  if (rows.length) console.table(rows); else console.log('No creature here remembers anything yet.');
+  return rows;
+}
+
+export { debugEcology, debugForceHunger, debugCognition, debugSubstrate, debugNodes, debugWiring, debugMemory };

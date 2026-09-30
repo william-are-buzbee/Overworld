@@ -27,8 +27,8 @@
 <script type="module">
 import * as m from './constants.js';
 import { CREATURE_WIRING, getWiring } from './wiring.js';
-import { runNodes, refillGlands, validateWiring, compileWiring } from './nodes.js';
-import { state } from './state.js';
+import { runNodes, refillGlands, validateWiring, compileWiring, knownGround } from './nodes.js';
+import { state, worlds } from './state.js';
 
 const log = document.getElementById('log');
 const summaryEl = document.getElementById('summary');
@@ -424,6 +424,73 @@ section('The wolf (wiring.js, step 6)');
   assert(playedScared.type === 'retreat', `played, alarmed, the same: the retreat takes the legs (${playedScared.type})`);
 }
 
+
+section('Memory: stores and writers (nodes.js)');
+// On a small flat world of grass (the ground writer reads the ground), removed after
+worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
+{
+  const MEM = { map: { bands: [3] }, nodes: [
+    { id: 'lib', zone: 'head', mass: 0.001, store: 'pattern' },          // 5 patterns
+    { id: 'ground', zone: 'head', mass: 0.002, store: 'route' },         // 10 tiles
+    { id: 'seen', zone: 'head', mass: 0.001, mode: 'mapped', inputs: [{ from: 'sense:head.visual' }],
+      fn: 'step', threshold: 1, writes: { store: 'lib' } },
+    { id: 'hurt', zone: 'torso', mass: 0.001, mode: 'pooled', inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'struck', zone: 'front_l', mass: 0.001, mode: 'mapped', inputs: [{ from: 'feature:present' }], gate: ['hurt'],
+      fn: 'step', threshold: 0, strict: true, writes: { store: 'lib', assoc: 'danger', amount: 0.5 } },
+    { id: 'known', zone: 'head', mass: 0.001, mode: 'mapped', inputs: [{ from: 'memory:lib.familiar' }], fn: 'pass', threshold: 0, strict: true },
+    { id: 'feared', zone: 'head', mass: 0.001, mode: 'mapped', inputs: [{ from: 'memory:lib.danger' }], fn: 'pass', threshold: 0, strict: true },
+    { id: 'walking', zone: 'torso', mass: 0.001, mode: 'pooled', inputs: [], fn: 'step', threshold: 0, writes: { store: 'ground' } },
+  ], outputs: [] };
+  assert(validateWiring({ key: 'wolf' }, MEM).length === 0, `a wiring with stores and writers validates (${validateWiring({ key: 'wolf' }, MEM).join('; ') || 'ok'})`);
+  const bad = { nodes: [{ id: 'lib', zone: 'head', mass: 0.001, store: 'pattern' },
+    { id: 'w', zone: 'head', mass: 0.001, mode: 'pooled', inputs: [], fn: 'step', threshold: 0, writes: { store: 'lib' } },
+    { id: 'r', zone: 'head', mass: 0.001, mode: 'pooled', inputs: [{ from: 'memory:lib.familiar' }], fn: 'pass' }], outputs: [] };
+  const bi = validateWiring({ key: 'wolf' }, bad);
+  assert(bi.some(i => /only a mapped node writes/.test(i)) && bi.some(i => /only a mapped node reads/.test(i)), 'a pooled writer of patterns, or reader of a store, is an issue');
+  const wolfBody = (destroyed = []) => { const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0, fatigue: 0 } };
+    m.initBodyMap(e); for (const z of e.bodyMap) if (destroyed.includes(z.key)) z.destroyed = true; return e; };
+  const seenAs = (key, over = {}) => ({ entity: { key, hp: 1 }, x: 51, y: 50, distance: 1, sizeRelative: 'smaller',
+    species: key, speciesConfidence: 0.9, dietType: 'herbivore', dietConfidence: 0.8, zoneSNR: { 'head.visual': 5 }, ...over });
+  const valueOf = (e, id) => ((e._nodeTrace || []).find(t => t.id === id) || { value: 0 }).value;
+  const e = wolfBody();
+  state.turnCount = 300;
+  for (let k = 0; k < 5; k++) { e.detectionInfo = [seenAs('hare')]; runNodes(e, MEM); }
+  const lib = e.memory.lib.patterns;
+  assert(lib.length === 1 && lib[0].n === 5 && lib[0].species === 'hare', `a hare seen five times: one pattern, written five times (${lib.length}, n ${lib[0] && lib[0].n})`);
+  assert(approx(valueOf(e, 'known'), 5 / 8), `recognised: familiarity ${valueOf(e, 'known').toFixed(3)} (n / (n + 3))`);
+  assert(valueOf(e, 'feared') === 0, 'nothing hurt it: no danger');
+  e.detectionInfo = [seenAs('hare')]; e.tookDamageThisTurn = true; runNodes(e, MEM);
+  assert(approx(lib[0].assoc.danger, 0.5), `struck by a hare in reach: its pattern associated with danger (${lib[0].assoc.danger})`);
+  e.tookDamageThisTurn = false; runNodes(e, MEM);
+  assert(approx(valueOf(e, 'feared'), 0.5), `seen again, not struck: feared (${valueOf(e, 'feared')})`);
+  e.detectionInfo = [seenAs('wolf', { sizeRelative: 'similar', dietType: 'predator' })]; runNodes(e, MEM);
+  assert(valueOf(e, 'feared') === 0, 'a wolf seen: another species, not feared');
+  // Capacity: five patterns; a sixth overwrites the one written least
+  for (const k of ['a', 'b', 'c', 'd']) { e.detectionInfo = [seenAs(k)]; runNodes(e, MEM); }
+  const keys = e.memory.lib.patterns.map(p => p.species).sort().join(',');
+  assert(e.memory.lib.patterns.length === 5 && !keys.includes('wolf') && keys.includes('hare'),
+         `a full store (5) overwrites what was written least: ${keys}`);
+  // Anterograde amnesia: the writer's zone gone, the store still read
+  const amnesic = wolfBody(['front_l']);
+  amnesic.memory = JSON.parse(JSON.stringify(e.memory));
+  amnesic.detectionInfo = [seenAs('b')]; amnesic.tookDamageThisTurn = true; runNodes(amnesic, MEM);
+  const pb = amnesic.memory.lib.patterns.find(p => p.species === 'b');
+  assert(!(pb.assoc && pb.assoc.danger), 'the association writer\'s limb destroyed: struck by b, nothing written');
+  amnesic.detectionInfo = [seenAs('hare')]; amnesic.tookDamageThisTurn = false; runNodes(amnesic, MEM);
+  assert(approx(valueOf(amnesic, 'feared'), 0.5), 'the hare is still feared: the store works (anterograde amnesia)');
+  // The store's zone gone: what it held is gone
+  const headless = wolfBody(['head']);
+  headless.memory = JSON.parse(JSON.stringify(e.memory));
+  headless.detectionInfo = []; runNodes(headless, MEM);
+  assert(!headless.memory.lib, 'the head destroyed: the pattern library it held is gone');
+  // Ground: the tile and the passable ground around it, forgotten oldest first
+  const w = wolfBody(); w.detectionInfo = [];
+  runNodes(w, MEM);
+  const g = knownGround(w, MEM);
+  assert(g && g.has('50,50') && g.size <= 10, `ground written: its own tile and what is around it, within capacity (${g ? g.size : 0} tiles)`);
+  assert(JSON.stringify(JSON.parse(JSON.stringify(e.memory))) === JSON.stringify(e.memory), 'memory is plain body state: it saves');
+}
+delete worlds[0];
 
 // 12
 section('Existing systems undamaged');
