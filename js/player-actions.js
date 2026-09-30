@@ -9,6 +9,7 @@ import { updateUI } from './ui.js';
 import { playerAttack, endStealth } from './combat.js';
 import { endPlayerTurn } from './turn-loop.js';
 import { applyTurningCost, getEntityTotalMass } from './physiology.js';
+import { bodyTakes } from './hub.js';
 
 function dirName(dx, dy){
   if (dx === 0 && dy === -1) return 'north';
@@ -48,18 +49,23 @@ function attemptMove(dx, dy){
     : state.player.stealth ? CREEP_INTENSITY : WALK_INTENSITY;
 
   const mon = monsterAt(nx, ny, state.player.layer);
+  if (!mon){
+    const ground = worlds[state.player.layer][ny][nx];
+    const cover = getCover(state.player.layer, nx, ny);
+    if (!isWalkable(ground, cover)){ log(`Blocked by ${terrainName(ground, cover)}.`, LOG_CATEGORIES.MOVEMENT); return; }
+    // No surviving locomotion zone: the body cannot carry itself. Facing has
+    // already turned (the head still works) and bump-attacks below still
+    // resolve; only the step is refused. Set in combat resolution when the last
+    // locomotion zone is destroyed; the same flag NPCs obey in ai.js.
+    if (state.player.immobilized){ log('You strain, but nothing that could carry you remains.', LOG_CATEGORIES.MOVEMENT); return; }
+  }
+  // The action will be spent: the body runs first, and a reflex the hub
+  // cannot hold takes it instead (hub.js)
+  if (bodyTakes('move')) return;
   if (mon){
     state.player.inCombatThisTurn = true;  // Prompt L-A
     const didHit = playerAttack(mon); endPlayerTurn(didHit ? 'attack' : 'miss'); return;
   }
-  const ground = worlds[state.player.layer][ny][nx];
-  const cover = getCover(state.player.layer, nx, ny);
-  if (!isWalkable(ground, cover)){ log(`Blocked by ${terrainName(ground, cover)}.`, LOG_CATEGORIES.MOVEMENT); return; }
-  // No surviving locomotion zone: the body cannot carry itself. Facing has
-  // already turned (the head still works) and bump-attacks above still
-  // resolve; only the step is refused. Set in combat resolution when the last
-  // locomotion zone is destroyed; the same flag NPCs obey in ai.js.
-  if (state.player.immobilized){ log('You strain, but nothing that could carry you remains.', LOG_CATEGORIES.MOVEMENT); return; }
   state.player.x = nx; state.player.y = ny;
   state.player.movedThisTurn = true;  // Prompt L-A
   const f = getFeature(state.player.layer, nx, ny);
@@ -71,12 +77,14 @@ function restAction(){
   // Resting is a turn spent still. Wounds knit through the body's own
   // healing (applyHealing with the rest bonus, in the turn loop); there is
   // no pool of hit points to top up. Food is still spent (fedDrainFor).
+  if (bodyTakes('rest')) return;
   log('You rest.', LOG_CATEGORIES.SYSTEM);
   endPlayerTurn('rest');
 }
 
 function turnInPlace(dx, dy){
   if (state.facing.dx === dx && state.facing.dy === dy) return;
+  if (bodyTakes('turn')) return;
   const oldDx = state.facing.dx;
   const oldDy = state.facing.dy;
   state.facing.dx = dx;
@@ -124,6 +132,7 @@ function eatAction(){
 }
 
 function eatCorpseFromGround(groundItem, layer, x, y){
+  if (bodyTakes('eat')) return;
   const share = (groundItem.mass || 0) / Math.max(1, getEntityTotalMass(state.player));
   state.player.fed = Math.min(FED_MAX, state.player.fed + share * FED_MAX);
   removeItem(layer, x, y, groundItem.id);

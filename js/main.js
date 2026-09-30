@@ -30,6 +30,7 @@ window.scentAt = debugScentAt;
 window.scentStats = debugScentStats;
 import { toggleStealth } from './combat.js';
 import { showHelp } from './interactions.js';
+import { bodyScreenHTML } from './hub.js';
 import { log, LOG_CATEGORIES } from './log.js';
 import { initLogUI } from './log-ui.js';
 import { openCharGen, beginGame, onPlayerDeath, speciesKeyNav } from './chargen.js';
@@ -195,11 +196,18 @@ const SELF_KEYS = new Set(['s', '5', 'clear', ' ']);
 // ── Action keys (non-movement) ──
 const ACTION_MAP = {
   'r': () => eatAction(),          // Eat a corpse underfoot
+  'b': () => showBodyScreen(),     // The body: what the hub drives and holds
   'f': () => toggleStealth(),      // Sneak toggle
   // V (sniff) handled explicitly below ACTION_MAP — V: ground, Shift+V: air
   '?': () => showHelp(),           // Help
   '/': () => showHelp(),
 };
+
+function showBodyScreen() {
+  openModal(bodyScreenHTML(state.player));
+  const b = document.getElementById('btn-close');
+  if (b) b.onclick = () => closeModal();
+}
 
 // ── Look mode helpers ──
 function enterLookMode() {

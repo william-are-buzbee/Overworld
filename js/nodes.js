@@ -15,12 +15,19 @@
 //                            'feature:<name>[@arg]' a feature the senses deliver
 //                            (FEATURES below); 'node:<id>' another node;
 //                            'blood:<hormone>' the level of a hormone, read by the
-//                            node's own receptors for it
+//                            node's own receptors for it; 'intent:act' the
+//                            player's will, 1 while the player acts through this
+//                            body, else 0 (the hub below)
 //   combine                  'sum' (default) or 'max' of the weighted inputs
 //   gate [ids]               nodes whose outputs multiply this node's output
 //                            (a modulating synapse: nothing passes if one is silent)
 //   vetoedBy [ids]           nodes whose firing silences this one (shunting
 //                            inhibition), if their signal arrives in time
+//   inhibitedBy [{node, weight}]
+//                            graded inhibition: the source's output × weight is
+//                            taken off this node's input (in the input's own
+//                            units) before it fires, if it arrives in time; a
+//                            late one is inert (compile lists it as such)
 //   fn                       'step':  gain if input ≥ threshold (> if strict)
 //                            'ramp':  clamp(gain × (input − threshold), 0, ceiling)
 //                            'pass':  input if input ≥ threshold, else 0
@@ -33,6 +40,12 @@
 //                            lose it (tissue that can sustain activity)
 //   predicts                 mapped: reports its place moved along the seen
 //                            velocity by the time this body needs to get there
+//
+// The hub: the node the player plays (Neural-Architecture-Design, "The hub
+// and the player"). It reads 'intent:act', drives the locomotion generator
+// through its own output, and holds back reflexes through the inhibitedBy
+// wires the wiring gives it, only those that arrive in time. What it cannot
+// reach, or reaches late, takes the body.
 //
 // The map: every percept lands on a place (a bearing and a distance band).
 // A pooled node reading a mapped one takes its strongest place (lateral
@@ -173,7 +186,7 @@ function compileWiring(wiring, pathways) {
       } else if (r.kind === 'feature') {
         if (r.arg) t = Math.max(t, hops(r.arg, n.zone));
         if (!FEATURES[r.name] && !POOLED_FEATURES[r.name]) issues.push(`${n.id}: unknown feature ${r.name}`);
-      } else if (r.kind !== 'blood') {
+      } else if (r.kind !== 'blood' && r.kind !== 'intent') {
         issues.push(`${n.id}: unknown input ${inp.from}`);
       }
     }
@@ -201,6 +214,21 @@ function compileWiring(wiring, pathways) {
     }
     liveVetoes.set(n.id, ok);
   }
+  // Graded inhibition: in time or inert. A late wire is anatomy, not a
+  // mistake (descending fibres onto a reflex arc too fast for them), so it is
+  // listed, not an issue.
+  const liveInhibits = new Map(), lateInhibits = new Map();
+  for (const n of wiring.nodes) {
+    const ok = [], late = [];
+    for (const w of n.inhibitedBy || []) {
+      const src = byId.get(w.node);
+      if (!src) { issues.push(`${n.id}: inhibition from ${w.node} is not a node`); continue; }
+      const lag = arrival.get(w.node) + hops(src.zone, n.zone) - arrival.get(n.id);
+      if (lag <= 0) ok.push(w); else late.push({ ...w, lag });
+    }
+    liveInhibits.set(n.id, ok);
+    lateInhibits.set(n.id, late);
+  }
   const outVetoes = new Map();
   for (const out of wiring.outputs || []) {
     const src = byId.get(out.node);
@@ -215,7 +243,7 @@ function compileWiring(wiring, pathways) {
     }
     outVetoes.set(out, ok);
   }
-  c = { byId, arrival, liveVetoes, outVetoes, issues, hops };
+  c = { byId, arrival, liveVetoes, liveInhibits, lateInhibits, outVetoes, issues, hops };
   byPathways.set(pathways, c);
   return c;
 }
@@ -264,9 +292,11 @@ function _fire(n, x, t) {
  * Run a creature's wiring on this action's percepts. Returns the output
  * stage's result ({ intensity, direction, source, type, isBolt, atFood }),
  * releases what its glands release, and leaves creature._nodeTrace (what
- * fired, for the inspector; transient).
+ * fired, for the inspector; transient). opts.intent: the player is acting
+ * through this body (the hub's input). The result's `held` lists the nodes
+ * the hub's inhibition kept from firing this action.
  */
-function runNodes(creature, wiring) {
+function runNodes(creature, wiring, opts = {}) {
   const bodyMap = getBodyMap(creature);
   const intact = bodyMap ? new Set(bodyMap.filter(z => !z.destroyed).map(z => z.key)) : null;
   const alive = (zone) => !intact || intact.has(zone);
@@ -315,6 +345,7 @@ function runNodes(creature, wiring) {
     return x instanceof Float64Array ? x[i] : (x ? x.v : 0);
   };
 
+  const held = [];
   for (const n of wiring.nodes) {
     if (!alive(n.zone)) {
       val.set(n.id, n.mode === 'mapped' ? new Float64Array(S) : { v: 0, place: null });
@@ -323,6 +354,8 @@ function runNodes(creature, wiring) {
     }
     const t = _threshold(n, creature);
     const vetoes = c.liveVetoes.get(n.id) || [];
+    const inhibits = c.liveInhibits.get(n.id) || [];
+    let wasHeld = false;
     if (n.mode === 'mapped') {
       const out = new Float64Array(S);
       for (let i = 0; i < S; i++) {
@@ -335,6 +368,7 @@ function runNodes(creature, wiring) {
           else if (r.kind === 'feature') v = FEATURES[r.name] ? FEATURES[r.name](creature, d, r.arg) : 0;
           else if (r.kind === 'node') v = at(r.name, i);
           else if (r.kind === 'blood') v = _blood(creature, r.name);
+          else if (r.kind === 'intent') v = opts.intent ? 1 : 0;
           const w = inp.weight != null ? inp.weight : 1;
           const wv = v === 0 ? 0 : w * v;          // 0 × Infinity is no signal
           if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
@@ -342,8 +376,12 @@ function runNodes(creature, wiring) {
         }
         if (!any) x = 0;
         const vetoed = vetoes.some(v => at(v, i) > 0);
-        let y = vetoed ? 0 : _fire(n, x, t);
+        let inh = 0;
+        for (const w of inhibits) inh += (w.weight != null ? w.weight : 1) * at(w.node, i);
+        let y = vetoed ? 0 : _fire(n, x - inh, t);
         for (const g of n.gate || []) y = y === 0 ? 0 : y * at(g, i);
+        if (inh > 0 && y === 0 && !vetoed && _fire(n, x, t) > 0 &&
+            (n.gate || []).every(g => at(g, i) > 0)) wasHeld = true;
         // How strongly each distance band of the map is wired in
         if (n.bands && y > 0) y *= n.bands[Math.min(places[i].band, n.bands.length - 1)];
         out[i] = y;
@@ -364,6 +402,8 @@ function runNodes(creature, wiring) {
           const pr = pooledRead(r.name); v = pr.v; p = pr.place;
         } else if (r.kind === 'blood') {
           v = _blood(creature, r.name);
+        } else if (r.kind === 'intent') {
+          v = opts.intent ? 1 : 0;
         }
         const w = inp.weight != null ? inp.weight : 1;
         const wv = v === 0 ? 0 : w * v;
@@ -374,10 +414,15 @@ function runNodes(creature, wiring) {
       }
       if (!any) x = 0;
       const vetoed = vetoes.some(v => pooledRead(v).v > 0);
-      let v = vetoed ? 0 : _fire(n, x, t);
+      let inh = 0;
+      for (const w of inhibits) inh += (w.weight != null ? w.weight : 1) * pooledRead(w.node).v;
+      let v = vetoed ? 0 : _fire(n, x - inh, t);
       for (const g of n.gate || []) v = v === 0 ? 0 : v * pooledRead(g).v;
+      if (inh > 0 && v === 0 && !vetoed && _fire(n, x, t) > 0 &&
+          (n.gate || []).every(g => pooledRead(g).v > 0)) wasHeld = true;
       val.set(n.id, { v, place: v > 0 ? place : null });
     }
+    if (wasHeld) held.push(n.id);
   }
 
   // ── Trace for the inspector: what fired, and about what ──
@@ -428,7 +473,7 @@ function runNodes(creature, wiring) {
     const p = where(loco.pr);
     return { intensity: loco.out.intensity, direction: bearing(loco.out, loco.pr),
              source: p && p.entity ? p.entity : null, type: loco.out.label,
-             isBolt: loco.out.label === 'bolt', atFood: false };
+             isBolt: loco.out.label === 'bolt', atFood: false, held };
   }
   // Then posture (holding still), orienting, feeding contact, in that order
   for (const effect of ['posture', 'orienting', 'feeding']) {
@@ -437,11 +482,13 @@ function runNodes(creature, wiring) {
       const pr = firing(out.node);
       if (!(pr.v > 0) || outVetoed(out)) continue;
       return { intensity: 0, direction: effect === 'orienting' ? bearing(out, pr) : null,
-               type: out.label, atFood: effect === 'feeding' };
+               source: effect === 'posture' || effect === 'orienting' ? _entityOf(pr) : null,
+               type: out.label, atFood: effect === 'feeding', held };
     }
   }
-  return { intensity: 0, direction: null, type: 'hold' };
+  return { intensity: 0, direction: null, type: 'hold', held };
 }
+const _entityOf = (pr) => (pr.place && pr.place.entity) || null;
 
 /**
  * Holding: a node whose tissue can sustain activity keeps it at the place
