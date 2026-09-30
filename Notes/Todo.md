@@ -189,7 +189,7 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [x] 7. The whole cast rewired (ravager, lurker, shaleback, colony; the hare on acts); the reactive rules gone
 - [ ] Then memory: writers and stores saved with the body, one animal, then the cast
   - [x] M1. Stores (pattern, route), writers (patterns, associations, ground), `memory:` inputs; saved with the body; damage reads off the wiring
-  - [ ] M2. The wolf remembers: a pattern library, danger and food associations, a route store replacing the true-ground detour
+  - [x] M2. The wolf remembers: a pattern library, danger associations (food waits for the sequence writer), a route store replacing the true-ground detour
   - [ ] M3. The cast remembers
 - [ ] Colony (chemotroph) and the purple biome are placeholders: remove in a later pass, keep the docs (the person, Sep 2026); spend no work on them
 

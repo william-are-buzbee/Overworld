@@ -173,8 +173,9 @@ const HARE = {
 // Centralised and nose-led: nearly all of it sits in the head, and everything
 // reaches the limbs through the torso, two hops away (Neural-Architecture-
 // Design, "First application: the wolf"). Built for a body: `hub` and
-// `integration` are its head's tissue for the hub and for holding the prey
-// (kg, the body map's neuralAllocation); the rest is the same circuit. Head:
+// `integration` are its head's tissue for the hub and for holding the prey,
+// `patterns` and `episodic` its pattern library and episodic store (kg, the
+// body map's neuralAllocation); the rest is the same circuit. Head:
 // the templates (prey, larger animal, rival, carrion, trail, air), the map
 // with its integration tissue holding and leading the prey, the bite, and the
 // hub. Torso: the locomotion generator's drives and the alarm gland.
@@ -182,9 +183,20 @@ const HARE = {
 // return (the wander's home pull stays), no cast when the air loses the prey,
 // no retreat to refuge, no blood-level rule (pain raises alarm, and alarm
 // lowers the retreat's threshold).
-function pursuitPredator({ hub, integration }) { return {
+function pursuitPredator({ hub, integration, patterns, episodic }) { return {
   map: { bands: [1.5, 4, 8] },
   nodes: [
+    // Memory (Neural-Architecture-Design, Memory): the pattern library holds
+    // what struck it and that it was dangerous; the episodic store holds the
+    // ground it has stood on (the detour plans through it, behaviors.js)
+    { id: 'patterns', zone: 'head', mass: patterns, store: 'pattern' },
+    { id: 'ground', zone: 'head', mass: episodic, store: 'route' },
+    { id: 'walk', zone: 'head', mass: 0.002, mode: 'pooled', inputs: [], fn: 'step', threshold: 0,
+      writes: { store: 'ground' } },
+    // What it has learned is dangerous, on the map
+    { id: 'known_danger', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'memory:patterns.danger' }], fn: 'pass', threshold: 0, strict: true },
+
     // The hub (the wolf's: 30 g of the head's integration tissue, tissue for
     // twenty outputs at once). Its drive reaches the generator as strongly as any
     // reflex's (below), so the chase, the carrion, giving way and the trail
@@ -206,10 +218,12 @@ function pursuitPredator({ hub, integration }) { return {
     { id: 'plant_eater', zone: 'head', mass: 0.005, mode: 'mapped',
       inputs: [{ from: 'feature:herbivoreDietConfidence' }], fn: 'step', threshold: DIET_DECISION_THRESHOLD, strict: true },
 
-    // Prey: anything reading smaller, not its own kind. Wired in by band as
-    // an image falls off, so the nearest wins the map
+    // Prey: anything reading smaller, not its own kind, and not what it has
+    // learned is dangerous (a known danger past half takes it off the list).
+    // Wired in by band as an image falls off, so the nearest wins the map
     { id: 'prey', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.9, 0.7, 0.5],
-      inputs: [{ from: 'feature:sizeSmaller' }], vetoedBy: ['kin'], fn: 'step', threshold: 1 },
+      inputs: [{ from: 'feature:sizeSmaller' }], vetoedBy: ['kin'], fn: 'step', threshold: 0.5,
+      inhibitedBy: [{ node: 'known_danger', weight: 1 }] },
     // The integration tissue: holds where the prey was (mass × 30 turns: the
     // wolf's 0.15 kg, 4.5) and leads it along the velocity the eyes resolve
     { id: 'prey_place', zone: 'head', mass: integration, mode: 'mapped', holds: true, predicts: true,
@@ -222,17 +236,24 @@ function pursuitPredator({ hub, integration }) { return {
       inputs: [{ from: 'feature:present' }], gate: ['hurt'], fn: 'step', threshold: 0, strict: true },
     { id: 'bite', zone: 'head', mass: 0.005, mode: 'pooled', combine: 'max',
       inputs: [{ from: 'node:prey_in_reach' }, { from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true },
+    // Struck: what was in reach is written, and written as dangerous
+    { id: 'mark_struck', zone: 'head', mass: 0.002, mode: 'mapped',
+      inputs: [{ from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true, writes: { store: 'patterns' } },
+    { id: 'mark_danger', zone: 'head', mass: 0.002, mode: 'mapped',
+      inputs: [{ from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true,
+      writes: { store: 'patterns', assoc: 'danger', amount: 0.25 } },
 
     // The larger-animal template: heavy against this body (nothing at 1.5×
-    // its mass, full at 3.5×), and alive to it (moving, a meat-eater, or much
-    // larger), not its own kind; falling off with distance
+    // its mass, full at 3.5×), or known to be dangerous, and alive to it
+    // (moving, a meat-eater, or much larger), not its own kind; falling off
+    // with distance
     { id: 'heavy', zone: 'head', mass: 0.005, mode: 'mapped',
       inputs: [{ from: 'feature:sizeRatio' }], fn: 'ramp', threshold: 1.5, gain: 0.5, ceiling: 1 },
     { id: 'alive_to', zone: 'head', mass: 0.005, mode: 'mapped', combine: 'max',
       inputs: [{ from: 'feature:moving' }, { from: 'feature:sizeMuchLarger' },
                { from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3 },
     { id: 'threat', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.6, 0.3, 0.1],
-      inputs: [{ from: 'node:heavy' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
+      inputs: [{ from: 'node:heavy' }, { from: 'node:known_danger' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
     { id: 'threat_level', zone: 'head', mass: 0.005, mode: 'pooled',
       inputs: [{ from: 'node:threat' }], fn: 'ramp' },
     { id: 'wary', zone: 'head', mass: 0.005, mode: 'pooled',
@@ -293,14 +314,14 @@ function pursuitPredator({ hub, integration }) { return {
   ],
 }; }
 
-// The wolf (prowler, meso-predator): 0.85 kg of neural tissue, 0.15 of it
-// integration in the head
-const WOLF = pursuitPredator({ hub: 0.03, integration: 0.15 });
+// The wolf (prowler, meso-predator): 0.85 kg of neural tissue in the head,
+// 0.15 of it integration, 0.05 pattern library, 0.18 episodic memory
+const WOLF = pursuitPredator({ hub: 0.03, integration: 0.15, patterns: 0.05, episodic: 0.18 });
 // The ravager (apex predator): the same plan at four times the mass, 1.26 kg
 // of neural tissue in the head, 0.20 of it integration (it holds a lost prey
 // six turns). Its hub is 40 g. What it reads as prey is what reads smaller
 // against its body: wolves too.
-const DIRE_WOLF = pursuitPredator({ hub: 0.04, integration: 0.20 });
+const DIRE_WOLF = pursuitPredator({ hub: 0.04, integration: 0.20, patterns: 0.06, episodic: 0.26 });
 
 // ── The lurker (ambush predator, Clade B) ──
 // Distributed and ground-led: its sensor limbs (vibration.ground 5, most of

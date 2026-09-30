@@ -192,17 +192,20 @@ function groundPassable(mon, tx, ty) {
  * unchanged); the search runs only when terrain blocks the straight line.
  * Returns true if the creature moved.
  */
-function stepRoundObstacles(creature, gx, gy, radius) {
+function stepRoundObstacles(creature, gx, gy, radius, known) {
   const dir = directionToward(creature.x, creature.y, gx, gy);
   const d0 = DIRECTION_DELTAS[dir];
   if (groundPassable(creature, creature.x + d0.x, creature.y + d0.y)) return moveInDirection(creature, dir);
-  const first = _searchFirstStep(creature, gx, gy, Math.max(1, Math.ceil(radius)));
+  const first = _searchFirstStep(creature, gx, gy, Math.max(1, Math.ceil(radius)), known);
   if (first != null && moveInDirection(creature, first)) return true;
   return moveInDirection(creature, dir);
 }
 
-function _searchFirstStep(creature, gx, gy, radius) {
+// Through ground the body knows (`known`, a Set of 'x,y': its route store) if
+// given, else through the true ground
+function _searchFirstStep(creature, gx, gy, radius, known) {
   const sx = creature.x, sy = creature.y;
+  const open = (x, y) => (!known || known.has(x + ',' + y)) && groundPassable(creature, x, y);
   const size = 2 * radius + 1;
   const firstDir = new Int8Array(size * size).fill(-1);
   const idx = (x, y) => (y - sy + radius) * size + (x - sx + radius);
@@ -218,8 +221,8 @@ function _searchFirstStep(creature, gx, gy, radius) {
       if (firstDir[i] !== -1) continue;
       const step = fd === 8 ? d : fd;
       if (Math.max(Math.abs(nx - gx), Math.abs(ny - gy)) <= 1 &&
-          (nx !== gx || ny !== gy) && groundPassable(creature, nx, ny)) return step;
-      if (!groundPassable(creature, nx, ny)) { firstDir[i] = 9; continue; }
+          (nx !== gx || ny !== gy) && open(nx, ny)) return step;
+      if (!open(nx, ny)) { firstDir[i] = 9; continue; }
       firstDir[i] = step;
       queue.push([nx, ny]);
     }
