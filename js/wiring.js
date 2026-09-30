@@ -16,10 +16,16 @@ import { SPECIES_TEMPLATES,
          THREAT_CONF_SIZE_AMBIGUOUS, LOOM_WINDOW_ACTIONS, HUNGER_THRESHOLD,
          STRESS_RELEASE_AMOUNT } from './constants.js';
 
-// How far the hub's inhibition raises each reflex, in the reflex's own input
-// units (threat confidence; vibration SNR for the bolt arcs). PLACEHOLDER
-// numbers until the hub's weights are plastic, earned by use (step 5b).
-const HUB_HOLD_FLEE = 0.6, HUB_HOLD_FREEZE = 0.5, HUB_HOLD_BOLT = 2.0;
+// How far each of the hub's wires raises its reflex when fully formed, in the
+// reflex's own input units (threat confidence; vibration SNR for the bolt
+// arcs), and how much of it a hare is born with (HUB_INNATE). The rest is
+// formed by use (nodes.js). Fully formed, a calm hare's hub holding a flee
+// (and so the freeze under it: three outputs on tissue for two) holds it to
+// 2.3 threat: not against a wolf seen, felt and closing within pouncing range
+// (2.7, more with its scent underfoot), and alarm lowers the flee's threshold
+// under it. Written by hand; they stand for how many synapses the hub's fibres
+// can make on each circuit.
+const HUB_HOLD_FLEE = 1.2, HUB_HOLD_FREEZE = 1.0, HUB_HOLD_BOLT = 2.0, HUB_INNATE = 0.5;
 const ALARM = { alarm: STRESS_NEURAL_SENSITIVITY };     // receptors: alarm chemistry lowers these thresholds
 const CHANNEL = 1 / (CONFIDENCE_NORMALIZATION * 2);      // SNR → template evidence, per channel
 
@@ -40,7 +46,8 @@ const HARE = {
     // Design, "The hub and the player"). An NPC hare carries the tissue with
     // nothing driving it. Its descending fibres run to the torso's flee and
     // freeze circuits (one hop, in time) and to the fore-limb bolt arcs (two
-    // hops, after the arcs have fired: a bolt cannot be held).
+    // hops, after the arcs have fired: a bolt cannot be held, and practice
+    // cannot change that). 3 g: tissue for two outputs at full strength.
     { id: 'hub', zone: 'head', mass: 0.003, mode: 'pooled',
       inputs: [{ from: 'intent:act' }], fn: 'step', threshold: 0, strict: true },
 
@@ -50,10 +57,10 @@ const HARE = {
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'ramp' },
     { id: 'bolt_arc_l', zone: 'fore_l', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_l.vibration.ground' }], fn: 'pass',
-      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT }] },
+      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT, innate: HUB_INNATE }] },
     { id: 'bolt_arc_r', zone: 'fore_r', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'pass',
-      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT }] },
+      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT, innate: HUB_INNATE }] },
     // Graze-limb ganglia: pass on their ground vibration; read meat-eater
     // volatiles underfoot through their contact chemistry
     { id: 'graze_relay_l', zone: 'mid_graze_l', mass: 0.003, mode: 'mapped',
@@ -119,10 +126,10 @@ const HARE = {
       inputs: [{ from: 'node:threat' }, { from: 'node:meat_underfoot' }], fn: 'ramp' },
     { id: 'flee', zone: 'torso', mass: 0.001, mode: 'pooled',
       inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FLEE_THRESHOLD, receptors: ALARM,
-      inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_FLEE }] },
+      inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_FLEE, innate: HUB_INNATE }] },
     { id: 'freeze', zone: 'torso', mass: 0.001, mode: 'pooled',
       inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FREEZE_THRESHOLD, receptors: ALARM,
-      inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_FREEZE }] },
+      inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_FREEZE, innate: HUB_INNATE }] },
     { id: 'alert', zone: 'torso', mass: 0.001, mode: 'pooled',
       inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_ALERT_THRESHOLD, receptors: ALARM },
     // The alarm gland answers the bolt, the flee circuit and pain; not freeze

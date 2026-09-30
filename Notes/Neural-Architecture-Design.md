@@ -19,8 +19,8 @@ where it was for mass × PERSISTENCE_SCALE turns, the traces' rule; `creature._h
 the place moved along the velocity the eyes resolve, by the ticks this body needs to get there). The hare's threat template
 is wired in by band; nothing in the hare holds or predicts, having no tissue for it. **Step 3 is in:** blood chemistry
 (`creature.hormones`), gland nodes that release into it, from a store their tissue holds and refills (`creature.glandStores`),
-`blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). **Step 5a is in:** the hub (below, "The hub
-as built"). Plastic hub weights and the hub's mass as its limit per action are step 5b. Inspect with `window.debugWiring('hare')`
+`blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). **Step 5 is in:** the hub (below, "The hub
+as built"): the player plays it, its wires onto reflexes are plastic, and its mass is its limit per action. Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
@@ -259,8 +259,10 @@ Everything about control follows from the wiring:
   arrives: a bolt already triggered by a close footfall cannot be stopped. A weaker or later-firing reflex can be held down
   if the hub's inhibitory weight beats its input. The game can say so: "your legs bolt before you can stop them."
 - **Control is earned by rewiring.** Hub-to-node weights are plastic. Driving a node, or holding a reflex down, strengthens
-  that wire each time it succeeds. A new grazer player cannot hold its bolt; one who has held it forty times can hold it
-  against a moderate footfall, never against a looming predator. The strength lives in tissue and can be lost with it.
+  that wire each time the hub fires against it (coincidence, not success: a wire too weak to win would otherwise never
+  grow). A new grazer player holds a flee only against something mild; one who has held against flight fifty times holds
+  it against a moderate threat, never against a looming predator. Practice cannot beat the race: a wire that lands after
+  its reflex fired never coincides with it. The strength lives in tissue and can be lost with it.
 - **How much the hub can do at once is its mass.** Each action the hub drives as many independent outputs as its tissue
   allows: a small hub one generator at a time, a large one orienting, stalking and holding a flinch down together. The same
   limit binds creatures: a big-brained body does more at once because it has the tissue to.
@@ -271,7 +273,7 @@ So species play differently from anatomy, not from a difficulty setting. A hare'
 of it: playing a hare is mostly steering while the body decides the important things. A wolf's hub reaches nearly all of its
 body: playing a wolf feels deliberate.
 
-### The hub as built (step 5a, Sep 2026)
+### The hub as built (steps 5a and 5b, Sep 2026)
 
 - **The hub is a node the wiring names**: the one reading `intent:act`, which is 1 while the player acts through this body
   and 0 otherwise. An NPC of the same species carries the tissue with nothing driving it. The hare's is 3 g in the head.
@@ -282,15 +284,26 @@ body: playing a wolf feels deliberate.
   a bolt or a flee that fires (tie goes to the earlier listed, and the reflexes are listed first), and freeze, which holds
   the generator still, shuts it (`vetoedBy`).
 - **Holding**: `inhibitedBy` wires from the hub. The hare's reach flee and freeze in the torso in time (one hop from the
-  head) and raise them by 0.6 and 0.5 threat. They reach the fore-limb bolt arcs two hops after the arcs fire: a bolt
-  cannot be held. The weights are placeholders until they are plastic (5b).
+  head). They reach the fore-limb bolt arcs two hops after the arcs fire: a bolt cannot be held.
+- **Plastic wires** (5b): each hub wire's `weight` is the wire fully formed, and `innate` the share a body is born with
+  (the hare: half of 1.2 threat onto flee, half of 1.0 onto freeze). The formed share is body state,
+  `creature.hubStrength` by target node, saved with the body. Each action the hub fires while a reflex it reaches in time
+  is driven past threshold, that wire forms HUB_LEARN_RATE (0.03) of what is left: half-formed to 90% in about fifty such
+  actions. Nothing else writes it and nothing unwrites it yet (no forgetting). A late wire never coincides with its
+  reflex and does not grow. The log says so as a wire firms up ("Holding your legs from running comes a little easier.").
+- **Mass is the limit per action** (5b): the hub's firing is split across what it engages at once, its own outputs and
+  each reflex driven against its wires, at full strength for mass / HUB_KG_PER_OUTPUT (1.5 g) of them and a share each
+  beyond that. The hare's 3 g drives the legs and holds one reflex at full strength. A threat that drives the flee drives
+  the freeze too, so holding a flight while walking is three outputs at two thirds each. What is engaged comes from a
+  first pass with the hub's inhibition off (`runNodes`, `result.hub`: share, engaged, capacity).
 - **When a reflex wins**, the pressed action does not happen. A bolt or flee sprints the body along its bearing, or the
   nearest open bearing beside it. A freeze spends the turn still. The log says which: "Your body bolts west before you can
   stop it." A reflex held for the first time is said once ("Your legs gather to run. You hold them."). The run's
   `result.held` lists what the hub held this action.
-- **The body screen (B)** is read off the wiring and the pathways: what the hub drives and what shuts it, each reflex that
-  can take the body, and whether the hub reaches it in time (and by how much), late (by how many hops), or not at all. It is
-  the hotbar's first cut: with one generator there is one thing to drive.
+- **The body screen (B)** is read off the wiring, the pathways and the body: how many things the hub can do at once, what
+  it drives and what shuts it, each reflex that can take the body, and whether the hub reaches it in time (how far it
+  raises it, of how far fully formed), late (by how many hops), or not at all. It is the hotbar's first cut: with one
+  generator there is one thing to drive.
 - Only wired species are played through the hub; the others are driven directly until they are wired (steps 6–7).
 
 ---
