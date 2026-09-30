@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hare Body Map Validation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a1a; color: #ccc; font: 14px/1.6 'Consolas', 'Monaco', monospace; padding: 20px; }
+  h1 { color: #e8e8e8; font-size: 18px; margin-bottom: 12px; }
+  .section { color: #7aa2f7; margin-top: 14px; font-weight: bold; }
+  .pass { color: #9ece6a; }
+  .fail { color: #f7768e; font-weight: bold; }
+  .info { color: #e0af68; margin-left: 20px; }
+  .line { margin-left: 20px; white-space: pre; }
+  #summary { margin-top: 20px; padding: 10px; font-size: 16px; font-weight: bold; border-top: 1px solid #333; }
+  .summary-pass { color: #9ece6a; }
+  .summary-fail { color: #f7768e; }
+</style>
+</head>
+<body>
+<h1>Hare Body Map — Data Validation</h1>
+<div id="log"></div>
+<div id="summary"></div>
+<!-- the node runner imports the game's modules, one of which reads the viewport canvas at load -->
+<canvas id="viewport" hidden></canvas>
+
+<script type="module">
+import * as m from './constants.js';
+import { CREATURE_WIRING, getWiring } from './wiring.js';
+import { runNodes, refillGlands, validateWiring, compileWiring, knownGround } from './nodes.js';
+import { state, worlds } from './state.js';
+
+const log = document.getElementById('log');
+const summaryEl = document.getElementById('summary');
+let passed = 0, failed = 0;
+
+function emit(cls, text) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = text;
+  log.appendChild(d);
+}
+
+function section(name) { emit('section', `── ${name} ──`); }
+function info(text) { emit('info', text); }
+
+function assert(condition, label) {
+  if (condition) { passed++; emit('line pass', `✓ ${label}`); }
+  else           { failed++; emit('line fail', `✗ ${label}`); }
+}
+
+function approx(a, b, tol = 0.001) { return Math.abs(a - b) < tol; }
+
+// A live hare's body map: the substrate store is set up by initBodyMap
+const hare = (() => { const e = { key: 'hare' }; m.initBodyMap(e); return e.bodyMap; })();
+const wiring = CREATURE_WIRING.hare;
+const SPK = m.SUBSTRATE_PER_KG_MUSCLE;
+
+// 1
+section('SUBSTRATE_PER_KG_MUSCLE');
+assert(SPK === 0.5, `value is 0.5 (got ${SPK})`);
+
+// 2
+section('Per-zone fields present');
+for (const z of hare) {
+  assert(typeof z.fiberRatio === 'number', `${z.key} has fiberRatio`);
+  assert(z.fiberRatio >= 0 && z.fiberRatio <= 1, `${z.key} fiberRatio in [0,1] (${z.fiberRatio})`);
+  if (z.muscle > 0) {
+    assert(typeof z.substrate === 'number', `${z.key} has substrate`);
+    assert(typeof z.substrateMax === 'number', `${z.key} has substrateMax`);
+  }
+}
+
+// 3
+section('Substrate derivation');
+for (const z of hare) {
+  if (z.muscle > 0) {
+    const expected = z.muscle * SPK;
+    assert(approx(z.substrateMax, expected), `${z.key} substrateMax = ${z.substrateMax} (expected ${expected.toFixed(2)})`);
+    assert(z.substrate === z.substrateMax, `${z.key} substrate starts full`);
+  }
+}
+
+// 4
+section('Fiber ratio values');
+const expectedFR = {
+  head: 0.15, torso: 0.40, fore_l: 0.10, fore_r: 0.10,
+  mid_graze_l: 0.15, mid_graze_r: 0.15, mid_loco_l: 0.70, mid_loco_r: 0.70,
+  rear_l: 0.80, rear_r: 0.80,
+};
+for (const z of hare) {
+  assert(z.fiberRatio === expectedFR[z.key], `${z.key} fiberRatio = ${z.fiberRatio} (expected ${expectedFR[z.key]})`);
+}
+
+// 5
+section('Locomotion power budget');
+const locoZones = hare.filter(z => z.locomotion);
+assert(locoZones.length === 4, `4 locomotion zones (got ${locoZones.length})`);
+const totalFast = locoZones.reduce((s, z) => s + z.muscle * z.fiberRatio, 0);
+const totalSlow = locoZones.reduce((s, z) => s + z.muscle * (1 - z.fiberRatio), 0);
+const totalLocoSub = locoZones.reduce((s, z) => s + z.substrate, 0);
+const powerFull = totalFast + totalSlow * 0.65;
+const powerEmpty = totalSlow * 0.65;
+const cliff = powerFull / powerEmpty;
+info(`fast-contracting loco muscle: ${totalFast.toFixed(3)} kg`);
+info(`slow-contracting loco muscle: ${totalSlow.toFixed(3)} kg`);
+info(`total loco substrate pool:    ${totalLocoSub.toFixed(2)}`);
+info(`power at full substrate:      ${powerFull.toFixed(2)} (open-circ)`);
+info(`power at empty substrate:     ${powerEmpty.toFixed(2)}`);
+info(`power cliff ratio:            ${cliff.toFixed(1)}×`);
+assert(totalFast > 1.5, `fast-contracting mass > 1.5kg (${totalFast.toFixed(3)})`);
+assert(cliff > 4.0, `power cliff > 4× (${cliff.toFixed(1)})`);
+
+// 6
+section('Sensory-zone fiber ratio sanity');
+for (const key of ['fore_l', 'fore_r']) {
+  const z = hare.find(z => z.key === key);
+  assert(z.fiberRatio <= 0.15, `${key} (primary sensor) has low fiberRatio (${z.fiberRatio})`);
+}
+
+// 7
+section('Every body carries fast-twitch fuel (Muscle-Fiber-Design, Sep 2026)');
+for (const ck of ['wolf', 'dire_wolf', 'cave_crab', 'ambush_pred']) {
+  const e = { key: ck }; m.initBodyMap(e);
+  const loco = e.bodyMap.filter(z => z.locomotion && z.muscle > 0);
+  assert(loco.length > 0 && loco.every(z => typeof z.fiberRatio === 'number' && approx(z.substrateMax, z.muscle * SPK)),
+         `${ck}: locomotion zones have fiberRatio and substrateMax = muscle × ${SPK}`);
+}
+
+// 8
+section('Wiring (wiring.js, run by nodes.js)');
+assert(wiring != null, 'CREATURE_WIRING.hare exists');
+const issues = validateWiring({ key: 'hare' }, wiring);
+assert(issues.length === 0, 'wiring fits the body, all inhibition arrives in time' + (issues.length ? ': ' + issues.join('; ') : ''));
+const node = {}; for (const n of wiring.nodes) node[n.id] = n;
+for (const id of ['bolt_arc_l', 'bolt_arc_r', 'bolt', 'low_threat', 'threat', 'threat_level', 'flee', 'freeze', 'alert',
+                  'alarm_gland', 'hungry', 'food_ahead', 'food_underfoot'])
+  assert(node[id] != null, `node '${id}' exists`);
+
+// 9
+section('Where the wiring sits');
+assert(node.bolt_arc_l.zone === 'fore_l' && node.bolt_arc_r.zone === 'fore_r', 'bolt arcs sit in the fore-limbs');
+assert(node.bolt_arc_l.inputs[0].from === 'sense:fore_l.vibration.ground', 'fore_l arc hears only its own limb');
+assert(node.bolt.vetoedBy.includes('low_threat'), 'the threat template can hold the bolt down');
+assert(node.threat.zone === 'torso' && node.food_ahead.zone === 'head', 'threat template in the torso, food template in the head');
+assert(node.flee.receptors && node.flee.receptors.alarm > 0, 'alarm chemistry lowers the flee threshold');
+assert(node.hungry.inputs[0].from === 'blood:hunger', 'the food template reads the hunger hormone through its own receptors');
+assert(node.alarm_gland.inputs.some(i => i.from === 'feature:pain'), 'pain drives the alarm gland');
+assert(!wiring.nodes.some(n => n.zone === 'rear_l' || n.zone === 'rear_r'), 'the rear limbs feed nothing (their footfalls reach no template)');
+
+// 10
+section('initBodyMap propagation');
+const fakeHare = { key: 'hare' };
+const bm = m.initBodyMap(fakeHare);
+for (const z of bm) {
+  assert(typeof z.fiberRatio === 'number', `instance ${z.key} has fiberRatio`);
+  if (z.muscle > 0) {
+    assert(typeof z.substrate === 'number', `instance ${z.key} has substrate`);
+    assert(z.substrate === z.substrateMax, `instance ${z.key} substrate full`);
+  }
+  assert(z.maxHp > 0, `instance ${z.key} has HP (${z.maxHp})`);
+}
+
+// 11
+section('The wiring dies with its zones');
+// No world is loaded here: an empty layer (no food, no scent on the ground)
+if (!state.player) state.player = { layer: 0, x: -1, y: -1 };
+function woundedHare(destroyed) {
+  const e = { key: 'hare', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0, fatigue: 0 } };
+  m.initBodyMap(e);
+  for (const z of e.bodyMap) if (destroyed.includes(z.key)) z.destroyed = true;
+  // A heavy footfall on both fore-limbs, from something wolf-sized four tiles off
+  e.detectionInfo = [{ entity: { key: 'wolf' }, x: 54, y: 50, distance: 4, sizeRelative: 'larger',
+    sizeEstimate: { estimated: 22, lower: 15, upper: 30 }, zoneSNR: { 'fore_l.vibration.ground': 9, 'fore_r.vibration.ground': 9 },
+    closingSpeed: 0, dietConfidence: 0 }];
+  return e;
+}
+assert(runNodes(woundedHare([]), wiring).type === 'bolt', 'intact: a heavy footfall bolts it');
+assert(runNodes(woundedHare(['fore_l']), wiring).type === 'bolt', 'one fore-limb gone: the other still bolts');
+assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'both fore-limbs gone: no bolt arc left to fire');
+// Chemistry
+{
+  const e = woundedHare([]);
+  runNodes(e, wiring);
+  assert(e.hormones.alarm > 0, 'a bolt releases alarm into the blood');
+  const calm = woundedHare([]); calm.detectionInfo = []; calm.tookDamageThisTurn = true;
+  runNodes(calm, wiring);
+  assert(calm.hormones.alarm > 0, 'pain alone releases alarm');
+  const jumpy = woundedHare([]); jumpy.hormones.alarm = 1.0;
+  jumpy.detectionInfo[0].zoneSNR = { 'fore_l.vibration.ground': 2.5, 'fore_r.vibration.ground': 2.5 };
+  const calm2 = woundedHare([]); calm2.detectionInfo[0].zoneSNR = { 'fore_l.vibration.ground': 2.5, 'fore_r.vibration.ground': 2.5 };
+  assert(runNodes(calm2, wiring).type !== 'bolt' && runNodes(jumpy, wiring).type === 'bolt',
+         'a footfall too faint to bolt a calm hare bolts an alarmed one');
+}
+// Gland store: three full releases, then dry; synthesis refills it
+{
+  const e = woundedHare([]);
+  const levels = [];
+  for (let k = 0; k < 4; k++) { runNodes(e, wiring); levels.push(e.hormones.alarm); }
+  assert(approx(levels[2], 0.9, 1e-6) && approx(levels[3], levels[2], 1e-9),
+         `a gland runs dry: alarm ${levels.map(v => v.toFixed(2)).join(' → ')} over four bolts`);
+  refillGlands(e, wiring, 50);
+  assert(approx(e.glandStores.alarm_gland, 0.45, 1e-6), `50 ticks of synthesis refill half the store (${e.glandStores.alarm_gland.toFixed(3)})`);
+}
+// The map: distance bands
+{
+  const shaleback = (dist) => {
+    const e = woundedHare([]);
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 50 + dist, y: 50, distance: dist, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 },
+      zoneSNR: { 'head.visual': 6, 'fore_l.vibration.ground': 3, 'fore_r.vibration.ground': 3 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring).type;
+  };
+  assert(shaleback(3) === 'flee', `a shaleback walking 3 tiles off (seen and felt): flee (${shaleback(3)})`);
+  assert(shaleback(12) === 'freeze' || shaleback(12) === 'alert', `a shaleback 12 tiles off: no flight (${shaleback(12)})`);
+}
+// Holding and prediction, on a small wiring (no wired creature holds yet)
+{
+  const holder = { map: { bands: [3] },
+    nodes: [{ id: 'seen', zone: 'head', mass: 0.1, mode: 'mapped', inputs: [{ from: 'sense:head.visual' }],
+              fn: 'step', threshold: 1, holds: true, predicts: true }],
+    outputs: [{ effect: 'locomotion', label: 'chase', node: 'seen', zone: 'torso', intensity: 1, bearing: 'toward' }] };
+  assert(validateWiring({ key: 'wolf' }, holder).length === 0, 'a holding, predicting node validates (on a wolf\'s head: 0.1 kg is more than a hare\'s)');
+  assert(validateWiring({ key: 'hare' }, holder).some(i => /head/.test(i)), 'the same node does not fit a hare\'s head');
+  const e = woundedHare([]);
+  state.turnCount = 100;
+  e.detectionInfo = [{ entity: { key: 'hare', hp: 1 }, x: 55, y: 50, distance: 5, zoneSNR: { 'head.visual': 5 },
+                       velocity: { vx: 0, vy: 0.4 } }];
+  const first = runNodes(e, holder);
+  assert(first.type === 'chase' && first.direction === 3, `perceived, moving south: aims ahead of it, south-east (${first.direction})`);
+  e.detectionInfo = []; state.turnCount = 102;
+  const held = runNodes(e, holder);
+  assert(held.type === 'chase', 'out of the senses 2 turns later: still held (0.1 kg holds 3 turns)');
+  state.turnCount = 104;
+  assert(runNodes(e, holder).type === 'hold', 'after 4 turns: let go');
+  const e2 = woundedHare(['head']); e2.detectionInfo = []; state.turnCount = 100;
+  e2._held = { seen: [{ x: 55, y: 50, v: 1, turn: 100, stamp: 0, entity: null }] };
+  assert(runNodes(e2, holder).type === 'hold', 'the head destroyed: nothing held');
+}
+// The hub: what the player's will holds back, only where its fibres arrive in time
+{
+  const c = compileWiring(wiring, m.CREATURE_PATHWAYS.hare);
+  assert(c.liveInhibits.get('flee').length === 1 && c.liveInhibits.get('freeze').length === 1,
+         'the hub (head) reaches flee and freeze (torso) in time: one hop');
+  assert(c.lateInhibits.get('bolt_arc_l')[0].lag === 2 && c.liveInhibits.get('bolt_arc_l').length === 0,
+         'the hub reaches the fore-limb bolt arcs two hops after they fire: inert');
+  const calm = woundedHare([]); calm.detectionInfo = [];
+  assert(runNodes(calm, wiring).type === 'hold' && runNodes(calm, wiring, { intent: true }).type === 'deliberate',
+         'nothing fires: an NPC hare holds; with the player acting, the hub drives the generator');
+  const shaleback = (dist, intent) => {
+    const e = woundedHare([]);
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 50 + dist, y: 50, distance: dist, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 },
+      zoneSNR: { 'head.visual': 6 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring, { intent });
+  };
+  const f0 = shaleback(6, false), f1 = shaleback(6, true);
+  assert(f0.type === 'freeze' && f1.type === 'deliberate' && f1.held.includes('freeze'),
+         `a shaleback seen 6 tiles off: freezes a hare (${f0.type}); the player holds it (${f1.type}, held ${f1.held})`);
+  const n1 = shaleback(2, true);
+  assert(n1.type === 'freeze' && n1.held.length === 0, `seen 2 tiles off: past the hold, the player freezes (${n1.type})`);
+  const felt = (intent) => {
+    const e = woundedHare([]);
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 53, y: 50, distance: 3, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 },
+      zoneSNR: { 'head.visual': 6, 'fore_l.vibration.ground': 3, 'fore_r.vibration.ground': 3 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring, { intent });
+  };
+  const g0 = felt(false), g1 = felt(true);
+  info(`a shaleback seen and felt 3 tiles off: hare ${g0.type}; player ${g1.type} (held ${g1.held.join(', ') || 'nothing'})`);
+  assert(g0.type === 'flee' && g1.type !== 'flee', 'seen and felt 3 tiles off: a hare flees; the player holds the flee');
+  assert(runNodes(woundedHare([]), wiring, { intent: true }).type === 'bolt', 'a heavy footfall bolts the player\'s hare too');
+  // The hub's tissue is its limit per action: 3 g, two outputs at full strength
+  assert(f1.hub.share === 1 && f1.hub.engaged.join() === 'freeze',
+         `holding a freeze while walking: two outputs, full strength (share ${f1.hub.share})`);
+  assert(approx(g1.hub.share, 2 / 3) && g1.hub.engaged.includes('flee') && g1.hub.engaged.includes('freeze'),
+         `holding a flee (and the freeze under it) while walking: three outputs, each at ${g1.hub.share.toFixed(2)}`);
+  // Plastic wires: grown by coincidence, saved as body state
+  const trainee = woundedHare([]);
+  trainee.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 56, y: 50, distance: 6, sizeRelative: 'much_larger',
+    sizeEstimate: { estimated: 200, lower: 150, upper: 260 }, zoneSNR: { 'head.visual': 6 }, closingSpeed: 0, dietConfidence: 0 }];
+  for (let k = 0; k < 55; k++) runNodes(trainee, wiring, { intent: true });
+  const hs = trainee.hubStrength;
+  assert(hs.freeze > 0.9 && hs.flee == null, `fifty-five actions held against a freeze: that wire ${Math.round(hs.freeze * 100)}% formed, the flee wire untouched`);
+  const npc = woundedHare([]);
+  npc.detectionInfo = trainee.detectionInfo;
+  for (let k = 0; k < 5; k++) runNodes(npc, wiring);
+  assert(npc.hubStrength == null, 'an NPC hare (nothing driving its hub) forms nothing');
+  const close = (strength) => {
+    const e = woundedHare([]);
+    if (strength) e.hubStrength = strength;
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 52, y: 50, distance: 2, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 }, zoneSNR: { 'head.visual': 6 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring, { intent: true }).type;
+  };
+  assert(close(null) === 'freeze' && close({ freeze: 1 }) === 'deliberate',
+         `seen 2 tiles off: a new player freezes (${close(null)}); one with the freeze wire fully formed walks on (${close({ freeze: 1 })})`);
+  const drilled = woundedHare([]); drilled.hubStrength = { bolt_arc_l: 1, bolt_arc_r: 1 };
+  assert(runNodes(drilled, wiring, { intent: true }).type === 'bolt', 'the bolt-arc wires fully formed: still two hops late, still a bolt');
+  const headless = woundedHare(['head']);
+  const hl = runNodes(headless, wiring, { intent: true });
+  assert(hl.type !== 'deliberate' && hl.hub == null, `the head destroyed: no hub, nothing driven or held (${hl.type})`);
+}
+assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
+
+section('The wolf (wiring.js, step 6)');
+// A small flat world of grass (the wolf writes the ground it stands on), removed after
+worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
+{
+  const W = CREATURE_WIRING.wolf;
+  assert(getWiring({ key: 'wolf' }) === W, 'getWiring returns the wolf\'s wiring');
+  assert(validateWiring({ key: 'wolf' }, W).length === 0, `the wolf's wiring fits its body (${validateWiring({ key: 'wolf' }, W).join('; ') || 'no issues'})`);
+  const D = CREATURE_WIRING.dire_wolf;
+  assert(getWiring({ key: 'dire_wolf' }) === D && validateWiring({ key: 'dire_wolf' }, D).length === 0,
+         'the ravager runs the same plan, built for its body, and it fits');
+  const wolfWith = (dets, hunger = 0.9, extra = {}) => {
+    const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
+    m.initBodyMap(e);
+    e.detectionInfo = dets;
+    return e;
+  };
+  const hare = (dx, over = {}) => ({ entity: { key: 'hare', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'much_smaller', sizeEstimate: { estimated: 5, lower: 4, upper: 6 },
+    zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0, dietType: 'herbivore', dietConfidence: 0.8, ...over });
+  const dire = (dx, over = {}) => ({ entity: { key: 'dire_wolf', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'much_larger', sizeEstimate: { estimated: 90, lower: 70, upper: 110 },
+    zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0, dietType: 'predator', dietConfidence: 0.8, ...over });
+  const brother = (dx) => ({ entity: { key: 'wolf', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'similar', sizeEstimate: { estimated: 22, lower: 18, upper: 26 }, zoneSNR: { 'head.visual': 5 },
+    isMoving: true, closingSpeed: 0, species: 'wolf', speciesConfidence: 0.9, dietType: 'predator', dietConfidence: 0.8 });
+
+  const c1 = runNodes(wolfWith([hare(3)]), W);
+  assert(c1.act === 'hunt_chase' && c1.direction === 2, `hungry, a hare 3 tiles east: chases it east (${c1.act}, ${c1.direction})`);
+  const c0 = runNodes(wolfWith([hare(3)], 0.2), W);
+  assert(c0.act == null, `fed, the same hare: no chase (${c0.type})`);
+  const b1 = runNodes(wolfWith([hare(1)]), W);
+  assert(b1.effect === 'strike' && b1.source && b1.source.key === 'hare', `hungry, a hare in reach: bites it (${b1.type})`);
+  const b0 = runNodes(wolfWith([hare(1)], 0.2), W);
+  assert(b0.effect !== 'strike', `fed, a hare in reach: no bite (${b0.type})`);
+  const bitten = wolfWith([dire(1)], 0.2, { tookDamageThisTurn: true });
+  assert(runNodes(bitten, W).type === 'bite', 'bitten by something in reach: bites back');
+  const r1 = runNodes(wolfWith([dire(1)]), W);
+  assert(r1.type === 'retreat' && r1.direction === 6, `a dire wolf in reach: retreats west (${r1.type}, ${r1.direction})`);
+  const r3 = runNodes(wolfWith([dire(3)]), W);
+  assert(r3.type === 'wary', `a dire wolf 3 tiles off, calm: faces it (${r3.type})`);
+  const r3a = runNodes(wolfWith([dire(3)], 0.9, { hormones: { alarm: 1, hunger: 0.9, fatigue: 0 } }), W);
+  assert(r3a.type === 'retreat', `the same, alarmed: retreats (${r3a.type})`);
+  const r3h = runNodes(wolfWith([dire(3), hare(2)]), W);
+  assert(r3h.act === 'hunt_chase', `a hare 2 tiles off and a dire wolf 3 tiles off, hungry and calm: the chase wins (${r3h.type})`);
+  const k1 = runNodes(wolfWith([brother(3)]), W);
+  assert(k1.type === 'give way' && k1.direction === 6, `another wolf 3 tiles east: gives way (${k1.type}, ${k1.direction})`);
+  const k2 = runNodes(wolfWith([brother(1)]), W);
+  assert(k2.effect !== 'strike', `another wolf in reach, hungry: no bite (${k2.type})`);
+  // The integration tissue holds where the prey was
+  const hunter = wolfWith([hare(3)]);
+  state.turnCount = 200;
+  runNodes(hunter, W);
+  hunter.detectionInfo = []; state.turnCount = 203;
+  const held = runNodes(hunter, W);
+  assert(held.act === 'hunt_chase' && held.place && held.place.x === 53, `out of the senses 3 turns later: still goes for where it was (${held.type})`);
+  state.turnCount = 206;
+  assert(runNodes(hunter, W).act !== 'hunt_chase', 'after 6 turns (0.15 kg holds 4.5): let go');
+  // The ravager: a wolf reads smaller against its body, and is prey
+  const ravager = { key: 'dire_wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.9, fatigue: 0 } };
+  m.initBodyMap(ravager);
+  ravager.detectionInfo = [{ ...brother(3), species: null, speciesConfidence: 0, sizeRelative: 'much_smaller',
+                             sizeEstimate: { estimated: 22, lower: 18, upper: 26 } }];
+  const rv = runNodes(ravager, D);
+  assert(rv.act === 'hunt_chase', `a hungry ravager, a wolf 3 tiles off: chases it (${rv.type})`);
+  // The lurker: still, listening; strikes what its sensor limbs feel in reach
+  const L = CREATURE_WIRING.ambush_pred;
+  assert(validateWiring({ key: 'ambush_pred' }, L).length === 0, 'the lurker\'s wiring fits its body');
+  const lurker = (dets, hunger = 0.9, extra = {}) => {
+    const e = { key: 'ambush_pred', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); e.detectionInfo = dets; return e;
+  };
+  const walker = (dx, over = {}) => ({ entity: { key: 'wolf', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'similar', sizeEstimate: { estimated: 22, lower: 18, upper: 26 },
+    zoneSNR: { 'sensor_l.vibration.ground': 6, 'sensor_r.vibration.ground': 6 }, isMoving: true, closingSpeed: 0, ...over });
+  assert(runNodes(lurker([]), L).act === 'hold', 'nothing near: held still, listening');
+  assert(runNodes(lurker([walker(3)]), L).act === 'hold', 'something its size 3 tiles off: still (nothing drives it to approach)');
+  const ls = runNodes(lurker([walker(1)]), L);
+  assert(ls.effect === 'strike' && ls.source.key === 'wolf', `hungry, something its size felt in reach: strikes (${ls.type})`);
+  assert(runNodes(lurker([walker(1)], 0.2), L).act === 'hold', 'fed, the same: still');
+  assert(runNodes(lurker([walker(1, { zoneSNR: {} })]), L).act === 'hold', 'seen in reach but not felt through a sensor limb: still');
+  assert(runNodes(lurker([walker(1)], 0.2, { tookDamageThisTurn: true }), L).effect === 'strike', 'struck, fed: strikes back');
+  const lk = runNodes(lurker([walker(1, { entity: { key: 'ambush_pred', hp: 1 }, species: 'ambush_pred', speciesConfidence: 0.9 })]), L);
+  assert(lk.effect !== 'strike', `another lurker in reach: no strike (${lk.type})`);
+  const ld = runNodes(lurker([dire(1)]), L);
+  assert(ld.act === 'flee_home', `a ravager in reach: goes home (${ld.type})`);
+  // Played: only a retreat can take the legs, and the hub reaches it late
+  // (the template sits in the torso beside it)
+  assert(runNodes(lurker([dire(1)]), L, { intent: true }).act === 'flee_home', 'played, a ravager in reach: the retreat takes the legs (the hub is a hop late)');
+  assert(runNodes(lurker([]), L, { intent: true }).type === 'deliberate', 'played, nothing near: the player moves it');
+  // The shaleback: grazes; shoves back when struck; a meat-eater on the air stops it
+  const C = CREATURE_WIRING.cave_crab;
+  assert(validateWiring({ key: 'cave_crab' }, C).length === 0, 'the shaleback\'s wiring fits its body');
+  const crab = (dets, extra = {}) => {
+    const e = { key: 'cave_crab', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.2, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); e.detectionInfo = dets; return e;
+  };
+  assert(runNodes(crab([]), C).type === 'hold', 'fed, nothing near: nothing fires (the gait\'s wander)');
+  const cw = runNodes(crab([{ ...dire(1), sizeRelative: 'smaller', sizeEstimate: { estimated: 90, lower: 70, upper: 110 } }],
+                           { tookDamageThisTurn: true }), C);
+  assert(cw.act === 'retaliate' && cw.source.key === 'dire_wolf', `struck by a ravager in reach: shoves it (${cw.type})`);
+  assert(runNodes(crab([dire(1)]), C).act !== 'flee_water', 'a ravager in reach, not struck: 90 kg reads light against 200, no retreat');
+  const smelt = runNodes(crab([], { plume: { meatSNR: 2, herbSNR: 0, upwind: { dx: 0, dy: -1 } } }), C);
+  assert(smelt.type === 'wind' && smelt.direction === 0, `meat-eater on the air from the north: faces north (${smelt.type}, ${smelt.direction})`);
+  const still = runNodes(crab([], { plume: { meatSNR: 2, herbSNR: 0, upwind: null } }), C);
+  assert(still.act === 'hold', `on the air with no wind to read: holds still (${still.type})`);
+  // The colony: a footfall felt moves it away
+  const K = CREATURE_WIRING.mushroom;
+  assert(validateWiring({ key: 'mushroom' }, K).length === 0, 'the colony\'s wiring fits its body');
+  const colony = (dets) => { const e = { key: 'mushroom', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.2, fatigue: 0 } };
+    m.initBodyMap(e); e.detectionInfo = dets; return e; };
+  const cf = runNodes(colony([{ ...hare(2), zoneSNR: { 'integument.vibration.ground': 3 } }]), K);
+  assert(cf.act === 'flee' && cf.direction === 6, `a footfall felt 2 tiles east: withdraws west (${cf.type}, ${cf.direction})`);
+  assert(runNodes(colony([{ ...hare(2), zoneSNR: { 'head.visual': 3 } }]), K).act == null, 'nothing felt: nothing');
+  // Played: the hub's drive wins the generator; only a retreat can take the legs
+  const played = runNodes(wolfWith([hare(3)]), W, { intent: true });
+  assert(played.type === 'deliberate', `played, hungry, a hare 3 tiles off: the player decides (${played.type})`);
+  const playedDire = runNodes(wolfWith([dire(1)]), W, { intent: true });
+  assert(playedDire.type === 'deliberate' && playedDire.held.includes('retreat'),
+         `played, calm, a dire wolf in reach: the player holds the retreat (${playedDire.type})`);
+  const playedScared = runNodes(wolfWith([dire(1)], 0.9, { hormones: { alarm: 1, hunger: 0.9, fatigue: 0 } }), W, { intent: true });
+  assert(playedScared.type === 'retreat', `played, alarmed, the same: the retreat takes the legs (${playedScared.type})`);
+}
+
+
+delete worlds[0];
+
+section('Memory: stores and writers (nodes.js)');
+// On a small flat world of grass (the ground writer reads the ground), removed after
+worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
+{
+  const MEM = { map: { bands: [3] }, nodes: [
+    { id: 'lib', zone: 'head', mass: 0.001, store: 'pattern' },          // 5 patterns
+    { id: 'ground', zone: 'head', mass: 0.002, store: 'route' },         // 10 tiles
+    { id: 'seen', zone: 'head', mass: 0.001, mode: 'mapped', inputs: [{ from: 'sense:head.visual' }],
+      fn: 'step', threshold: 1, writes: { store: 'lib' } },
+    { id: 'hurt', zone: 'torso', mass: 0.001, mode: 'pooled', inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'struck', zone: 'front_l', mass: 0.001, mode: 'mapped', inputs: [{ from: 'feature:present' }], gate: ['hurt'],
+      fn: 'step', threshold: 0, strict: true, writes: { store: 'lib', assoc: 'danger', amount: 0.5 } },
+    { id: 'known', zone: 'head', mass: 0.001, mode: 'mapped', inputs: [{ from: 'memory:lib.familiar' }], fn: 'pass', threshold: 0, strict: true },
+    { id: 'feared', zone: 'head', mass: 0.001, mode: 'mapped', inputs: [{ from: 'memory:lib.danger' }], fn: 'pass', threshold: 0, strict: true },
+    { id: 'walking', zone: 'torso', mass: 0.001, mode: 'pooled', inputs: [], fn: 'step', threshold: 0, writes: { store: 'ground' } },
+  ], outputs: [] };
+  assert(validateWiring({ key: 'wolf' }, MEM).length === 0, `a wiring with stores and writers validates (${validateWiring({ key: 'wolf' }, MEM).join('; ') || 'ok'})`);
+  const bad = { nodes: [{ id: 'lib', zone: 'head', mass: 0.001, store: 'pattern' },
+    { id: 'w', zone: 'head', mass: 0.001, mode: 'pooled', inputs: [], fn: 'step', threshold: 0, writes: { store: 'lib' } },
+    { id: 'r', zone: 'head', mass: 0.001, mode: 'pooled', inputs: [{ from: 'memory:lib.familiar' }], fn: 'pass' }], outputs: [] };
+  const bi = validateWiring({ key: 'wolf' }, bad);
+  assert(bi.some(i => /only a mapped node writes/.test(i)) && bi.some(i => /only a mapped node reads/.test(i)), 'a pooled writer of patterns, or reader of a store, is an issue');
+  const wolfBody = (destroyed = []) => { const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0, fatigue: 0 } };
+    m.initBodyMap(e); for (const z of e.bodyMap) if (destroyed.includes(z.key)) z.destroyed = true; return e; };
+  const seenAs = (key, over = {}) => ({ entity: { key, hp: 1 }, x: 51, y: 50, distance: 1, sizeRelative: 'smaller',
+    species: key, speciesConfidence: 0.9, dietType: 'herbivore', dietConfidence: 0.8, zoneSNR: { 'head.visual': 5 }, ...over });
+  const valueOf = (e, id) => ((e._nodeTrace || []).find(t => t.id === id) || { value: 0 }).value;
+  const e = wolfBody();
+  state.turnCount = 300;
+  for (let k = 0; k < 5; k++) { e.detectionInfo = [seenAs('hare')]; runNodes(e, MEM); }
+  const lib = e.memory.lib.patterns;
+  assert(lib.length === 1 && lib[0].n === 5 && lib[0].species === 'hare', `a hare seen five times: one pattern, written five times (${lib.length}, n ${lib[0] && lib[0].n})`);
+  assert(approx(valueOf(e, 'known'), 5 / 8), `recognised: familiarity ${valueOf(e, 'known').toFixed(3)} (n / (n + 3))`);
+  assert(valueOf(e, 'feared') === 0, 'nothing hurt it: no danger');
+  e.detectionInfo = [seenAs('hare')]; e.tookDamageThisTurn = true; runNodes(e, MEM);
+  assert(approx(lib[0].assoc.danger, 0.5), `struck by a hare in reach: its pattern associated with danger (${lib[0].assoc.danger})`);
+  e.tookDamageThisTurn = false; runNodes(e, MEM);
+  assert(approx(valueOf(e, 'feared'), 0.5), `seen again, not struck: feared (${valueOf(e, 'feared')})`);
+  e.detectionInfo = [seenAs('wolf', { sizeRelative: 'similar', dietType: 'predator' })]; runNodes(e, MEM);
+  assert(valueOf(e, 'feared') === 0, 'a wolf seen: another species, not feared');
+  // Capacity: five patterns; a sixth overwrites the one written least
+  for (const k of ['a', 'b', 'c', 'd']) { e.detectionInfo = [seenAs(k)]; runNodes(e, MEM); }
+  const keys = e.memory.lib.patterns.map(p => p.species).sort().join(',');
+  assert(e.memory.lib.patterns.length === 5 && !keys.includes('wolf') && keys.includes('hare'),
+         `a full store (5) overwrites what was written least: ${keys}`);
+  // Anterograde amnesia: the writer's zone gone, the store still read
+  const amnesic = wolfBody(['front_l']);
+  amnesic.memory = JSON.parse(JSON.stringify(e.memory));
+  amnesic.detectionInfo = [seenAs('b')]; amnesic.tookDamageThisTurn = true; runNodes(amnesic, MEM);
+  const pb = amnesic.memory.lib.patterns.find(p => p.species === 'b');
+  assert(!(pb.assoc && pb.assoc.danger), 'the association writer\'s limb destroyed: struck by b, nothing written');
+  amnesic.detectionInfo = [seenAs('hare')]; amnesic.tookDamageThisTurn = false; runNodes(amnesic, MEM);
+  assert(approx(valueOf(amnesic, 'feared'), 0.5), 'the hare is still feared: the store works (anterograde amnesia)');
+  // The store's zone gone: what it held is gone
+  const headless = wolfBody(['head']);
+  headless.memory = JSON.parse(JSON.stringify(e.memory));
+  headless.detectionInfo = []; runNodes(headless, MEM);
+  assert(!headless.memory.lib, 'the head destroyed: the pattern library it held is gone');
+  // Ground: the tile and the passable ground around it, forgotten oldest first
+  const w = wolfBody(); w.detectionInfo = [];
+  runNodes(w, MEM);
+  const g = knownGround(w, MEM);
+  assert(g && g.has('50,50') && g.size <= 10, `ground written: its own tile and what is around it, within capacity (${g ? g.size : 0} tiles)`);
+  assert(JSON.stringify(JSON.parse(JSON.stringify(e.memory))) === JSON.stringify(e.memory), 'memory is plain body state: it saves');
+}
+// The wolf remembers (memory step 2)
+{
+  const W = CREATURE_WIRING.wolf;
+  const wolf = () => { const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.9, fatigue: 0 } };
+    m.initBodyMap(e); return e; };
+  // A smaller animal that fights back: 'biter', reads smaller, identified
+  const biterBody = { key: 'biter', hp: 1 };
+  const biter = (dx) => ({ entity: biterBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'smaller',
+    sizeEstimate: { estimated: 8, lower: 6, upper: 10 }, species: 'biter', speciesConfidence: 0.9, dietType: 'predator',
+    dietConfidence: 0.8, zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0 });
+  const e = wolf();
+  e.detectionInfo = [biter(3)];
+  assert(runNodes(e, W).act === 'hunt_chase', 'hungry, a smaller animal 3 tiles off, nothing learned: chases it');
+  e.detectionInfo = [biter(1)];
+  for (let k = 0; k < 3; k++) { e.tookDamageThisTurn = true; runNodes(e, W); }
+  const pat = e.memory.patterns.patterns.find(p => p.species === 'biter');
+  assert(pat && pat.assoc.danger > 0.5, `struck by it three times in reach: written, and dangerous (${pat ? pat.assoc.danger.toFixed(2) : 'nothing'})`);
+  e.tookDamageThisTurn = false; e.detectionInfo = [biter(3)];
+  const after = runNodes(e, W);
+  assert(after.act !== 'hunt_chase', `the same animal 3 tiles off: no longer prey (${after.type})`);
+  e.detectionInfo = [biter(1)];
+  assert(runNodes(e, W).type === 'wary' || runNodes(e, W).type === 'retreat', `in reach again: it reads as a threat (${runNodes(e, W).type})`);
+  const other = wolf(); other.memory = JSON.parse(JSON.stringify(e.memory));
+  other.detectionInfo = [{ ...biter(3), entity: { key: 'hare', hp: 1 }, species: 'hare', dietType: 'herbivore', sizeRelative: 'much_smaller' }];
+  assert(runNodes(other, W).act === 'hunt_chase', 'a hare (another pattern) is still prey');
+  // Ground: the wolf writes where it stands every action
+  const g = wolf(); g.detectionInfo = [];
+  runNodes(g, W);
+  const known = knownGround(g, W);
+  assert(known && known.has('50,50') && known.size === 9, `one action on open ground: 9 tiles known (${known ? known.size : 0})`);
+  assert(e.memory.ground && e.memory.ground.count > 0 && JSON.parse(JSON.stringify(e.memory)).ground.count === e.memory.ground.count,
+         'the ground store is body state: it saves');
+}
+// The cast remembers (memory step 3)
+{
+  const H = CREATURE_WIRING.hare, L = CREATURE_WIRING.ambush_pred, C = CREATURE_WIRING.cave_crab;
+  const body = (key, hunger = 0.2, extra = {}) => { const e = { key, layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); return e; };
+  // Hare habituation: a shaleback felt and seen often, never harmful
+  const crabBody = { key: 'cave_crab', hp: 1 };
+  const crab = (dx) => ({ entity: crabBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'much_larger',
+    sizeEstimate: { estimated: 200, lower: 150, upper: 260 }, species: 'cave_crab', speciesConfidence: 0.9,
+    dietType: 'herbivore', dietConfidence: 0.8, isMoving: true, closingSpeed: 0,
+    zoneSNR: { 'head.visual': 6, 'fore_l.vibration.ground': 1.5, 'fore_r.vibration.ground': 1.5 } });
+  const h = body('hare'); h.detectionInfo = [crab(6)];
+  const first = runNodes(h, H).type;
+  for (let k = 0; k < 40; k++) runNodes(h, H);
+  const later = runNodes(h, H).type;
+  info(`hare, a shaleback felt and seen 6 tiles off: first ${first}; after 40 actions of it, ${later}`);
+  assert(first === 'freeze' && later !== 'freeze' && h.memory.lib_l.patterns[0].n > 40,
+         `habituation: familiar and never harmful, the threat template is held down (${first} → ${later})`);
+  // Hare danger: hurt in contact by a ravager, then felt at a distance
+  const direBody = { key: 'dire_wolf', hp: 1 };
+  const direAt = (dx) => ({ entity: direBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'much_larger',
+    sizeEstimate: { estimated: 90, lower: 70, upper: 110 }, species: 'dire_wolf', speciesConfidence: 0.9,
+    dietType: 'predator', dietConfidence: 0.8, isMoving: true, closingSpeed: 0,
+    zoneSNR: { 'fore_l.vibration.ground': 1.5, 'fore_r.vibration.ground': 1.5 } });
+  const threatOf = (e) => ((e._nodeTrace || []).find(t => t.id === 'threat_level') || { value: 0 }).value;
+  const naive = body('hare'); naive.detectionInfo = [direAt(6)];
+  runNodes(naive, H); const before = threatOf(naive);
+  const scarred = body('hare'); scarred.detectionInfo = [direAt(1)];
+  for (let k = 0; k < 3; k++) { scarred.tookDamageThisTurn = true; runNodes(scarred, H); }
+  scarred.tookDamageThisTurn = false; scarred.hormones.alarm = 0; scarred.detectionInfo = [direAt(6)];
+  runNodes(scarred, H); const afterD = threatOf(scarred);
+  assert(scarred.memory.lib_l.patterns.some(p => p.assoc && p.assoc.danger > 0.5) && afterD > before,
+         `hurt by a ravager: the fore limbs remember it as dangerous; felt 6 tiles off it reads as more threat (${before.toFixed(2)} → ${afterD.toFixed(2)})`);
+  // Lurker: struck by something its size three times; it no longer strikes that
+  const fighterBody = { key: 'fighter', hp: 1 };
+  const fighter = () => ({ entity: fighterBody, x: 51, y: 50, distance: 1, sizeRelative: 'similar',
+    sizeEstimate: { estimated: 22, lower: 18, upper: 26 }, species: 'fighter', speciesConfidence: 0.9,
+    zoneSNR: { 'sensor_l.vibration.ground': 6, 'sensor_r.vibration.ground': 6 }, isMoving: true, closingSpeed: 0 });
+  const lk = body('ambush_pred', 0.9); lk.detectionInfo = [fighter()];
+  assert(runNodes(lk, L).effect === 'strike', 'a hungry lurker, something its size in reach: strikes');
+  for (let k = 0; k < 3; k++) { lk.tookDamageThisTurn = true; runNodes(lk, L); }
+  lk.tookDamageThisTurn = false;
+  assert(runNodes(lk, L).effect !== 'strike', 'struck by it three times: its limbs know it, and stay the strike');
+  // Shaleback: struck by a wolf three times; a wolf in reach is then a threat
+  const wolfBody = { key: 'wolf', hp: 1 };
+  const wolfAt = (dx) => ({ entity: wolfBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'smaller',
+    sizeEstimate: { estimated: 22, lower: 18, upper: 26 }, species: 'wolf', speciesConfidence: 0.9,
+    dietType: 'predator', dietConfidence: 0.8, zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0 });
+  const sb = body('cave_crab'); sb.detectionInfo = [wolfAt(1)];
+  assert(runNodes(sb, C).act !== 'flee_water', 'a shaleback, a wolf in reach: 22 kg reads light, no retreat');
+  for (let k = 0; k < 3; k++) { sb.tookDamageThisTurn = true; runNodes(sb, C); }
+  sb.tookDamageThisTurn = false; sb.hormones.alarm = 0;
+  const sbAfter = runNodes(sb, C);
+  assert(sbAfter.act === 'flee_water' || sbAfter.type === 'wary', `struck by it three times: a wolf in reach reads as a threat (${sbAfter.type})`);
+}
+delete worlds[0];
+
+// 12
+section('Existing systems undamaged');
+assert(m.CREATURE_PATHWAYS.hare.length === 19, `hare pathways: 19`);
+assert(m.CREATURE_PATHWAYS.wolf.length === 7, `wolf pathways: 7`);
+assert(typeof m.computeStrikeDamage === 'function', 'computeStrikeDamage exists');
+assert(typeof m.selectHitZone === 'function', 'selectHitZone exists');
+assert(typeof m.getPathways === 'function', 'getPathways exists');
+
+// Summary
+summaryEl.textContent = `${passed} passed, ${failed} failed`;
+summaryEl.className = failed > 0 ? 'summary-fail' : 'summary-pass';
+</script>
+</body>
+</html>
