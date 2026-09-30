@@ -308,7 +308,9 @@ section('The wolf (wiring.js, step 6)');
   const W = CREATURE_WIRING.wolf;
   assert(getWiring({ key: 'wolf' }) === W, 'getWiring returns the wolf\'s wiring');
   assert(validateWiring({ key: 'wolf' }, W).length === 0, `the wolf's wiring fits its body (${validateWiring({ key: 'wolf' }, W).join('; ') || 'no issues'})`);
-  assert(getWiring({ key: 'dire_wolf' }) == null, 'the dire wolf is still on the reactive rules');
+  const D = CREATURE_WIRING.dire_wolf;
+  assert(getWiring({ key: 'dire_wolf' }) === D && validateWiring({ key: 'dire_wolf' }, D).length === 0,
+         'the ravager runs the same plan, built for its body, and it fits');
   const wolfWith = (dets, hunger = 0.9, extra = {}) => {
     const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
     m.initBodyMap(e);
@@ -356,6 +358,13 @@ section('The wolf (wiring.js, step 6)');
   assert(held.act === 'hunt_chase' && held.place && held.place.x === 53, `out of the senses 3 turns later: still goes for where it was (${held.type})`);
   state.turnCount = 206;
   assert(runNodes(hunter, W).act !== 'hunt_chase', 'after 6 turns (0.15 kg holds 4.5): let go');
+  // The ravager: a wolf reads smaller against its body, and is prey
+  const ravager = { key: 'dire_wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.9, fatigue: 0 } };
+  m.initBodyMap(ravager);
+  ravager.detectionInfo = [{ ...brother(3), species: null, speciesConfidence: 0, sizeRelative: 'much_smaller',
+                             sizeEstimate: { estimated: 22, lower: 18, upper: 26 } }];
+  const rv = runNodes(ravager, D);
+  assert(rv.act === 'hunt_chase', `a hungry ravager, a wolf 3 tiles off: chases it (${rv.type})`);
   // Played: the hub's drive wins the generator; only a retreat can take the legs
   const played = runNodes(wolfWith([hare(3)]), W, { intent: true });
   assert(played.type === 'deliberate', `played, hungry, a hare 3 tiles off: the player decides (${played.type})`);

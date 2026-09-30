@@ -169,10 +169,12 @@ const HARE = {
   ],
 };
 
-// ── The wolf (prowler, meso-predator, Clade A) ──
-// Centralised and nose-led: nearly all of it sits in the head (0.85 kg of
-// neural tissue), and everything reaches the limbs through the torso, two hops
-// away (Neural-Architecture-Design, "First application: the wolf"). Head:
+// ── The pursuit predator (Clade A: the wolf, the ravager) ──
+// Centralised and nose-led: nearly all of it sits in the head, and everything
+// reaches the limbs through the torso, two hops away (Neural-Architecture-
+// Design, "First application: the wolf"). Built for a body: `hub` and
+// `integration` are its head's tissue for the hub and for holding the prey
+// (kg, the body map's neuralAllocation); the rest is the same circuit. Head:
 // the templates (prey, larger animal, rival, carrion, trail, air), the map
 // with its integration tissue holding and leading the prey, the bite, and the
 // hub. Torso: the locomotion generator's drives and the alarm gland.
@@ -180,16 +182,16 @@ const HARE = {
 // return (the wander's home pull stays), no cast when the air loses the prey,
 // no retreat to refuge, no blood-level rule (pain raises alarm, and alarm
 // lowers the retreat's threshold).
-const WOLF = {
+function pursuitPredator({ hub, integration }) { return {
   map: { bands: [1.5, 4, 8] },
   nodes: [
-    // The hub: 30 g of the head's integration tissue, tissue for twenty
-    // outputs at once. Its drive reaches the generator as strongly as any
+    // The hub (the wolf's: 30 g of the head's integration tissue, tissue for
+    // twenty outputs at once). Its drive reaches the generator as strongly as any
     // reflex's (below), so the chase, the carrion, giving way and the trail
     // never take a played wolf's legs; only a retreat can (it is listed first,
     // and wins the tie), and the hub has a wire onto that, in time, half
     // formed. Playing a wolf is deliberate.
-    { id: 'hub', zone: 'head', mass: 0.03, mode: 'pooled',
+    { id: 'hub', zone: 'head', mass: hub, mode: 'pooled',
       inputs: [{ from: 'intent:act' }], fn: 'step', threshold: 0, strict: true },
 
     // Blood: hunger (the gut's hormone) and pain (felt through every zone)
@@ -208,9 +210,9 @@ const WOLF = {
     // an image falls off, so the nearest wins the map
     { id: 'prey', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.9, 0.7, 0.5],
       inputs: [{ from: 'feature:sizeSmaller' }], vetoedBy: ['kin'], fn: 'step', threshold: 1 },
-    // The integration tissue: holds where the prey was (0.15 kg: 4.5 turns)
-    // and leads it along the velocity the eyes resolve
-    { id: 'prey_place', zone: 'head', mass: 0.15, mode: 'mapped', holds: true, predicts: true,
+    // The integration tissue: holds where the prey was (mass × 30 turns: the
+    // wolf's 0.15 kg, 4.5) and leads it along the velocity the eyes resolve
+    { id: 'prey_place', zone: 'head', mass: integration, mode: 'mapped', holds: true, predicts: true,
       inputs: [{ from: 'node:prey' }], fn: 'pass', threshold: 0, strict: true },
     // Prey in reach of the jaw, hungry
     { id: 'prey_in_reach', zone: 'head', mass: 0.005, mode: 'mapped', bands: [1, 0, 0, 0],
@@ -289,9 +291,18 @@ const WOLF = {
     { effect: 'orienting', label: 'wary', act: 'orient', node: 'wary', zone: 'head', bearing: 'toward' },
     { effect: 'feeding', label: 'eat', act: 'eat_corpse', node: 'carrion_here', zone: 'head' },
   ],
-};
+}; }
 
-const CREATURE_WIRING = { hare: HARE, wolf: WOLF };
+// The wolf (prowler, meso-predator): 0.85 kg of neural tissue, 0.15 of it
+// integration in the head
+const WOLF = pursuitPredator({ hub: 0.03, integration: 0.15 });
+// The ravager (apex predator): the same plan at four times the mass, 1.26 kg
+// of neural tissue in the head, 0.20 of it integration (it holds a lost prey
+// six turns). Its hub is 40 g. What it reads as prey is what reads smaller
+// against its body: wolves too.
+const DIRE_WOLF = pursuitPredator({ hub: 0.04, integration: 0.20 });
+
+const CREATURE_WIRING = { hare: HARE, wolf: WOLF, dire_wolf: DIRE_WOLF };
 
 /** A creature's wiring (the player's through its species' creature), or null
  *  for one still on the reactive rules. */
