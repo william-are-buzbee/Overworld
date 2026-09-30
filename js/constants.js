@@ -144,6 +144,11 @@ export const GLAND_SYNTHESIS_PER_KG  = 9;     // hormone made per kg of gland ti
 // to 90% in about fifty such actions).
 export const HUB_KG_PER_OUTPUT       = 0.0015; // kg of hub tissue per output driven at full strength
 export const HUB_LEARN_RATE          = 0.03;   // share of a hub wire's unformed synapses formed per coincidence
+// Memory (Neural-Architecture-Design, Memory; nodes.js): what a store's tissue
+// holds. One entry is a pattern (a feature combination and its associations)
+// or a tile of known ground. Stands for synapse count per kg; the wolf's 50 g
+// pattern library holds 250 patterns, its 0.18 kg episodic store 900 tiles.
+export const MEMORY_ENTRIES_PER_KG   = 5000;   // entries a kg of store tissue holds
 
 // ==================== DRIVE SYSTEM ====================
 export const MASS_HUNGER_COEFF   = 0.000015;  // hunger per turn per kg of total mass

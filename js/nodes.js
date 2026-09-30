@@ -42,6 +42,16 @@
 //                            lose it (tissue that can sustain activity)
 //   predicts                 mapped: reports its place moved along the seen
 //                            velocity by the time this body needs to get there
+//   store 'pattern'|'route'  a store: tissue that holds what writers write,
+//                            mass × MEMORY_ENTRIES_PER_KG entries; it never
+//                            fires. Destroy its zone and what it held is gone
+//   writes {store, assoc?, amount?}
+//                            a writer: each time this node fires it writes
+//                            into the store (below, Memory). Destroy it and
+//                            nothing new is written; the store still works
+//   inputs 'memory:<store>.familiar' / 'memory:<store>.<assoc>' (mapped): how
+//                            well the percept matches what the store holds,
+//                            and what that match was associated with
 //
 // The hub: the node the player plays (Neural-Architecture-Design, "The hub
 // and the player"). It reads 'intent:act', drives the locomotion generator
@@ -59,6 +69,18 @@
 // wires), full strength for mass / HUB_KG_PER_OUTPUT of them and a share each
 // beyond that. What is engaged is read from a first pass with the hub's
 // inhibition off.
+//
+// Memory (Neural-Architecture-Design, Memory): writing is a node firing onto
+// a store. A pattern store holds the feature combinations its writer fired
+// on (species where identified, size reading, diet where resolved), each
+// with how often it was written and what association writers attached to it
+// (danger, food: a strength 0–1). A route store holds ground: the tiles its
+// writer fired on and the passable ground around them. A full store
+// overwrites what was written least (then longest ago). Stores are body
+// state (creature.memory, saved with the body); a store's zone destroyed
+// wipes it; a writer's zone destroyed stops new writes (anterograde
+// amnesia). PLACEHOLDER: patterns are matched on percept features, not on
+// what the senses deliver, until perception is nodes.
 //
 // The map: every percept lands on a place (a bearing and a distance band).
 // A pooled node reading a mapped one takes its strongest place (lateral
@@ -83,11 +105,12 @@
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE,
          GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG, PERSISTENCE_SCALE,
-         HUB_KG_PER_OUTPUT, HUB_LEARN_RATE } from './constants.js';
+         HUB_KG_PER_OUTPUT, HUB_LEARN_RATE, MEMORY_ENTRIES_PER_KG,
+         DIET_DECISION_THRESHOLD } from './constants.js';
 import { state } from './state.js';
 import { getSpeciesKey, meatEaterUnderfoot, readPreyTrailStep } from './detection.js';
 import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom,
-         getCorpseAt, DIRECTION_DELTAS } from './ai-utils.js';
+         getCorpseAt, DIRECTION_DELTAS, groundPassable } from './ai-utils.js';
 import { getBodyPTW, releaseHormone } from './physiology.js';
 
 // ── Features: what the senses deliver to a node ──
@@ -243,6 +266,12 @@ function compileWiring(wiring, pathways) {
       } else if (r.kind === 'feature') {
         if (r.arg) t = Math.max(t, hops(r.arg, n.zone));
         if (!FEATURES[r.name] && !POOLED_FEATURES[r.name]) issues.push(`${n.id}: unknown feature ${r.name}`);
+      } else if (r.kind === 'memory') {
+        const [storeId] = r.name.split('.');
+        const st = byId.get(storeId);
+        if (!st || !st.store) { issues.push(`${n.id}: memory input from ${storeId}, not a store`); continue; }
+        if (n.mode !== 'mapped') issues.push(`${n.id}: only a mapped node reads a store`);
+        t = Math.max(t, hops(st.zone, n.zone));
       } else if (r.kind !== 'blood' && r.kind !== 'intent') {
         issues.push(`${n.id}: unknown input ${inp.from}`);
       }
@@ -256,6 +285,14 @@ function compileWiring(wiring, pathways) {
       issues.push(`${n.id}: ${n.bands.length} band gains for ${wiring.map.bands.length + 1} bands`);
     if ((n.holds || n.predicts) && n.mode !== 'mapped') issues.push(`${n.id}: only a mapped node holds or predicts a place`);
     if (n.holds && !(n.mass > 0)) issues.push(`${n.id}: holds with no tissue`);
+    if (n.store && n.store !== 'pattern' && n.store !== 'route') issues.push(`${n.id}: unknown store kind ${n.store}`);
+    if (n.store && !(n.mass > 0)) issues.push(`${n.id}: a store with no tissue`);
+    if (n.writes) {
+      const st = byId.get(n.writes.store);
+      if (!st || !st.store) issues.push(`${n.id}: writes to ${n.writes.store}, not an earlier store`);
+      else if (st.store === 'pattern' && n.mode !== 'mapped') issues.push(`${n.id}: only a mapped node writes patterns`);
+      else if (st.store === 'route' && n.mode !== 'pooled') issues.push(`${n.id}: only a pooled node writes ground`);
+    }
     byId.set(n.id, n);
     arrival.set(n.id, t);
   }
@@ -423,6 +460,11 @@ function runNodes(creature, wiring, opts = {}) {
     val.clear();
     const held = [], driven = [];
     for (const n of wiring.nodes) {
+      if (n.store) {                          // a store holds; it does not fire
+        val.set(n.id, { v: 0, place: null });
+        if (!alive(n.zone) && creature.memory) delete creature.memory[n.id];   // the tissue holding it is gone
+        continue;
+      }
       if (!alive(n.zone)) {
         val.set(n.id, n.mode === 'mapped' ? new Float64Array(S) : { v: 0, place: null });
         if (creature._held) delete creature._held[n.id];   // the tissue holding it is gone
@@ -446,6 +488,7 @@ function runNodes(creature, wiring, opts = {}) {
             else if (r.kind === 'node') v = at(r.name, i);
             else if (r.kind === 'blood') v = _blood(creature, r.name);
             else if (r.kind === 'intent') v = opts.intent ? 1 : 0;
+            else if (r.kind === 'memory') v = _recall(creature, r.name, d);
             const w = inp.weight != null ? inp.weight : 1;
             const wv = v === 0 ? 0 : w * v;          // 0 × Infinity is no signal
             if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
@@ -466,6 +509,9 @@ function runNodes(creature, wiring, opts = {}) {
         }
         val.set(n.id, out);
         if (n.holds && !dry) _hold(creature, n, out, places, turn, stamp, heldNow);
+        if (n.writes && !dry) {
+          for (let i = 0; i < S; i++) if (out[i] > 0) _writePattern(creature, c.byId.get(n.writes.store), n.writes, dets[i], turn);
+        }
       } else {
         let x = n.combine === 'max' ? -Infinity : 0, any = false;
         let place = null, placeWeight = -Infinity;
@@ -500,6 +546,7 @@ function runNodes(creature, wiring, opts = {}) {
         if (drive) wasDriven = true;
         if (inh > 0 && v === 0 && drive) wasHeld = true;
         val.set(n.id, { v, place: v > 0 ? place : null });
+        if (n.writes && !dry && v > 0) _writeGround(creature, c.byId.get(n.writes.store), turn);
       }
       if (wasHeld) held.push(n.id);
       if (hubbed && wasDriven) driven.push(n.id);
@@ -615,6 +662,118 @@ function runNodes(creature, wiring, opts = {}) {
 }
 const _entityOf = (pr) => (pr.place && pr.place.entity) || null;
 
+// ── Memory: stores and writers ──
+
+function _store(creature, node) {
+  const all = creature.memory || (creature.memory = {});
+  return all[node.id] || (all[node.id] = node.store === 'route' ? { tiles: {}, count: 0 } : { patterns: [] });
+}
+const _capacity = (node) => Math.max(1, Math.floor((node.mass || 0) * MEMORY_ENTRIES_PER_KG));
+
+/** A percept's feature combination, as a pattern store holds it. */
+function _signature(d) {
+  return {
+    species: d.species && d.speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE ? d.species : null,
+    size: d.sizeRelative || null,
+    diet: d.dietType && d.dietConfidence >= DIET_DECISION_THRESHOLD ? d.dietType : null,
+  };
+}
+/** How well a stored pattern matches a signature, 0–1: species half, size and
+ *  diet a quarter each; two identified species that differ do not match. */
+function _similarity(p, sig) {
+  if (p.species && sig.species && p.species !== sig.species) return 0;
+  return (p.species && p.species === sig.species ? 0.5 : 0) + (p.size && p.size === sig.size ? 0.25 : 0) +
+         (p.diet && p.diet === sig.diet ? 0.25 : 0);
+}
+const _same = (p, sig) => p.species === sig.species && p.size === sig.size && p.diet === sig.diet;
+
+/** A writer fired on a percept. A pattern writer refreshes the pattern that
+ *  is this combination, or writes it (overwriting what was written least when
+ *  full). An association writer strengthens the association on the pattern
+ *  that best matches (at least half), toward 1; with no such pattern it has
+ *  nothing to attach to and writes nothing. */
+function _writePattern(creature, storeNode, w, d, turn) {
+  const st = _store(creature, storeNode);
+  const sig = _signature(d);
+  if (w.assoc) {
+    let best = null, bs = 0.5 - 1e-9;
+    for (const p of st.patterns) { const sm = _similarity(p, sig); if (sm > bs) { bs = sm; best = p; } }
+    if (!best) return;
+    const a = (best.assoc || (best.assoc = {}))[w.assoc] || 0;
+    best.assoc[w.assoc] = a + (w.amount != null ? w.amount : 0.25) * (1 - a);
+    return;
+  }
+  let p = st.patterns.find(q => _same(q, sig));
+  if (p) { p.n++; p.last = turn; return; }
+  if (st.patterns.length >= _capacity(storeNode)) {
+    let k = 0;
+    for (let j = 1; j < st.patterns.length; j++) {
+      const a = st.patterns[j], b = st.patterns[k];
+      if (a.n < b.n || (a.n === b.n && a.last < b.last)) k = j;
+    }
+    st.patterns.splice(k, 1);
+  }
+  st.patterns.push({ ...sig, n: 1, last: turn });
+}
+
+/** A ground writer fired: the tile the body is on and the passable ground
+ *  around it (felt and seen as it stands there) are known, newest last; a full
+ *  store forgets the ground it knew longest ago. */
+function _writeGround(creature, storeNode, turn) {
+  const st = _store(creature, storeNode);
+  const cap = _capacity(storeNode);
+  const put = (x, y) => {
+    const k = x + ',' + y;
+    if (!(k in st.tiles)) {
+      if (st.count >= cap) {
+        let oldest = null, ot = Infinity;
+        for (const [kk, tt] of Object.entries(st.tiles)) if (tt < ot) { ot = tt; oldest = kk; }
+        if (oldest) { delete st.tiles[oldest]; st.count--; }
+      }
+      st.count++;
+    }
+    st.tiles[k] = turn;
+  };
+  put(creature.x, creature.y);
+  for (const d of DIRECTION_DELTAS) {
+    const x = creature.x + d.x, y = creature.y + d.y;
+    if (groundPassable(creature, x, y)) put(x, y);
+  }
+}
+
+/** What a store says about a percept: 'familiar' (the best match, weighted by
+ *  how often it was written: n / (n + 3)) or an association's strength on the
+ *  best-matching pattern. */
+function _recall(creature, ref, d) {
+  const [storeId, what] = ref.split('.');
+  const st = creature.memory && creature.memory[storeId];
+  if (!st || !st.patterns || !st.patterns.length) return 0;
+  const sig = _signature(d);
+  let best = 0;
+  for (const p of st.patterns) {
+    const sm = _similarity(p, sig);
+    if (!(sm > 0)) continue;
+    const v = what === 'familiar' ? sm * p.n / (p.n + 3) : sm * ((p.assoc && p.assoc[what]) || 0);
+    if (v > best) best = v;
+  }
+  return best;
+}
+
+/** The ground a creature's route stores know (a Set of 'x,y'), or null if it
+ *  has none: what a detour can plan through (behaviors.js chaseStep). */
+function knownGround(creature, wiring) {
+  if (!wiring || !creature.memory) return null;
+  let known = null;
+  for (const n of wiring.nodes) {
+    if (n.store !== 'route') continue;
+    const st = creature.memory[n.id];
+    if (!st) continue;
+    known = known || new Set();
+    for (const k in st.tiles) known.add(k);
+  }
+  return known;
+}
+
 /**
  * Holding: a node whose tissue can sustain activity keeps it at the place
  * where it was, for its mass × PERSISTENCE_SCALE turns (the rule traces use:
@@ -677,4 +836,4 @@ function refillGlands(creature, wiring, ticks) {
   }
 }
 
-export { runNodes, refillGlands, compileWiring, validateWiring, hubStrength, FEATURES, POOLED_FEATURES };
+export { runNodes, refillGlands, compileWiring, validateWiring, hubStrength, knownGround, FEATURES, POOLED_FEATURES };
