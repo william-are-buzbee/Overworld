@@ -76,8 +76,8 @@
 // drives, in the shape ai.js _ganglionOutputToAction reads. Its glands release
 // into the blood (physiology.js releaseHormone) as they fire. The output
 // stage, in order: glands; a strike (a strike circuit firing on something in
-// reach); the strongest drive at the locomotion generator; then posture,
-// orienting, feeding. An output may name its `act`, the executor's name for
+// reach); the strongest drive at the locomotion generator; then feeding,
+// posture, orienting. An output may name its `act`, the executor's name for
 // it (behaviors.js), a bridge until the motor layer reads effects.
 
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
@@ -592,8 +592,10 @@ function runNodes(creature, wiring, opts = {}) {
     return result(loco.out, loco.pr, { intensity: loco.out.intensity, direction: bearing(loco.out, loco.pr),
                                        isBolt: loco.out.label === 'bolt' });
   }
-  // Then posture (holding still), orienting, feeding contact, in that order
-  for (const effect of ['posture', 'orienting', 'feeding']) {
+  // Then feeding contact, posture (holding still), orienting, in that order
+  // (feeding is not locomotion: a body held still can eat; what should stop
+  // it, an alert, vetoes it)
+  for (const effect of ['feeding', 'posture', 'orienting']) {
     for (const out of wiring.outputs || []) {
       if (out.effect !== effect || !alive(out.zone)) continue;
       const pr = firing(out.node);

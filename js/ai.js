@@ -207,6 +207,19 @@ function _actToAction(output, creature) {
       return { behavior: 'maintain_distance', magnitude: m, target: output.source };
     case 'orient':
       return { behavior: 'orient', magnitude: m, direction: output.direction };
+    // Flight to where the body knows: home ground (its wander's home), or water
+    case 'flee_home':
+    case 'flee_water':
+      creature.threatSource = output.source || creature.threatSource;
+      return { behavior: 'flee_refuge', magnitude: m, refugeType: output.act === 'flee_home' ? 'territory' : 'water',
+               direction: output.direction, _ganglionIntensity: m };
+    // Held still: at rest (fatigue clears)
+    case 'hold':
+      return { behavior: 'rest', magnitude: 0.1 };
+    case 'graze':
+      return { behavior: 'graze', magnitude: 0.3 };
+    case 'forage_approach':
+      return { behavior: 'forage_approach', magnitude: m, direction: output.direction };
     default:
       return { behavior: 'wander', magnitude: 0.1 };
   }

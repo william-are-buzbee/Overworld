@@ -289,7 +289,7 @@ function pursuitPredator({ hub, integration }) { return {
     { effect: 'locomotion', label: 'track', act: 'follow_trail', node: 'track', zone: 'torso', intensity: 0.25, bearing: 'toward' },
     { effect: 'locomotion', label: 'upwind', act: 'follow_scent', node: 'upwind', zone: 'torso', intensity: 0.25, bearing: 'toward' },
     { effect: 'orienting', label: 'wary', act: 'orient', node: 'wary', zone: 'head', bearing: 'toward' },
-    { effect: 'feeding', label: 'eat', act: 'eat_corpse', node: 'carrion_here', zone: 'head' },
+    { effect: 'feeding', label: 'eat', act: 'eat_corpse', node: 'carrion_here', zone: 'head', vetoedBy: ['wary'] },
   ],
 }; }
 
@@ -302,7 +302,85 @@ const WOLF = pursuitPredator({ hub: 0.03, integration: 0.15 });
 // against its body: wolves too.
 const DIRE_WOLF = pursuitPredator({ hub: 0.04, integration: 0.20 });
 
-const CREATURE_WIRING = { hare: HARE, wolf: WOLF, dire_wolf: DIRE_WOLF };
+// ── The lurker (ambush predator, Clade B) ──
+// Distributed and ground-led: its sensor limbs (vibration.ground 5, most of
+// their tissue processing it) are local minds that read what walks near and
+// decide the strike themselves (Cognition-Design, local processing). Its
+// generator is held still by a tonic node in the torso, the listening posture:
+// its own footfalls would deafen the limbs it hunts with (the old rule's
+// "movement compromises sense", as tissue). Nothing drives it to approach:
+// what comes into reach is struck; a heavy animal alive to it sends it home.
+// Its hub is 10 g of the head's 50 g of integration.
+function _lurkerSensor(side) {
+  const z = 'sensor_' + side;
+  return [
+    // The limb's own template: something its size or smaller, not its kind,
+    // felt through this limb, in reach of the strike (the touching band)
+    { id: 'feel_' + side, zone: z, mass: 0.01, mode: 'mapped',
+      inputs: [{ from: `sense:${z}.vibration.ground` }], fn: 'step', threshold: 1 },
+    { id: 'kin_' + side, zone: z, mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
+    { id: 'prey_' + side, zone: z, mass: 0.02, mode: 'mapped', bands: [1, 0, 0, 0],
+      inputs: [{ from: 'feature:sizeSmallerOrSimilar' }], gate: ['feel_' + side, 'hungry'],
+      vetoedBy: ['kin_' + side], fn: 'step', threshold: 1 },
+    // Struck while something is in reach: strike back at it
+    { id: 'struck_' + side, zone: z, mass: 0.005, mode: 'mapped', bands: [1, 0, 0, 0],
+      inputs: [{ from: 'feature:present' }], gate: ['hurt'], fn: 'step', threshold: 0, strict: true },
+    { id: 'strike_' + side, zone: z, mass: 0.005, mode: 'pooled', combine: 'max',
+      inputs: [{ from: 'node:prey_' + side }, { from: 'node:struck_' + side }], fn: 'step', threshold: 0, strict: true },
+    // Carrion under it: the limb's contact chemistry
+    { id: 'carrion_' + side, zone: z, mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'feature:corpseUnderfoot' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+  ];
+}
+const LURKER = {
+  map: { bands: [1.5, 4, 8] },
+  nodes: [
+    { id: 'hub', zone: 'head', mass: 0.01, mode: 'pooled',
+      inputs: [{ from: 'intent:act' }], fn: 'step', threshold: 0, strict: true },
+    // Blood: the receptors are in every limb's tissue; these are the torso's
+    { id: 'hungry', zone: 'torso', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'blood:hunger' }], fn: 'step', threshold: REACTIVE_HUNGER_THRESHOLD, strict: true },
+    { id: 'hurt', zone: 'torso', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+    ..._lurkerSensor('l'),
+    ..._lurkerSensor('r'),
+    // Torso: the larger-animal template (as the wolf's), the listening
+    // posture, the retreat and the alarm gland
+    { id: 'kin', zone: 'torso', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
+    { id: 'heavy', zone: 'torso', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:sizeRatio' }], fn: 'ramp', threshold: 1.5, gain: 0.5, ceiling: 1 },
+    { id: 'alive_to', zone: 'torso', mass: 0.005, mode: 'mapped', combine: 'max',
+      inputs: [{ from: 'feature:moving' }, { from: 'feature:sizeMuchLarger' },
+               { from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3 },
+    { id: 'threat', zone: 'torso', mass: 0.01, mode: 'mapped', bands: [1, 0.6, 0.3, 0.1],
+      inputs: [{ from: 'node:heavy' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
+    { id: 'threat_level', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat' }], fn: 'ramp' },
+    { id: 'retreat', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: 0.8, receptors: ALARM,
+      inhibitedBy: [{ node: 'hub', weight: 1.0, innate: 0.5 }] },
+    // Tonic: fires with no input, and holds the generator still
+    { id: 'listen', zone: 'torso', mass: 0.005, mode: 'pooled', inputs: [], fn: 'step', threshold: 0 },
+    { id: 'alarm_gland', zone: 'torso', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'node:retreat' }, { from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+  ],
+  // The strike arcs first (either limb); then the generator: a retreat home,
+  // or the hub; failing both, the listening posture holds it still
+  outputs: [
+    { effect: 'gland', hormone: 'alarm', node: 'alarm_gland', zone: 'torso', release: STRESS_RELEASE_AMOUNT },
+    { effect: 'strike', label: 'strike', act: 'hunt_attack', node: 'strike_l', zone: 'sensor_l', bearing: 'toward' },
+    { effect: 'strike', label: 'strike', act: 'hunt_attack', node: 'strike_r', zone: 'sensor_r', bearing: 'toward' },
+    { effect: 'locomotion', label: 'retreat', act: 'flee_home', node: 'retreat', zone: 'torso', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'deliberate', node: 'hub', zone: 'torso', intensity: 1.0 },
+    { effect: 'posture', label: 'listen', act: 'hold', node: 'listen', zone: 'torso' },
+    { effect: 'feeding', label: 'eat', act: 'eat_corpse', node: 'carrion_l', zone: 'sensor_l' },
+    { effect: 'feeding', label: 'eat', act: 'eat_corpse', node: 'carrion_r', zone: 'sensor_r' },
+  ],
+};
+
+const CREATURE_WIRING = { hare: HARE, wolf: WOLF, dire_wolf: DIRE_WOLF, ambush_pred: LURKER };
 
 /** A creature's wiring (the player's through its species' creature), or null
  *  for one still on the reactive rules. */
