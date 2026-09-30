@@ -74,15 +74,20 @@
 //
 // Nothing in here moves anything: runNodes returns what the output stage
 // drives, in the shape ai.js _ganglionOutputToAction reads. Its glands release
-// into the blood (physiology.js releaseHormone) as they fire.
+// into the blood (physiology.js releaseHormone) as they fire. The output
+// stage, in order: glands; a strike (a strike circuit firing on something in
+// reach); the strongest drive at the locomotion generator; then posture,
+// orienting, feeding. An output may name its `act`, the executor's name for
+// it (behaviors.js), a bridge until the motor layer reads effects.
 
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE,
          GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG, PERSISTENCE_SCALE,
          HUB_KG_PER_OUTPUT, HUB_LEARN_RATE } from './constants.js';
 import { state } from './state.js';
-import { getSpeciesKey, meatEaterUnderfoot } from './detection.js';
-import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom } from './ai-utils.js';
+import { getSpeciesKey, meatEaterUnderfoot, readPreyTrailStep } from './detection.js';
+import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom,
+         getCorpseAt, DIRECTION_DELTAS } from './ai-utils.js';
 import { getBodyPTW, releaseHormone } from './physiology.js';
 
 // ── Features: what the senses deliver to a node ──
@@ -93,6 +98,8 @@ const FEATURES = {
   sizeSmallerOrSimilar: (c, d) => (d.sizeRelative === 'smaller' || d.sizeRelative === 'much_smaller' ||
                                    d.sizeRelative === 'similar') ? 1 : 0,
   sizeMuchLarger: (c, d) => d.sizeRelative === 'much_larger' ? 1 : 0,
+  sizeSmaller:    (c, d) => (d.sizeRelative === 'smaller' || d.sizeRelative === 'much_smaller') ? 1 : 0,
+  sizeSimilar:    (c, d) => d.sizeRelative === 'similar' ? 1 : 0,
   sizeLarger:     (c, d) => d.sizeRelative === 'larger' ? 1 : 0,
   sizeAmbiguous:  (c, d) => d.sizeRelative === 'ambiguous' ? 1 : 0,
   // How heavy it reads against this body: estimated mass / own mass. An
@@ -105,8 +112,14 @@ const FEATURES = {
   // Identified by the channels as this creature's own kind (pass 7)
   recognisedKin: (c, d) => (d.species && d.speciesConfidence >= SPECIES_DISPLAY_CONFIDENCE &&
                             d.species === getSpeciesKey(c)) ? 1 : 0,
-  // Confidence that it eats meat (odour, or a recognised species' diet)
+  // Confidence that it eats meat, or plants (odour, or a recognised species' diet)
   predatorDietConfidence: (c, d) => d.dietType === 'predator' ? (d.dietConfidence || 0) : 0,
+  herbivoreDietConfidence: (c, d) => d.dietType === 'herbivore' ? (d.dietConfidence || 0) : 0,
+  // Moving: felt (a footfall is movement), or the eye's change detection, or
+  // closing. Only a body the senses read as still is not (unknown is moving).
+  moving: (c, d) => (d.isMoving === false && !(d.closingSpeed > 0)) ? 0 : 1,
+  // Something is there (any channel)
+  present: () => 1,
   // Looming: how many of this creature's own actions until a seen body closing
   // on it arrives (Infinity if nothing closes). Only the eyes resolve closing.
   contactActions: (c, d) => {
@@ -139,6 +152,29 @@ const POOLED_FEATURES = {
   foodUnderfoot: (c) => {
     const t = findNearestFoodTile(c.x, c.y);
     return (t && dist(c.x, c.y, t.x, t.y) < 1) ? 1 : 0;
+  },
+  // Carrion: a corpse underfoot (the mouth on it), or the nearest one the
+  // nose places within 4 tiles (detection.js detectCorpses, PLACEHOLDER for
+  // a carrion odour template on the map)
+  corpseUnderfoot: (c) => (getCorpseAt(c.layer != null ? c.layer : state.player.layer, c.x, c.y) ? 1 : 0),
+  corpseNear: (c) => {
+    const k = (c.detectedCorpses || []).find(k => k.distance >= 1 && k.distance <= 4);
+    return k ? { value: 1, place: { x: k.x, y: k.y } } : 0;
+  },
+  // A prey trail on the ground: the fresher neighbouring tile of plant-eater
+  // volatiles, read with the nose put to the ground (detection.js readPreyTrailStep)
+  preyTrail: (c) => {
+    const dir = readPreyTrailStep(c);
+    if (dir == null) return 0;
+    const d = DIRECTION_DELTAS[dir];
+    return { value: 1, place: { x: c.x + d.x, y: c.y + d.y } };
+  },
+  // Plant-eater volatiles on the air, and the wind to face them: a place a
+  // few tiles upwind (the plume, detection.js readPlume)
+  preyUpwind: (c) => {
+    const p = c.plume;
+    if (!p || !(p.herbSNR >= 1) || !p.upwind) return 0;
+    return { value: 1, place: { x: c.x + p.upwind.dx * 3, y: c.y + p.upwind.dy * 3 } };
   },
 };
 
@@ -524,6 +560,26 @@ function runNodes(creature, wiring, opts = {}) {
     releaseHormone(creature, out.hormone, amount);
   }
 
+  // What the output stage returns: the effect, the output's label and `act`
+  // (the executor's name for it, ai.js; a bridge until the motor layer reads
+  // effects directly), and the place and body it is about
+  const result = (out, pr, extra) => {
+    const p = pr ? where(pr) : null;
+    return { intensity: 0, direction: null, source: p && p.entity ? p.entity : null,
+             place: p ? { x: p.x, y: p.y } : null, type: out ? out.label : 'hold',
+             effect: out ? out.effect : null, act: out ? out.act || null : null,
+             isBolt: false, atFood: false, held, hub: hubInfo, ...extra };
+  };
+
+  // Strikes first: a strike circuit firing on something in reach throws the
+  // strike (a jaw, a limb) at where it is
+  for (const out of wiring.outputs || []) {
+    if (out.effect !== 'strike' || !alive(out.zone)) continue;
+    const pr = firing(out.node);
+    if (!(pr.v > 0) || outVetoed(out) || !where(pr)) continue;
+    return result(out, pr, { direction: bearing(out, pr) });
+  }
+
   // Locomotion: the strongest drive reaching the generator (earliest listed on a tie)
   let loco = null;
   for (const out of wiring.outputs || []) {
@@ -533,10 +589,8 @@ function runNodes(creature, wiring, opts = {}) {
     if (!loco || out.intensity > loco.out.intensity) loco = { out, pr };
   }
   if (loco) {
-    const p = where(loco.pr);
-    return { intensity: loco.out.intensity, direction: bearing(loco.out, loco.pr),
-             source: p && p.entity ? p.entity : null, type: loco.out.label,
-             isBolt: loco.out.label === 'bolt', atFood: false, held, hub: hubInfo };
+    return result(loco.out, loco.pr, { intensity: loco.out.intensity, direction: bearing(loco.out, loco.pr),
+                                       isBolt: loco.out.label === 'bolt' });
   }
   // Then posture (holding still), orienting, feeding contact, in that order
   for (const effect of ['posture', 'orienting', 'feeding']) {
@@ -544,12 +598,11 @@ function runNodes(creature, wiring, opts = {}) {
       if (out.effect !== effect || !alive(out.zone)) continue;
       const pr = firing(out.node);
       if (!(pr.v > 0) || outVetoed(out)) continue;
-      return { intensity: 0, direction: effect === 'orienting' ? bearing(out, pr) : null,
-               source: effect === 'posture' || effect === 'orienting' ? _entityOf(pr) : null,
-               type: out.label, atFood: effect === 'feeding', held, hub: hubInfo };
+      return result(out, pr, { direction: effect === 'orienting' ? bearing(out, pr) : null,
+                               source: effect === 'feeding' ? null : _entityOf(pr), atFood: effect === 'feeding' });
     }
   }
-  return { intensity: 0, direction: null, type: 'hold', held, hub: hubInfo };
+  return result(null, null);
 }
 const _entityOf = (pr) => (pr.place && pr.place.entity) || null;
 

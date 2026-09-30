@@ -14,7 +14,7 @@ import { SPECIES_TEMPLATES,
          STRESS_NEURAL_SENSITIVITY, CONFIDENCE_NORMALIZATION,
          THREAT_CONF_CHANNEL_CAP, THREAT_CONF_SIZE_MUCH_LARGER, THREAT_CONF_SIZE_LARGER,
          THREAT_CONF_SIZE_AMBIGUOUS, LOOM_WINDOW_ACTIONS, HUNGER_THRESHOLD,
-         STRESS_RELEASE_AMOUNT } from './constants.js';
+         STRESS_RELEASE_AMOUNT, REACTIVE_HUNGER_THRESHOLD, DIET_DECISION_THRESHOLD } from './constants.js';
 
 // How far each of the hub's wires raises its reflex when fully formed, in the
 // reflex's own input units (threat confidence; vibration SNR for the bolt
@@ -169,7 +169,129 @@ const HARE = {
   ],
 };
 
-const CREATURE_WIRING = { hare: HARE };
+// ── The wolf (prowler, meso-predator, Clade A) ──
+// Centralised and nose-led: nearly all of it sits in the head (0.85 kg of
+// neural tissue), and everything reaches the limbs through the torso, two hops
+// away (Neural-Architecture-Design, "First application: the wolf"). Head:
+// the templates (prey, larger animal, rival, carrion, trail, air), the map
+// with its integration tissue holding and leading the prey, the bite, and the
+// hub. Torso: the locomotion generator's drives and the alarm gland.
+// Everything its reactive rules did is here as tissue, or gone: no territory
+// return (the wander's home pull stays), no cast when the air loses the prey,
+// no retreat to refuge, no blood-level rule (pain raises alarm, and alarm
+// lowers the retreat's threshold).
+const WOLF = {
+  map: { bands: [1.5, 4, 8] },
+  nodes: [
+    // The hub: 30 g of the head's integration tissue, tissue for twenty
+    // outputs at once. Its drive reaches the generator as strongly as any
+    // reflex's (below), so the chase, the carrion, giving way and the trail
+    // never take a played wolf's legs; only a retreat can (it is listed first,
+    // and wins the tie), and the hub has a wire onto that, in time, half
+    // formed. Playing a wolf is deliberate.
+    { id: 'hub', zone: 'head', mass: 0.03, mode: 'pooled',
+      inputs: [{ from: 'intent:act' }], fn: 'step', threshold: 0, strict: true },
+
+    // Blood: hunger (the gut's hormone) and pain (felt through every zone)
+    { id: 'hungry', zone: 'head', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'blood:hunger' }], fn: 'step', threshold: REACTIVE_HUNGER_THRESHOLD, strict: true },
+    { id: 'hurt', zone: 'head', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+
+    // Identity: its own kind, and a known plant-eater (odour bound to it)
+    { id: 'kin', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
+    { id: 'plant_eater', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:herbivoreDietConfidence' }], fn: 'step', threshold: DIET_DECISION_THRESHOLD, strict: true },
+
+    // Prey: anything reading smaller, not its own kind. Wired in by band as
+    // an image falls off, so the nearest wins the map
+    { id: 'prey', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.9, 0.7, 0.5],
+      inputs: [{ from: 'feature:sizeSmaller' }], vetoedBy: ['kin'], fn: 'step', threshold: 1 },
+    // The integration tissue: holds where the prey was (0.15 kg: 4.5 turns)
+    // and leads it along the velocity the eyes resolve
+    { id: 'prey_place', zone: 'head', mass: 0.15, mode: 'mapped', holds: true, predicts: true,
+      inputs: [{ from: 'node:prey' }], fn: 'pass', threshold: 0, strict: true },
+    // Prey in reach of the jaw, hungry
+    { id: 'prey_in_reach', zone: 'head', mass: 0.005, mode: 'mapped', bands: [1, 0, 0, 0],
+      inputs: [{ from: 'node:prey' }], gate: ['hungry'], fn: 'step', threshold: 0, strict: true },
+    // Something in contact while a blow lands: bite back
+    { id: 'struck_by', zone: 'head', mass: 0.005, mode: 'mapped', bands: [1, 0, 0, 0],
+      inputs: [{ from: 'feature:present' }], gate: ['hurt'], fn: 'step', threshold: 0, strict: true },
+    { id: 'bite', zone: 'head', mass: 0.005, mode: 'pooled', combine: 'max',
+      inputs: [{ from: 'node:prey_in_reach' }, { from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true },
+
+    // The larger-animal template: heavy against this body (nothing at 1.5×
+    // its mass, full at 3.5×), and alive to it (moving, a meat-eater, or much
+    // larger), not its own kind; falling off with distance
+    { id: 'heavy', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:sizeRatio' }], fn: 'ramp', threshold: 1.5, gain: 0.5, ceiling: 1 },
+    { id: 'alive_to', zone: 'head', mass: 0.005, mode: 'mapped', combine: 'max',
+      inputs: [{ from: 'feature:moving' }, { from: 'feature:sizeMuchLarger' },
+               { from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3 },
+    { id: 'threat', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.6, 0.3, 0.1],
+      inputs: [{ from: 'node:heavy' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
+    { id: 'threat_level', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat' }], fn: 'ramp' },
+    { id: 'wary', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: 0.2, receptors: ALARM },
+
+    // Rivals: its own size and not a known plant-eater, or its own kind,
+    // near (out to 4 tiles)
+    { id: 'rival', zone: 'head', mass: 0.005, mode: 'mapped', combine: 'max', bands: [1, 1, 0, 0],
+      inputs: [{ from: 'feature:sizeSimilar' }, { from: 'feature:recognisedKin' }],
+      vetoedBy: ['plant_eater'], fn: 'step', threshold: 1 },
+
+    // Carrion, trail and air: the nose (head chemical processing)
+    { id: 'carrion_here', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'feature:corpseUnderfoot' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+    { id: 'carrion_near', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'feature:corpseNear' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+    { id: 'trail', zone: 'head', mass: 0.01, mode: 'pooled',
+      inputs: [{ from: 'feature:preyTrail' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+    { id: 'air', zone: 'head', mass: 0.01, mode: 'pooled',
+      inputs: [{ from: 'feature:preyUpwind' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+
+    // Torso: the drives on the locomotion generator, a hop from the head
+    { id: 'retreat', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: 0.8, receptors: ALARM,
+      inhibitedBy: [{ node: 'hub', weight: 1.0, innate: 0.5 }] },
+    { id: 'chase', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:prey_place' }], gate: ['hungry'], fn: 'step', threshold: 0, strict: true },
+    { id: 'to_carrion', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:carrion_near' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'give_way', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:rival' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'track', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:trail' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'upwind', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:air' }], fn: 'step', threshold: 0, strict: true },
+    // The alarm gland answers the retreat and pain
+    { id: 'alarm_gland', zone: 'torso', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'node:retreat' }, { from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+  ],
+
+  // The bite goes first: it is decided in the head, a hop before the retreat
+  // in the torso could shut it (the race), so a wolf with prey or an attacker
+  // in its jaws bites. Then the strongest drive at the
+  // generator: a retreat, the hub, the chase (ties to the earlier listed),
+  // then carrion, giving way, the trail and the air
+  outputs: [
+    { effect: 'gland', hormone: 'alarm', node: 'alarm_gland', zone: 'torso', release: STRESS_RELEASE_AMOUNT },
+    { effect: 'strike', label: 'bite', act: 'hunt_attack', node: 'bite', zone: 'head', bearing: 'toward' },
+    { effect: 'locomotion', label: 'retreat', act: 'flee', node: 'retreat', zone: 'torso', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'deliberate', node: 'hub', zone: 'torso', intensity: 1.0 },
+    { effect: 'locomotion', label: 'chase', act: 'hunt_chase', node: 'chase', zone: 'torso', intensity: 1.0, bearing: 'toward' },
+    { effect: 'locomotion', label: 'carrion', act: 'approach_corpse', node: 'to_carrion', zone: 'torso', intensity: 0.6, bearing: 'toward' },
+    { effect: 'locomotion', label: 'give way', act: 'maintain_distance', node: 'give_way', zone: 'torso', intensity: 0.25, bearing: 'away' },
+    { effect: 'locomotion', label: 'track', act: 'follow_trail', node: 'track', zone: 'torso', intensity: 0.25, bearing: 'toward' },
+    { effect: 'locomotion', label: 'upwind', act: 'follow_scent', node: 'upwind', zone: 'torso', intensity: 0.25, bearing: 'toward' },
+    { effect: 'orienting', label: 'wary', act: 'orient', node: 'wary', zone: 'head', bearing: 'toward' },
+    { effect: 'feeding', label: 'eat', act: 'eat_corpse', node: 'carrion_here', zone: 'head' },
+  ],
+};
+
+const CREATURE_WIRING = { hare: HARE, wolf: WOLF };
 
 /** A creature's wiring (the player's through its species' creature), or null
  *  for one still on the reactive rules. */

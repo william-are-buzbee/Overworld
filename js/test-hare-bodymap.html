@@ -302,7 +302,70 @@ assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'bot
   assert(hl.type !== 'deliberate' && hl.hub == null, `the head destroyed: no hub, nothing driven or held (${hl.type})`);
 }
 assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
-assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');
+
+section('The wolf (wiring.js, step 6)');
+{
+  const W = CREATURE_WIRING.wolf;
+  assert(getWiring({ key: 'wolf' }) === W, 'getWiring returns the wolf\'s wiring');
+  assert(validateWiring({ key: 'wolf' }, W).length === 0, `the wolf's wiring fits its body (${validateWiring({ key: 'wolf' }, W).join('; ') || 'no issues'})`);
+  assert(getWiring({ key: 'dire_wolf' }) == null, 'the dire wolf is still on the reactive rules');
+  const wolfWith = (dets, hunger = 0.9, extra = {}) => {
+    const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
+    m.initBodyMap(e);
+    e.detectionInfo = dets;
+    return e;
+  };
+  const hare = (dx, over = {}) => ({ entity: { key: 'hare', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'much_smaller', sizeEstimate: { estimated: 5, lower: 4, upper: 6 },
+    zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0, dietType: 'herbivore', dietConfidence: 0.8, ...over });
+  const dire = (dx, over = {}) => ({ entity: { key: 'dire_wolf', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'much_larger', sizeEstimate: { estimated: 90, lower: 70, upper: 110 },
+    zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0, dietType: 'predator', dietConfidence: 0.8, ...over });
+  const brother = (dx) => ({ entity: { key: 'wolf', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'similar', sizeEstimate: { estimated: 22, lower: 18, upper: 26 }, zoneSNR: { 'head.visual': 5 },
+    isMoving: true, closingSpeed: 0, species: 'wolf', speciesConfidence: 0.9, dietType: 'predator', dietConfidence: 0.8 });
+
+  const c1 = runNodes(wolfWith([hare(3)]), W);
+  assert(c1.act === 'hunt_chase' && c1.direction === 2, `hungry, a hare 3 tiles east: chases it east (${c1.act}, ${c1.direction})`);
+  const c0 = runNodes(wolfWith([hare(3)], 0.2), W);
+  assert(c0.act == null, `fed, the same hare: no chase (${c0.type})`);
+  const b1 = runNodes(wolfWith([hare(1)]), W);
+  assert(b1.effect === 'strike' && b1.source && b1.source.key === 'hare', `hungry, a hare in reach: bites it (${b1.type})`);
+  const b0 = runNodes(wolfWith([hare(1)], 0.2), W);
+  assert(b0.effect !== 'strike', `fed, a hare in reach: no bite (${b0.type})`);
+  const bitten = wolfWith([dire(1)], 0.2, { tookDamageThisTurn: true });
+  assert(runNodes(bitten, W).type === 'bite', 'bitten by something in reach: bites back');
+  const r1 = runNodes(wolfWith([dire(1)]), W);
+  assert(r1.type === 'retreat' && r1.direction === 6, `a dire wolf in reach: retreats west (${r1.type}, ${r1.direction})`);
+  const r3 = runNodes(wolfWith([dire(3)]), W);
+  assert(r3.type === 'wary', `a dire wolf 3 tiles off, calm: faces it (${r3.type})`);
+  const r3a = runNodes(wolfWith([dire(3)], 0.9, { hormones: { alarm: 1, hunger: 0.9, fatigue: 0 } }), W);
+  assert(r3a.type === 'retreat', `the same, alarmed: retreats (${r3a.type})`);
+  const r3h = runNodes(wolfWith([dire(3), hare(2)]), W);
+  assert(r3h.act === 'hunt_chase', `a hare 2 tiles off and a dire wolf 3 tiles off, hungry and calm: the chase wins (${r3h.type})`);
+  const k1 = runNodes(wolfWith([brother(3)]), W);
+  assert(k1.type === 'give way' && k1.direction === 6, `another wolf 3 tiles east: gives way (${k1.type}, ${k1.direction})`);
+  const k2 = runNodes(wolfWith([brother(1)]), W);
+  assert(k2.effect !== 'strike', `another wolf in reach, hungry: no bite (${k2.type})`);
+  // The integration tissue holds where the prey was
+  const hunter = wolfWith([hare(3)]);
+  state.turnCount = 200;
+  runNodes(hunter, W);
+  hunter.detectionInfo = []; state.turnCount = 203;
+  const held = runNodes(hunter, W);
+  assert(held.act === 'hunt_chase' && held.place && held.place.x === 53, `out of the senses 3 turns later: still goes for where it was (${held.type})`);
+  state.turnCount = 206;
+  assert(runNodes(hunter, W).act !== 'hunt_chase', 'after 6 turns (0.15 kg holds 4.5): let go');
+  // Played: the hub's drive wins the generator; only a retreat can take the legs
+  const played = runNodes(wolfWith([hare(3)]), W, { intent: true });
+  assert(played.type === 'deliberate', `played, hungry, a hare 3 tiles off: the player decides (${played.type})`);
+  const playedDire = runNodes(wolfWith([dire(1)]), W, { intent: true });
+  assert(playedDire.type === 'deliberate' && playedDire.held.includes('retreat'),
+         `played, calm, a dire wolf in reach: the player holds the retreat (${playedDire.type})`);
+  const playedScared = runNodes(wolfWith([dire(1)], 0.9, { hormones: { alarm: 1, hunger: 0.9, fatigue: 0 } }), W, { intent: true });
+  assert(playedScared.type === 'retreat', `played, alarmed, the same: the retreat takes the legs (${playedScared.type})`);
+}
+
 
 // 12
 section('Existing systems undamaged');
