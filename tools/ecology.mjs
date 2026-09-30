@@ -7,8 +7,10 @@
 //
 // The player is the camera: only creatures within the active radius are simulated,
 // so it stands still (rests) for the whole run, kept fed so it does not starve
-// (at ~612 turns). A creature that kills it ends that run early; the report says
-// how often and by what.
+// (at ~612 turns). It rests by ending the turn directly, not through the rest
+// key: a wired species' body runs before a keyed action and its reflexes can
+// move it (hub.js), and the camera is not what is measured. A creature that
+// kills it ends that run early; the report says how often and by what.
 //
 // Usage:
 //   PLAYWRIGHT_MODULE=/opt/node22/lib/node_modules/playwright node tools/ecology.mjs
@@ -89,6 +91,8 @@ async function runSeed(seed) {
     const { state, monsters } = await import('./js/state.js');
     const { closeHunts } = await import('./js/hunt-funnel.js');
     const { getBodyPTW, turnsToFullSpeed, getEntityTotalMass } = await import('./js/physiology.js');
+    const { endPlayerTurn } = await import('./js/turn-loop.js');
+    window.__ecoRest = () => endPlayerTurn('rest');
     const { WALK_INTENSITY } = await import('./js/constants.js');
     const L = state.player.layer;
     const t = window.__eco = {
@@ -172,8 +176,7 @@ async function runSeed(seed) {
 
   let turns = 0;
   for (; turns < TURNS; turns++) {
-    await page.keyboard.press(' ');
-    const alive = await page.evaluate(() => window.__ecoTick());
+    const alive = await page.evaluate(() => { window.__ecoRest(); return window.__ecoTick(); });
     if (!alive) break;
   }
   const out = await page.evaluate(async () => {

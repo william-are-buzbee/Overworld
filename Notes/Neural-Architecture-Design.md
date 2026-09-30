@@ -20,7 +20,8 @@ the place moved along the velocity the eyes resolve, by the ticks this body need
 is wired in by band; nothing in the hare holds or predicts, having no tissue for it. **Step 3 is in:** blood chemistry
 (`creature.hormones`), gland nodes that release into it, from a store their tissue holds and refills (`creature.glandStores`),
 `blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). **Step 5 is in:** the hub (below, "The hub
-as built"): the player plays it, its wires onto reflexes are plastic, and its mass is its limit per action. Inspect with `window.debugWiring('hare')`
+as built"): the player plays it, its wires onto reflexes are plastic, and its mass is its limit per action. **Step 6 is
+in:** the wolf (below, "The wolf as built"). Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
@@ -228,11 +229,12 @@ A number that cannot be traced to the body is written in the wiring with a comme
 | in the code | in this design |
 |---|---|
 | the hare's wiring (`wiring.js`) | fore-limb bolt arcs and relays, graze-limb relays and taste, the torso threat template with looming, flee / freeze / alert, the stress gland, the head food template: nodes |
-| `nodes.js` output stage | stands in for generators built from nodes: the strongest drive reaching the locomotion generator wins |
+| the wolf's wiring (`wiring.js`, step 6) | head: prey, larger-animal, rival, carrion, trail and air templates, the map holding and leading the prey (0.15 kg of integration), the bite, the hub; torso: the drives on the generator and the alarm gland (below, "The wolf as built") |
+| `nodes.js` output stage | stands in for generators built from nodes: a strike first, then the strongest drive reaching the locomotion generator wins; an output's `act` names the executor's behaviour (ai.js `_actToAction`), a bridge |
 | `detection.js _identify` (pass 7) | a wired pattern library, not yet housed in nodes |
 | traces (`detection.js`), evidence summation, odour binding | still how creatures on the reactive rules hold and combine; a wired creature holds with `holds` nodes on its map (step 4). Evidence summation and odour binding stay in perception until perception is nodes |
 | feature functions in `nodes.js` (size, identity, looming time) | percepts delivered as features; PLACEHOLDER until perception itself is nodes |
-| `evaluateReactiveRules` | placeholder: universal templates wired to generators, written as code. Retired creature by creature |
+| `evaluateReactiveRules` | placeholder: universal templates wired to generators, written as code. Retired creature by creature: the hare and the wolf no longer run it |
 | `canOverrideReactive`, `deliberativeEvaluation` | placeholder for timing by hops plus inhibition |
 | `getMovementIntensity` by behaviour label | placeholder: intensity should come from the generator |
 | `ai-utils.js stepRoundObstacles` | placeholder for a learned route store (sequence and pattern writers) |
@@ -352,6 +354,34 @@ What its reactive rules become:
 | 7–9 territory, rest, default | glands (rest) and the gait generator's resting drive |
 
 ---
+
+### The wolf as built (step 6, Sep 2026)
+
+The draft above, with what changed on the way:
+
+- **Templates in the head** (per percept, on the map): `prey` (reads smaller, not its own kind; wired in by band so the
+  nearest wins), `heavy` × `alive_to` → `threat` (nothing at 1.5× its mass, full at 3.5×; moving, a meat-eater or much
+  larger; not its own kind; by band 1, 0.6, 0.3, 0.1), `rival` (its size or its kind, not a known plant-eater, out to 4
+  tiles), and pooled carrion, trail and air templates reading the nose. `prey_place` is the integration tissue: it holds
+  the prey's place for 4.5 turns (0.15 kg) and leads it along the velocity the eyes resolve.
+- **Hunger gates** the chase, the bite on prey, carrion and the trail and air; **pain** gates biting what is in contact.
+- **The bite** is a strike output, first in the output stage. It is decided in the head, a hop before a retreat in the
+  torso could shut it (the race), so a wolf with prey or an attacker in its jaws bites.
+- **The generator** (torso): retreat (away, 1.0, alarm receptors: threshold 0.8, a third of that at full alarm), the hub
+  (1.0), chase (toward the held, led place, 1.0), carrion (0.6), give way (away from a rival, 0.25), trail and air
+  (0.25). The strongest wins, ties to the earlier listed. A wary head orients toward a big mover it will not flee.
+- **The alarm gland** (torso) answers the retreat and pain.
+- **Gone with the reactive rules**: the territory return (the wander's home pull stays), the cast when the air loses the
+  prey (the air template drives only while the nose has it), the retreat to a refuge, the blood-level rules (pain raises
+  alarm, alarm lowers the retreat's threshold), the deliberative layer's checks on diet confidence and fight assessment
+  (a smaller thing is prey), and the auto-attack on an adjacent player (ai.js `adjacencyCombatCheck`, skipped for wired
+  creatures: their strike circuits decide).
+- **Played** (a prowler): the hub is 30 g, tissue for twenty outputs. Its drive reaches the generator at 1.0, so the chase,
+  carrion, giving way and the trail never take the legs; a retreat (listed first, winning the tie) can, and the hub has a
+  wire onto it, half formed at birth (1.0 threat fully formed). A calm played wolf holds its ground against a dire wolf in
+  reach; an alarmed one backs away.
+- **The harness camera** rests by ending the turn directly, not through the rest key, so a wired camera's reflexes do not
+  move it (tools/ecology.mjs).
 
 ## Implementation Sequence
 

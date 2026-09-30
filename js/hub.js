@@ -14,7 +14,7 @@
 // the hub can do at once, read off the wiring, the pathways and the body.
 
 import { state, worlds } from './state.js';
-import { getPathways, SPRINT_INTENSITY, HUB_KG_PER_OUTPUT } from './constants.js';
+import { getPathways, SPRINT_INTENSITY, WALK_INTENSITY, HUB_KG_PER_OUTPUT } from './constants.js';
 import { buildAllDetectionInfo } from './detection.js';
 import { runNodes, compileWiring, hubStrength } from './nodes.js';
 import { getWiring } from './wiring.js';
@@ -29,13 +29,21 @@ const _DIR_NAMES = ['north', 'northeast', 'east', 'southeast', 'south', 'southwe
 
 // What a held reflex feels like, the first action it is held
 const HELD_LINES = {
-  flee:   'Your legs gather to run. You hold them.',
-  freeze: 'Your body wants to go still. You keep moving.',
+  flee:     'Your legs gather to run. You hold them.',
+  freeze:   'Your body wants to go still. You keep moving.',
+  retreat:  'Your body wants to back away. You hold your ground.',
+  give_way: 'You hold back from giving way.',
 };
 // A wire firming up: said as its formed share crosses each tenth
 const LEARN_LINES = {
-  flee:   'Holding your legs from running comes a little easier.',
-  freeze: 'Keeping moving through the urge to freeze comes a little easier.',
+  flee:    'Holding your legs from running comes a little easier.',
+  freeze:  'Keeping moving through the urge to freeze comes a little easier.',
+  retreat: 'Holding your ground comes a little easier.',
+};
+// What a locomotion reflex that takes the body does, by its output's label
+const REFLEX_VERBS = {
+  bolt: 'bolts', flee: 'flees', retreat: 'backs away', chase: 'goes after it', carrion: 'goes for the carcass',
+  'give way': 'gives way', track: 'follows the trail', upwind: 'follows the scent',
 };
 
 /**
@@ -46,7 +54,7 @@ const LEARN_LINES = {
 function bodyTakes(kind) {
   const p = state.player;
   const wiring = p && p.hp > 0 ? getWiring(p) : null;
-  if (!wiring) return false;
+  if (!wiring) { if (p) p.tookDamageThisTurn = false; return false; }
 
   buildAllDetectionInfo(p);
   const before = { ...(p.hubStrength || {}) };
@@ -66,7 +74,8 @@ function bodyTakes(kind) {
   }
   p._hubHeld = out.held || [];
 
-  if (out.type === 'bolt' || out.type === 'flee') return _reflexRun(p, out);
+  // A drive at the generator the hub did not win: it takes the legs
+  if (out.effect === 'locomotion' && out.type !== 'deliberate') return _reflexRun(p, out);
   if (out.type === 'freeze' && kind !== 'rest') {
     log('You freeze. The body will not move.', LOG_CATEGORIES.COMBAT);
     endPlayerTurn('rest');
@@ -75,15 +84,16 @@ function bodyTakes(kind) {
   return false;
 }
 
-// A bolt or a flee: the generator drives the legs at a sprint along the
-// output's bearing, or the nearest open bearing beside it. With no bearing
-// (a taste underfoot has no place), the way the body faces.
+// A locomotion reflex (a bolt, a flee, a retreat, a chase…): the generator
+// drives the legs along the output's bearing at its intensity (a sprint for a
+// strong drive), or the nearest open bearing beside it. With no bearing (a
+// taste underfoot has no place), the way the body faces.
 function _reflexRun(p, out) {
   let dir = out.direction;
   if (dir == null) dir = _DELTAS.findIndex(([dx, dy]) => dx === state.facing.dx && dy === state.facing.dy);
   if (dir < 0) dir = 0;
   const tries = [dir, (dir + 1) % 8, (dir + 7) % 8, (dir + 2) % 8, (dir + 6) % 8];
-  const verb = out.type === 'bolt' ? 'bolts' : 'flees';
+  const verb = REFLEX_VERBS[out.type] || 'moves';
   for (const d of tries) {
     const [dx, dy] = _DELTAS[d];
     const nx = p.x + dx, ny = p.y + dy;
@@ -93,14 +103,14 @@ function _reflexRun(p, out) {
     if (p.immobilized) break;
     state.facing.dx = dx; state.facing.dy = dy;
     if (p.stealth) endStealth('You break into a run.');
-    p._lastMovementIntensity = SPRINT_INTENSITY;
+    p._lastMovementIntensity = out.intensity >= 0.7 ? SPRINT_INTENSITY : WALK_INTENSITY;
     p.x = nx; p.y = ny;
     p.movedThisTurn = true;
     log(`Your body ${verb} ${_DIR_NAMES[d]} before you can stop it.`, LOG_CATEGORIES.COMBAT);
     endPlayerTurn('move');
     return true;
   }
-  log(`Your body tries to ${out.type === 'bolt' ? 'bolt' : 'flee'}, but has nowhere to go.`, LOG_CATEGORIES.COMBAT);
+  log(`Your body tries to move (${out.type}), but has nowhere to go.`, LOG_CATEGORIES.COMBAT);
   endPlayerTurn('rest');
   return true;
 }
@@ -128,10 +138,16 @@ function hubReport(entity) {
     }
     return seen;
   };
+  // A drive that loses to the hub's at the generator (weaker, or as strong and
+  // listed after it) never takes the body
+  const outs = wiring.outputs || [];
+  const hubLoco = outs.findIndex(o => o.node === hubNode.id && o.effect === 'locomotion');
+  const losesToHub = (o) => hubLoco >= 0 && o.effect === 'locomotion' &&
+    (o.intensity < outs[hubLoco].intensity || (o.intensity === outs[hubLoco].intensity && outs.indexOf(o) > hubLoco));
   const reflexes = [];
-  for (const o of wiring.outputs || []) {
+  for (const o of outs) {
     if (o.node === hubNode.id || (o.effect !== 'locomotion' && o.effect !== 'posture')) continue;
-    if (o.label === 'forage') continue;    // below the hub's drive at the generator
+    if (losesToHub(o)) continue;
     const holds = [], late = [];
     for (const id of upstream(o.node)) {
       const n = c.byId.get(id);

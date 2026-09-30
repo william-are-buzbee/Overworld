@@ -185,7 +185,7 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [x] 4. Maps: bearing and distance bands, holding, prediction; the hare's threat template per distance band
 - [x] 5a. The hub: the player plays it; reach, graded inhibition and the race; reflexes it cannot hold take the body, and the log says so; the body screen (B) read off the wiring
 - [x] 5b. Plastic hub weights (grown by coincidence, saved with the body; a late wire never grows); the hub's mass as its limit per action (its firing split across what it engages)
-- [ ] 6. The wolf wired on the system; its reactive rules retired
+- [x] 6. The wolf wired on the system; its reactive rules retired (the prowler player plays it through the hub)
 - [ ] 7. The whole cast rewired; the reactive rules gone
 - [ ] Then memory: writers and stores saved with the body, one animal, then the cast
 

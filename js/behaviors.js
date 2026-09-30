@@ -229,11 +229,11 @@ function executeAction(creature, action) {
       break;
     }
     case 'hunt_chase': {
-      if (action.target) {
-        creature.huntTarget = action.target;
-        const pos = perceivedPosition(creature, action.target);
-        if (pos) moved = chaseStep(creature, pos);
-      }
+      // To where the prey is perceived, or the place a wired map put it
+      // (held, or led along its seen velocity)
+      if (action.target) creature.huntTarget = action.target;
+      const pos = action.place || (action.target ? perceivedPosition(creature, action.target) : null);
+      if (pos && (pos.x !== creature.x || pos.y !== creature.y)) moved = chaseStep(creature, pos);
       creature.currentBehavior = 'hunt';
       break;
     }
@@ -946,6 +946,8 @@ function monsterMelee(mon){
 
       applyZoneDamage(player, zone, zoneDmg, { by: mon });
     }
+    // The blow is felt: a wired player's pain input reads it before its next action (hub.js)
+    player.tookDamageThisTurn = true;
   }
   noteStrike(mon, player, { why, zone: contactedZones.map(z => z.key).join('+'), vital: contactedZones.some(z => z.vital),
     raw: dmg, armour: null, dealt: dmg, zoneHpBefore: null, zoneMaxHp: null,

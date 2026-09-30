@@ -114,6 +114,9 @@ function _ganglionOutputToAction(output, creature) {
   // Store ganglion intensity for substrate depletion
   creature._lastGanglionIntensity = output.intensity;
 
+  // An output that names its act (the wolf's wiring): straight onto the executor
+  if (output.act) return _actToAction(output, creature);
+
   if (output.intensity <= 0) {
     // No locomotion signal — hold still or check feeding
     if (output.type === 'alert') {
@@ -176,6 +179,36 @@ function _ganglionOutputToAction(output, creature) {
       direction: output.direction,
       _ganglionIntensity: output.intensity,
     };
+  }
+}
+
+/**
+ * A wired output's `act` onto the action executor (behaviors.js), with the
+ * place and body its circuit fired about. A bridge, as above.
+ */
+function _actToAction(output, creature) {
+  const m = output.intensity;
+  switch (output.act) {
+    case 'flee':
+      creature.threatSource = output.source || creature.threatSource;
+      return { behavior: 'flee', magnitude: m, direction: output.direction, _ganglionIntensity: m };
+    case 'hunt_chase':
+      return { behavior: 'hunt_chase', magnitude: m, target: output.source, place: output.place };
+    case 'hunt_attack':
+      return { behavior: 'hunt_attack', magnitude: 0.3, target: output.source };
+    case 'eat_corpse':
+      return { behavior: 'eat_corpse', magnitude: 0.3 };
+    case 'approach_corpse':
+      return { behavior: 'approach_corpse', magnitude: m, corpse: output.place };
+    case 'follow_trail':
+    case 'follow_scent':
+      return { behavior: output.act, magnitude: m, direction: output.direction };
+    case 'maintain_distance':
+      return { behavior: 'maintain_distance', magnitude: m, target: output.source };
+    case 'orient':
+      return { behavior: 'orient', magnitude: m, direction: output.direction };
+    default:
+      return { behavior: 'wander', magnitude: 0.1 };
   }
 }
 
@@ -302,10 +335,11 @@ function runCreatureAI(creature) {
 
   // Adjacency combat: skip if fleeing cleanly or if action already attacked
   const behavior = creature.currentBehavior;
+  // (not for a wired creature: its own strike circuits decide what it strikes)
   const fleeingCleanly = (behavior === 'flee' && moved && !creature.tookDamageThisTurn);
   const alreadyAttacked = (action.behavior === 'retaliate' || action.behavior === 'attack_adjacent' ||
                            action.behavior === 'hunt_attack');
-  if (!fleeingCleanly && !alreadyAttacked) {
+  if (!neural && !fleeingCleanly && !alreadyAttacked) {
     adjacencyCombatCheck(creature);
   }
   noteHuntAction(creature, action, x0, y0);   // tools/ecology.mjs bookkeeping; nothing in play reads it
