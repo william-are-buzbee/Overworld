@@ -136,6 +136,14 @@ export const STRESS_MAX                = 1.5;   // ceiling on alarm hormone in t
 // clearance wins, so alarm cannot ratchet on its own flight.
 export const GLAND_STORE_PER_KG      = 900;   // hormone held per kg of gland tissue
 export const GLAND_SYNTHESIS_PER_KG  = 9;     // hormone made per kg of gland tissue per world tick
+// The hub (Neural-Architecture-Design, the hub and the player; nodes.js). Its
+// firing is split across what it engages in one action: tissue for one output
+// at full strength per HUB_KG_PER_OUTPUT (the hare's 3 g hub: its drive and
+// one held reflex). Its wires onto reflexes grow by HUB_LEARN_RATE of what is
+// left to form, each action it fires while the reflex is driven (half-formed
+// to 90% in about fifty such actions).
+export const HUB_KG_PER_OUTPUT       = 0.0015; // kg of hub tissue per output driven at full strength
+export const HUB_LEARN_RATE          = 0.03;   // share of a hub wire's unformed synapses formed per coincidence
 
 // ==================== DRIVE SYSTEM ====================
 export const MASS_HUNGER_COEFF   = 0.000015;  // hunger per turn per kg of total mass

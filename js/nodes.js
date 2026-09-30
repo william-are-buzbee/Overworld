@@ -23,11 +23,13 @@
 //                            (a modulating synapse: nothing passes if one is silent)
 //   vetoedBy [ids]           nodes whose firing silences this one (shunting
 //                            inhibition), if their signal arrives in time
-//   inhibitedBy [{node, weight}]
+//   inhibitedBy [{node, weight, innate}]
 //                            graded inhibition: the source's output × weight is
 //                            taken off this node's input (in the input's own
 //                            units) before it fires, if it arrives in time; a
-//                            late one is inert (compile lists it as such)
+//                            late one is inert (compile lists it as such). From
+//                            the hub, weight is the wire fully formed and
+//                            innate the share of it formed at birth (below)
 //   fn                       'step':  gain if input ≥ threshold (> if strict)
 //                            'ramp':  clamp(gain × (input − threshold), 0, ceiling)
 //                            'pass':  input if input ≥ threshold, else 0
@@ -46,6 +48,17 @@
 // through its own output, and holds back reflexes through the inhibitedBy
 // wires the wiring gives it, only those that arrive in time. What it cannot
 // reach, or reaches late, takes the body.
+//   Its wires onto reflexes are plastic: each has a strength, the share of its
+// synapses formed (creature.hubStrength, saved with the body; the wiring's
+// `innate` until written). A wire grows by coincidence, each action the hub
+// fires while its reflex is driven past threshold, HUB_LEARN_RATE of what is
+// left to form; a late wire's signal lands after its reflex fired, never with
+// it, and does not grow.
+//   Its tissue is its limit per action: its firing is split across what it
+// engages at once (the outputs it drives and each reflex driven against its
+// wires), full strength for mass / HUB_KG_PER_OUTPUT of them and a share each
+// beyond that. What is engaged is read from a first pass with the hub's
+// inhibition off.
 //
 // The map: every percept lands on a place (a bearing and a distance band).
 // A pooled node reading a mapped one takes its strongest place (lateral
@@ -65,7 +78,8 @@
 
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE,
-         GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG, PERSISTENCE_SCALE } from './constants.js';
+         GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG, PERSISTENCE_SCALE,
+         HUB_KG_PER_OUTPUT, HUB_LEARN_RATE } from './constants.js';
 import { state } from './state.js';
 import { getSpeciesKey, meatEaterUnderfoot } from './detection.js';
 import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom } from './ai-utils.js';
@@ -243,7 +257,11 @@ function compileWiring(wiring, pathways) {
     }
     outVetoes.set(out, ok);
   }
-  c = { byId, arrival, liveVetoes, liveInhibits, lateInhibits, outVetoes, issues, hops };
+  // The hub: the node the player's intent enters at (one per wiring)
+  const hubs = wiring.nodes.filter(n => (n.inputs || []).some(i => i.from.startsWith('intent:')));
+  if (hubs.length > 1) issues.push(`${hubs.length} hub nodes (one reads intent)`);
+  const hub = hubs.length ? hubs[0] : null;
+  c = { byId, arrival, liveVetoes, liveInhibits, lateInhibits, outVetoes, issues, hops, hub };
   byPathways.set(pathways, c);
   return c;
 }
@@ -345,85 +363,130 @@ function runNodes(creature, wiring, opts = {}) {
     return x instanceof Float64Array ? x[i] : (x ? x.v : 0);
   };
 
-  const held = [];
-  for (const n of wiring.nodes) {
-    if (!alive(n.zone)) {
-      val.set(n.id, n.mode === 'mapped' ? new Float64Array(S) : { v: 0, place: null });
-      if (creature._held) delete creature._held[n.id];   // the tissue holding it is gone
-      continue;
-    }
-    const t = _threshold(n, creature);
-    const vetoes = c.liveVetoes.get(n.id) || [];
-    const inhibits = c.liveInhibits.get(n.id) || [];
-    let wasHeld = false;
-    if (n.mode === 'mapped') {
-      const out = new Float64Array(S);
-      for (let i = 0; i < S; i++) {
-        const d = dets[i];
+  // The hub's wires: their strength (formed share) and, this action, the
+  // share of the hub's firing each gets; off for the first pass
+  const hubId = c.hub ? c.hub.id : null;
+  let share = 1, hubOff = false;
+  const wOf = (targetId, w) => {
+    const base = w.weight != null ? w.weight : 1;
+    if (w.node !== hubId) return base;
+    return hubOff ? 0 : base * hubStrength(creature, targetId, w) * share;
+  };
+
+  // One pass over the wiring. Returns what the hub held, and which nodes its
+  // wires reach were driven past threshold (they would fire without it). A
+  // dry pass holds nothing (no places written).
+  const evaluate = (dry) => {
+    val.clear();
+    const held = [], driven = [];
+    for (const n of wiring.nodes) {
+      if (!alive(n.zone)) {
+        val.set(n.id, n.mode === 'mapped' ? new Float64Array(S) : { v: 0, place: null });
+        if (creature._held) delete creature._held[n.id];   // the tissue holding it is gone
+        continue;
+      }
+      const t = _threshold(n, creature);
+      const vetoes = c.liveVetoes.get(n.id) || [];
+      const inhibits = c.liveInhibits.get(n.id) || [];
+      const hubbed = hubId != null && inhibits.some(w => w.node === hubId);
+      let wasHeld = false, wasDriven = false;
+      if (n.mode === 'mapped') {
+        const out = new Float64Array(S);
+        for (let i = 0; i < S; i++) {
+          const d = dets[i];
+          let x = n.combine === 'max' ? -Infinity : 0, any = false;
+          for (const inp of n.inputs || []) {
+            const r = _parseRef(inp.from);
+            let v = 0;
+            if (r.kind === 'sense') v = alive(r.name.split('.')[0]) && d.zoneSNR ? (d.zoneSNR[r.name] || 0) : 0;
+            else if (r.kind === 'feature') v = FEATURES[r.name] ? FEATURES[r.name](creature, d, r.arg) : 0;
+            else if (r.kind === 'node') v = at(r.name, i);
+            else if (r.kind === 'blood') v = _blood(creature, r.name);
+            else if (r.kind === 'intent') v = opts.intent ? 1 : 0;
+            const w = inp.weight != null ? inp.weight : 1;
+            const wv = v === 0 ? 0 : w * v;          // 0 × Infinity is no signal
+            if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
+            any = true;
+          }
+          if (!any) x = 0;
+          const vetoed = vetoes.some(v => at(v, i) > 0);
+          let inh = 0;
+          for (const w of inhibits) inh += wOf(n.id, w) * at(w.node, i);
+          let y = vetoed ? 0 : _fire(n, x - inh, t);
+          for (const g of n.gate || []) y = y === 0 ? 0 : y * at(g, i);
+          const drive = !vetoed && _fire(n, x, t) > 0 && (n.gate || []).every(g => at(g, i) > 0);
+          if (drive) wasDriven = true;
+          if (inh > 0 && y === 0 && drive) wasHeld = true;
+          // How strongly each distance band of the map is wired in
+          if (n.bands && y > 0) y *= n.bands[Math.min(places[i].band, n.bands.length - 1)];
+          out[i] = y;
+        }
+        val.set(n.id, out);
+        if (n.holds && !dry) _hold(creature, n, out, places, turn, stamp, heldNow);
+      } else {
         let x = n.combine === 'max' ? -Infinity : 0, any = false;
+        let place = null, placeWeight = -Infinity;
         for (const inp of n.inputs || []) {
           const r = _parseRef(inp.from);
-          let v = 0;
-          if (r.kind === 'sense') v = alive(r.name.split('.')[0]) && d.zoneSNR ? (d.zoneSNR[r.name] || 0) : 0;
-          else if (r.kind === 'feature') v = FEATURES[r.name] ? FEATURES[r.name](creature, d, r.arg) : 0;
-          else if (r.kind === 'node') v = at(r.name, i);
-          else if (r.kind === 'blood') v = _blood(creature, r.name);
-          else if (r.kind === 'intent') v = opts.intent ? 1 : 0;
+          let v = 0, p = null;
+          if (r.kind === 'feature') {
+            const f = POOLED_FEATURES[r.name];
+            const got = f ? f(creature, r.arg) : 0;
+            if (got && typeof got === 'object') { v = got.value; p = got.place || null; } else v = got || 0;
+          } else if (r.kind === 'node') {
+            const pr = pooledRead(r.name); v = pr.v; p = pr.place;
+          } else if (r.kind === 'blood') {
+            v = _blood(creature, r.name);
+          } else if (r.kind === 'intent') {
+            v = opts.intent ? 1 : 0;
+          }
           const w = inp.weight != null ? inp.weight : 1;
-          const wv = v === 0 ? 0 : w * v;          // 0 × Infinity is no signal
+          const wv = v === 0 ? 0 : w * v;
           if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
           any = true;
+          // The place this node is about: that of its largest input carrying one
+          if (p && wv > placeWeight) { placeWeight = wv; place = p; }
         }
         if (!any) x = 0;
-        const vetoed = vetoes.some(v => at(v, i) > 0);
+        const vetoed = vetoes.some(v => pooledRead(v).v > 0);
         let inh = 0;
-        for (const w of inhibits) inh += (w.weight != null ? w.weight : 1) * at(w.node, i);
-        let y = vetoed ? 0 : _fire(n, x - inh, t);
-        for (const g of n.gate || []) y = y === 0 ? 0 : y * at(g, i);
-        if (inh > 0 && y === 0 && !vetoed && _fire(n, x, t) > 0 &&
-            (n.gate || []).every(g => at(g, i) > 0)) wasHeld = true;
-        // How strongly each distance band of the map is wired in
-        if (n.bands && y > 0) y *= n.bands[Math.min(places[i].band, n.bands.length - 1)];
-        out[i] = y;
+        for (const w of inhibits) inh += wOf(n.id, w) * pooledRead(w.node).v;
+        let v = vetoed ? 0 : _fire(n, x - inh, t);
+        for (const g of n.gate || []) v = v === 0 ? 0 : v * pooledRead(g).v;
+        const drive = !vetoed && _fire(n, x, t) > 0 && (n.gate || []).every(g => pooledRead(g).v > 0);
+        if (drive) wasDriven = true;
+        if (inh > 0 && v === 0 && drive) wasHeld = true;
+        val.set(n.id, { v, place: v > 0 ? place : null });
       }
-      val.set(n.id, out);
-      if (n.holds) _hold(creature, n, out, places, turn, stamp, heldNow);
-    } else {
-      let x = n.combine === 'max' ? -Infinity : 0, any = false;
-      let place = null, placeWeight = -Infinity;
-      for (const inp of n.inputs || []) {
-        const r = _parseRef(inp.from);
-        let v = 0, p = null;
-        if (r.kind === 'feature') {
-          const f = POOLED_FEATURES[r.name];
-          const got = f ? f(creature, r.arg) : 0;
-          if (got && typeof got === 'object') { v = got.value; p = got.place || null; } else v = got || 0;
-        } else if (r.kind === 'node') {
-          const pr = pooledRead(r.name); v = pr.v; p = pr.place;
-        } else if (r.kind === 'blood') {
-          v = _blood(creature, r.name);
-        } else if (r.kind === 'intent') {
-          v = opts.intent ? 1 : 0;
-        }
-        const w = inp.weight != null ? inp.weight : 1;
-        const wv = v === 0 ? 0 : w * v;
-        if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
-        any = true;
-        // The place this node is about: that of its largest input carrying one
-        if (p && wv > placeWeight) { placeWeight = wv; place = p; }
-      }
-      if (!any) x = 0;
-      const vetoed = vetoes.some(v => pooledRead(v).v > 0);
-      let inh = 0;
-      for (const w of inhibits) inh += (w.weight != null ? w.weight : 1) * pooledRead(w.node).v;
-      let v = vetoed ? 0 : _fire(n, x - inh, t);
-      for (const g of n.gate || []) v = v === 0 ? 0 : v * pooledRead(g).v;
-      if (inh > 0 && v === 0 && !vetoed && _fire(n, x, t) > 0 &&
-          (n.gate || []).every(g => pooledRead(g).v > 0)) wasHeld = true;
-      val.set(n.id, { v, place: v > 0 ? place : null });
+      if (wasHeld) held.push(n.id);
+      if (hubbed && wasDriven) driven.push(n.id);
     }
-    if (wasHeld) held.push(n.id);
+    return { held, driven };
+  };
+
+  // With the player acting: a first pass with the hub's inhibition off finds
+  // what it engages; its firing is split across that; then the real pass,
+  // and each engaged wire grows (coincidence: the hub firing, its reflex driven)
+  let hubInfo = null, pass;
+  if (opts.intent && c.hub && alive(c.hub.zone)) {
+    hubOff = true;
+    const engaged = evaluate(true).driven;
+    hubOff = false;
+    const drives = (wiring.outputs || []).filter(o => o.node === hubId).length;
+    const capacity = (c.hub.mass || 0) / HUB_KG_PER_OUTPUT;
+    share = Math.min(1, capacity / Math.max(1, drives + engaged.length));
+    pass = evaluate(false);
+    const st = creature.hubStrength || (creature.hubStrength = {});
+    for (const id of engaged) {
+      const w = (c.liveInhibits.get(id) || []).find(ww => ww.node === hubId);
+      const s = hubStrength(creature, id, w);
+      st[id] = s + HUB_LEARN_RATE * (1 - s);
+    }
+    hubInfo = { share, engaged, capacity };
+  } else {
+    pass = evaluate(false);
   }
+  const held = pass.held;
 
   // ── Trace for the inspector: what fired, and about what ──
   const trace = [];
@@ -473,7 +536,7 @@ function runNodes(creature, wiring, opts = {}) {
     const p = where(loco.pr);
     return { intensity: loco.out.intensity, direction: bearing(loco.out, loco.pr),
              source: p && p.entity ? p.entity : null, type: loco.out.label,
-             isBolt: loco.out.label === 'bolt', atFood: false, held };
+             isBolt: loco.out.label === 'bolt', atFood: false, held, hub: hubInfo };
   }
   // Then posture (holding still), orienting, feeding contact, in that order
   for (const effect of ['posture', 'orienting', 'feeding']) {
@@ -483,10 +546,10 @@ function runNodes(creature, wiring, opts = {}) {
       if (!(pr.v > 0) || outVetoed(out)) continue;
       return { intensity: 0, direction: effect === 'orienting' ? bearing(out, pr) : null,
                source: effect === 'posture' || effect === 'orienting' ? _entityOf(pr) : null,
-               type: out.label, atFood: effect === 'feeding', held };
+               type: out.label, atFood: effect === 'feeding', held, hub: hubInfo };
     }
   }
-  return { intensity: 0, direction: null, type: 'hold', held };
+  return { intensity: 0, direction: null, type: 'hold', held, hub: hubInfo };
 }
 const _entityOf = (pr) => (pr.place && pr.place.entity) || null;
 
@@ -517,6 +580,15 @@ function _hold(creature, n, out, places, turn, stamp, heldNow) {
   heldNow.set(n.id, kept.filter(h => h.stamp < stamp));
 }
 
+/** How much of a hub wire has formed (0–1): written by use and saved with the
+ *  body (creature.hubStrength, by target node); the wiring's innate share until
+ *  then; a wire with no innate share given is fully formed. */
+function hubStrength(creature, targetId, wire) {
+  const st = creature.hubStrength;
+  if (st && st[targetId] != null) return st[targetId];
+  return wire && wire.innate != null ? wire.innate : 1;
+}
+
 /** What a gland node can hold: its tissue × GLAND_STORE_PER_KG. */
 function _glandMax(node) {
   return (node && node.mass ? node.mass : 0) * GLAND_STORE_PER_KG;
@@ -543,4 +615,4 @@ function refillGlands(creature, wiring, ticks) {
   }
 }
 
-export { runNodes, refillGlands, compileWiring, validateWiring, FEATURES, POOLED_FEATURES };
+export { runNodes, refillGlands, compileWiring, validateWiring, hubStrength, FEATURES, POOLED_FEATURES };

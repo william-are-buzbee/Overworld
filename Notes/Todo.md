@@ -184,7 +184,7 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [x] 3b. Gland stores: a gland releases what it holds and refills by synthesis (the hare no longer ratchets alarm on its own flight)
 - [x] 4. Maps: bearing and distance bands, holding, prediction; the hare's threat template per distance band
 - [x] 5a. The hub: the player plays it; reach, graded inhibition and the race; reflexes it cannot hold take the body, and the log says so; the body screen (B) read off the wiring
-- [ ] 5b. Plastic hub weights (control earned by holding and driving, saved with the body); the hub's mass as its limit per action
+- [x] 5b. Plastic hub weights (grown by coincidence, saved with the body; a late wire never grows); the hub's mass as its limit per action (its firing split across what it engages)
 - [ ] 6. The wolf wired on the system; its reactive rules retired
 - [ ] 7. The whole cast rewired; the reactive rules gone
 - [ ] Then memory: writers and stores saved with the body, one animal, then the cast

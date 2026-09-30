@@ -270,6 +270,36 @@ assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'bot
   info(`a shaleback seen and felt 3 tiles off: hare ${g0.type}; player ${g1.type} (held ${g1.held.join(', ') || 'nothing'})`);
   assert(g0.type === 'flee' && g1.type !== 'flee', 'seen and felt 3 tiles off: a hare flees; the player holds the flee');
   assert(runNodes(woundedHare([]), wiring, { intent: true }).type === 'bolt', 'a heavy footfall bolts the player\'s hare too');
+  // The hub's tissue is its limit per action: 3 g, two outputs at full strength
+  assert(f1.hub.share === 1 && f1.hub.engaged.join() === 'freeze',
+         `holding a freeze while walking: two outputs, full strength (share ${f1.hub.share})`);
+  assert(approx(g1.hub.share, 2 / 3) && g1.hub.engaged.includes('flee') && g1.hub.engaged.includes('freeze'),
+         `holding a flee (and the freeze under it) while walking: three outputs, each at ${g1.hub.share.toFixed(2)}`);
+  // Plastic wires: grown by coincidence, saved as body state
+  const trainee = woundedHare([]);
+  trainee.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 56, y: 50, distance: 6, sizeRelative: 'much_larger',
+    sizeEstimate: { estimated: 200, lower: 150, upper: 260 }, zoneSNR: { 'head.visual': 6 }, closingSpeed: 0, dietConfidence: 0 }];
+  for (let k = 0; k < 55; k++) runNodes(trainee, wiring, { intent: true });
+  const hs = trainee.hubStrength;
+  assert(hs.freeze > 0.9 && hs.flee == null, `fifty-five actions held against a freeze: that wire ${Math.round(hs.freeze * 100)}% formed, the flee wire untouched`);
+  const npc = woundedHare([]);
+  npc.detectionInfo = trainee.detectionInfo;
+  for (let k = 0; k < 5; k++) runNodes(npc, wiring);
+  assert(npc.hubStrength == null, 'an NPC hare (nothing driving its hub) forms nothing');
+  const close = (strength) => {
+    const e = woundedHare([]);
+    if (strength) e.hubStrength = strength;
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 52, y: 50, distance: 2, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 }, zoneSNR: { 'head.visual': 6 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring, { intent: true }).type;
+  };
+  assert(close(null) === 'freeze' && close({ freeze: 1 }) === 'deliberate',
+         `seen 2 tiles off: a new player freezes (${close(null)}); one with the freeze wire fully formed walks on (${close({ freeze: 1 })})`);
+  const drilled = woundedHare([]); drilled.hubStrength = { bolt_arc_l: 1, bolt_arc_r: 1 };
+  assert(runNodes(drilled, wiring, { intent: true }).type === 'bolt', 'the bolt-arc wires fully formed: still two hops late, still a bolt');
+  const headless = woundedHare(['head']);
+  const hl = runNodes(headless, wiring, { intent: true });
+  assert(hl.type !== 'deliberate' && hl.hub == null, `the head destroyed: no hub, nothing driven or held (${hl.type})`);
 }
 assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
 assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');
