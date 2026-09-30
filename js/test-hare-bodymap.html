@@ -27,7 +27,7 @@
 <script type="module">
 import * as m from './constants.js';
 import { CREATURE_WIRING, getWiring } from './wiring.js';
-import { runNodes, refillGlands, validateWiring } from './nodes.js';
+import { runNodes, refillGlands, validateWiring, compileWiring } from './nodes.js';
 import { state } from './state.js';
 
 const log = document.getElementById('log');
@@ -236,6 +236,40 @@ assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'bot
   const e2 = woundedHare(['head']); e2.detectionInfo = []; state.turnCount = 100;
   e2._held = { seen: [{ x: 55, y: 50, v: 1, turn: 100, stamp: 0, entity: null }] };
   assert(runNodes(e2, holder).type === 'hold', 'the head destroyed: nothing held');
+}
+// The hub: what the player's will holds back, only where its fibres arrive in time
+{
+  const c = compileWiring(wiring, m.CREATURE_PATHWAYS.hare);
+  assert(c.liveInhibits.get('flee').length === 1 && c.liveInhibits.get('freeze').length === 1,
+         'the hub (head) reaches flee and freeze (torso) in time: one hop');
+  assert(c.lateInhibits.get('bolt_arc_l')[0].lag === 2 && c.liveInhibits.get('bolt_arc_l').length === 0,
+         'the hub reaches the fore-limb bolt arcs two hops after they fire: inert');
+  const calm = woundedHare([]); calm.detectionInfo = [];
+  assert(runNodes(calm, wiring).type === 'hold' && runNodes(calm, wiring, { intent: true }).type === 'deliberate',
+         'nothing fires: an NPC hare holds; with the player acting, the hub drives the generator');
+  const shaleback = (dist, intent) => {
+    const e = woundedHare([]);
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 50 + dist, y: 50, distance: dist, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 },
+      zoneSNR: { 'head.visual': 6 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring, { intent });
+  };
+  const f0 = shaleback(6, false), f1 = shaleback(6, true);
+  assert(f0.type === 'freeze' && f1.type === 'deliberate' && f1.held.includes('freeze'),
+         `a shaleback seen 6 tiles off: freezes a hare (${f0.type}); the player holds it (${f1.type}, held ${f1.held})`);
+  const n1 = shaleback(2, true);
+  assert(n1.type === 'freeze' && n1.held.length === 0, `seen 2 tiles off: past the hold, the player freezes (${n1.type})`);
+  const felt = (intent) => {
+    const e = woundedHare([]);
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 53, y: 50, distance: 3, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 },
+      zoneSNR: { 'head.visual': 6, 'fore_l.vibration.ground': 3, 'fore_r.vibration.ground': 3 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring, { intent });
+  };
+  const g0 = felt(false), g1 = felt(true);
+  info(`a shaleback seen and felt 3 tiles off: hare ${g0.type}; player ${g1.type} (held ${g1.held.join(', ') || 'nothing'})`);
+  assert(g0.type === 'flee' && g1.type !== 'flee', 'seen and felt 3 tiles off: a hare flees; the player holds the flee');
+  assert(runNodes(woundedHare([]), wiring, { intent: true }).type === 'bolt', 'a heavy footfall bolts the player\'s hare too');
 }
 assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
 assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');

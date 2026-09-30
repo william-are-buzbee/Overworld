@@ -16,6 +16,10 @@ import { SPECIES_TEMPLATES,
          THREAT_CONF_SIZE_AMBIGUOUS, LOOM_WINDOW_ACTIONS, HUNGER_THRESHOLD,
          STRESS_RELEASE_AMOUNT } from './constants.js';
 
+// How far the hub's inhibition raises each reflex, in the reflex's own input
+// units (threat confidence; vibration SNR for the bolt arcs). PLACEHOLDER
+// numbers until the hub's weights are plastic, earned by use (step 5b).
+const HUB_HOLD_FLEE = 0.6, HUB_HOLD_FREEZE = 0.5, HUB_HOLD_BOLT = 2.0;
 const ALARM = { alarm: STRESS_NEURAL_SENSITIVITY };     // receptors: alarm chemistry lowers these thresholds
 const CHANNEL = 1 / (CONFIDENCE_NORMALIZATION * 2);      // SNR → template evidence, per channel
 
@@ -24,6 +28,7 @@ const CHANNEL = 1 / (CONFIDENCE_NORMALIZATION * 2);      // SNR → template evi
 // Graze limbs: feel the ground too, and taste it. Torso: the threat template,
 // the locomotion generator and the alarm gland. Head: eyes, and the food
 // template. No integration tissue: nothing here holds anything past the action.
+// Head: the hub, the node a player plays (below).
 const HARE = {
   // The map: 8 bearings × 4 distance bands (touching, near, mid, far; edges
   // in tiles). Nothing in the hare holds a place: it has no tissue for it.
@@ -31,16 +36,24 @@ const HARE = {
   nodes: [
     // Fore-limb ganglia: pass on their limb's footfall signal, and fire the
     // bolt arc when it spikes past threshold
+    // The hub: the player's will enters the body here (Neural-Architecture-
+    // Design, "The hub and the player"). An NPC hare carries the tissue with
+    // nothing driving it. Its descending fibres run to the torso's flee and
+    // freeze circuits (one hop, in time) and to the fore-limb bolt arcs (two
+    // hops, after the arcs have fired: a bolt cannot be held).
+    { id: 'hub', zone: 'head', mass: 0.003, mode: 'pooled',
+      inputs: [{ from: 'intent:act' }], fn: 'step', threshold: 0, strict: true },
+
     { id: 'fore_relay_l', zone: 'fore_l', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_l.vibration.ground' }], fn: 'ramp' },
     { id: 'fore_relay_r', zone: 'fore_r', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'ramp' },
     { id: 'bolt_arc_l', zone: 'fore_l', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_l.vibration.ground' }], fn: 'pass',
-      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM },
+      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT }] },
     { id: 'bolt_arc_r', zone: 'fore_r', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'pass',
-      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM },
+      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM, inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_BOLT }] },
     // Graze-limb ganglia: pass on their ground vibration; read meat-eater
     // volatiles underfoot through their contact chemistry
     { id: 'graze_relay_l', zone: 'mid_graze_l', mass: 0.003, mode: 'mapped',
@@ -105,9 +118,11 @@ const HARE = {
     { id: 'threat_level', zone: 'torso', mass: 0.001, mode: 'pooled',
       inputs: [{ from: 'node:threat' }, { from: 'node:meat_underfoot' }], fn: 'ramp' },
     { id: 'flee', zone: 'torso', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FLEE_THRESHOLD, receptors: ALARM },
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FLEE_THRESHOLD, receptors: ALARM,
+      inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_FLEE }] },
     { id: 'freeze', zone: 'torso', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FREEZE_THRESHOLD, receptors: ALARM },
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FREEZE_THRESHOLD, receptors: ALARM,
+      inhibitedBy: [{ node: 'hub', weight: HUB_HOLD_FREEZE }] },
     { id: 'alert', zone: 'torso', mass: 0.001, mode: 'pooled',
       inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_ALERT_THRESHOLD, receptors: ALARM },
     // The alarm gland answers the bolt, the flee circuit and pain; not freeze
@@ -129,10 +144,15 @@ const HARE = {
   // Where the firing lands. Locomotion: the central generator in the torso
   // drives the four locomotion limbs; the strongest drive reaching it wins.
   // Alert inhibits the food drive there (and freeze is always above alert).
+  // The hub's drive reaches the generator weaker than the reflexes' (it wins
+  // over foraging, loses to a bolt or a flee that fires), and freeze, which
+  // holds the generator still, shuts it.
   outputs: [
     { effect: 'gland', hormone: 'alarm', node: 'alarm_gland', zone: 'torso', release: STRESS_RELEASE_AMOUNT },
     { effect: 'locomotion', label: 'bolt',   node: 'bolt',       zone: 'torso', intensity: 1.0, bearing: 'away' },
     { effect: 'locomotion', label: 'flee',   node: 'flee',       zone: 'torso', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'deliberate', node: 'hub', zone: 'torso', intensity: 0.5,
+      vetoedBy: ['freeze'] },
     { effect: 'locomotion', label: 'forage', node: 'food_ahead', zone: 'torso', intensity: 0.3, bearing: 'toward',
       vetoedBy: ['alert'] },
     { effect: 'posture',    label: 'freeze', node: 'freeze',     zone: 'torso' },

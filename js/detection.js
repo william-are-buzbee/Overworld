@@ -399,7 +399,8 @@ function isInVisionCone(detector, target) {
 function _eyeCoverage(detector, target) {
   const bodyMap = getBodyMap(detector);
   // No facing data = omnidirectional: every eye counts
-  const facingAngleDeg = detector.facing ? facingToAngle(detector.facing) : null;
+  const facing = detector.isPlayer ? state.facing : detector.facing;
+  const facingAngleDeg = facing ? facingToAngle(facing) : null;
 
   let hasEyeZone = false;   // any zone with eyes, destroyed or not
   let eyes = 0, acuity = 0;
@@ -1308,7 +1309,7 @@ function buildAllDetectionInfo(creature) {
 
   // Build info for all entities in detection range
   const allTargets = [];
-  if (player && player.hp > 0) allTargets.push(player);
+  if (player && player.hp > 0 && player !== creature) allTargets.push(player);
   for (const m of nearby) {
     if (m === creature || m.hp <= 0) continue;
     allTargets.push(m);

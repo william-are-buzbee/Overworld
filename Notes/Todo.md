@@ -183,7 +183,8 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [x] 3. Glands and hunger: `creature.hormones` {alarm, hunger, fatigue} replaces `creature.drives` and `stressLevel`; gland nodes release, receptors read
 - [x] 3b. Gland stores: a gland releases what it holds and refills by synthesis (the hare no longer ratchets alarm on its own flight)
 - [x] 4. Maps: bearing and distance bands, holding, prediction; the hare's threat template per distance band
-- [ ] 5. The hub: reach, inhibition, the race, plastic hub weights, its mass as the limit per action; the player drives it (hotbar from the wiring)
+- [x] 5a. The hub: the player plays it; reach, graded inhibition and the race; reflexes it cannot hold take the body, and the log says so; the body screen (B) read off the wiring
+- [ ] 5b. Plastic hub weights (control earned by holding and driving, saved with the body); the hub's mass as its limit per action
 - [ ] 6. The wolf wired on the system; its reactive rules retired
 - [ ] 7. The whole cast rewired; the reactive rules gone
 - [ ] Then memory: writers and stores saved with the body, one animal, then the cast

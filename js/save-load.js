@@ -196,6 +196,7 @@ const TRANSIENT_FIELDS = [
     '_lastStruckBy',             // entity: last to land a blow (tools/ecology.mjs)
     '_held',                     // held places per holding node (nodes.js; entity references)
     '_actionStamp',              // action counter for held places (nodes.js)
+    '_hubHeld',                  // reflexes the hub held last action (hub.js)
     '_nodeTrace',                // what fired last action (nodes.js, the inspector)
     '_hunts',                    // Map<entity, episode>: open hunt episodes (hunt-funnel.js, tools/ecology.mjs)
     '_huntLog',                  // closed hunt episodes (hunt-funnel.js)

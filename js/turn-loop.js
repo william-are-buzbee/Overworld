@@ -297,6 +297,10 @@ function endPlayerTurn(action){
   // Slower player → more ticks/action → fewer actions per day.
   const worldTicksElapsed = BASE_TICKS_PER_ACTION * (REFERENCE_SPEED / effectivePlayerRate);
   advanceTick(worldTicksElapsed);
+  // The player's blood chemistry: alarm clears, glands make hormone (the same
+  // as every creature's, below)
+  _clearStressChemistry(player, worldTicksElapsed);
+  refillGlands(player, getWiring(player), worldTicksElapsed);
   // Drain FED based on action (scaled; 1 FED per accumulated 100)
   state.player.fedProgress = (state.player.fedProgress||0) + fedDrainFor(action||'move');
   while (state.player.fedProgress >= 10 && state.player.fed > 0){

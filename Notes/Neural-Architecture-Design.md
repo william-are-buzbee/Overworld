@@ -19,7 +19,8 @@ where it was for mass × PERSISTENCE_SCALE turns, the traces' rule; `creature._h
 the place moved along the velocity the eyes resolve, by the ticks this body needs to get there). The hare's threat template
 is wired in by band; nothing in the hare holds or predicts, having no tissue for it. **Step 3 is in:** blood chemistry
 (`creature.hormones`), gland nodes that release into it, from a store their tissue holds and refills (`creature.glandStores`),
-`blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). Inspect with `window.debugWiring('hare')`
+`blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). **Step 5a is in:** the hub (below, "The hub
+as built"). Plastic hub weights and the hub's mass as its limit per action are step 5b. Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
@@ -127,6 +128,12 @@ looming outline trips all three. No rule says so: it falls out of the weights.
 A negative weight from one node onto another's input or output. "Holding a response down" is nothing more: a node that
 recognises another hare, wired with a negative weight onto the bolt node, keeps a hare grazing when another hare thumps past.
 Without that wire nothing can hold the bolt down, and the animal bolts at shadows.
+
+In the code there are two kinds (nodes.js). `vetoedBy`: shunting, all or nothing (the target is silent while the source
+fires). `inhibitedBy: [{node, weight}]`: graded, the source's output × weight taken off the target's input in the input's
+own units, so a threshold of 1.5 threat held with weight 0.6 fires at 2.1. Both obey the race: a wire that arrives after
+the target has fired is inert. A late veto is a wiring mistake (an issue); a late graded wire is listed as anatomy, since
+descending fibres onto a reflex arc too fast for them are a real thing and the body screen says so.
 
 ### Priming
 
@@ -260,9 +267,31 @@ Everything about control follows from the wiring:
 - **Dedicating tissue to control is a build choice.** A larger hub, or more hub wiring, gives more reachable actions and
   stronger inhibition, paid for in mass and in the food neural tissue costs.
 
-So species play differently from anatomy, not from a difficulty setting. A hare's hub is 0.01 kg with almost no wires out
+So species play differently from anatomy, not from a difficulty setting. A hare's hub is 3 g with almost no wires out
 of it: playing a hare is mostly steering while the body decides the important things. A wolf's hub reaches nearly all of its
 body: playing a wolf feels deliberate.
+
+### The hub as built (step 5a, Sep 2026)
+
+- **The hub is a node the wiring names**: the one reading `intent:act`, which is 1 while the player acts through this body
+  and 0 otherwise. An NPC of the same species carries the tissue with nothing driving it. The hare's is 3 g in the head.
+- **Before each action that spends a turn** (a step, an attack, a rest, a turn, eating), the player's body builds its own
+  percepts and runs its wiring with the hub firing (`hub.js` `bodyTakes`). Its glands release into the player's blood; the
+  player's alarm clears and its glands refill every turn, as every creature's do.
+- **Reach**: the hub's own output drives the locomotion generator (`deliberate`, intensity 0.5). It beats foraging, loses to
+  a bolt or a flee that fires (tie goes to the earlier listed, and the reflexes are listed first), and freeze, which holds
+  the generator still, shuts it (`vetoedBy`).
+- **Holding**: `inhibitedBy` wires from the hub. The hare's reach flee and freeze in the torso in time (one hop from the
+  head) and raise them by 0.6 and 0.5 threat. They reach the fore-limb bolt arcs two hops after the arcs fire: a bolt
+  cannot be held. The weights are placeholders until they are plastic (5b).
+- **When a reflex wins**, the pressed action does not happen. A bolt or flee sprints the body along its bearing, or the
+  nearest open bearing beside it. A freeze spends the turn still. The log says which: "Your body bolts west before you can
+  stop it." A reflex held for the first time is said once ("Your legs gather to run. You hold them."). The run's
+  `result.held` lists what the hub held this action.
+- **The body screen (B)** is read off the wiring and the pathways: what the hub drives and what shuts it, each reflex that
+  can take the body, and whether the hub reaches it in time (and by how much), late (by how many hops), or not at all. It is
+  the hotbar's first cut: with one generator there is one thing to drive.
+- Only wired species are played through the hub; the others are driven directly until they are wired (steps 6–7).
 
 ---
 
@@ -341,10 +370,12 @@ not set targets for the ecology.
 
 ## Open Questions
 
-- Which nodes are hub nodes: every node in integration tissue, or the wiring names them?
+- Which nodes are hub nodes: every node in integration tissue, or the wiring names them? (For now the wiring names one,
+  the node reading `intent:act`.)
 - Band gains are written by hand (the hare's fall off as an image does, about 3 / distance beyond 4 tiles). Should they come
   from the eyes' resolution instead, once perception is nodes?
-- Does the player see why a reflex won (the log line), or only feel it?
+- Does the player see why a reflex won, or only feel it? (For now: the log says what the body did, not why; the body screen
+  says why in general.)
 
 ## What NOT to Change
 
