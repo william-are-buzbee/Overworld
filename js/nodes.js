@@ -171,6 +171,13 @@ const POOLED_FEATURES = {
   },
   // Plant-eater volatiles on the air, and the wind to face them: a place a
   // few tiles upwind (the plume, detection.js readPlume)
+  // Meat-eater volatiles on the air (the plume), and a place upwind to face
+  meatOnAir: (c) => (c.plume && c.plume.meatSNR >= 1 ? 1 : 0),
+  meatUpwind: (c) => {
+    const p = c.plume;
+    if (!p || !(p.meatSNR >= 1) || !p.upwind) return 0;
+    return { value: 1, place: { x: c.x + p.upwind.dx * 3, y: c.y + p.upwind.dy * 3 } };
+  },
   preyUpwind: (c) => {
     const p = c.plume;
     if (!p || !(p.herbSNR >= 1) || !p.upwind) return 0;

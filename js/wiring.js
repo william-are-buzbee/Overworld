@@ -380,7 +380,106 @@ const LURKER = {
   ],
 };
 
-const CREATURE_WIRING = { hare: HARE, wolf: WOLF, dire_wolf: DIRE_WOLF, ambush_pred: LURKER };
+// ── The shaleback (wading grazer, Clade A) ──
+// Centralised like the wolf, 200 kg, and nothing on the ground reads heavier
+// than it. Head: the food template, the larger-animal template (it rarely
+// fires: little is), a nose for meat-eaters on the air, and the hub. Front
+// limbs: contact chemistry (grazing), and the shove. Torso: the drives and
+// the alarm gland. Water is its refuge: its retreat runs there.
+const SHALEBACK = {
+  map: { bands: [1.5, 4, 8] },
+  nodes: [
+    { id: 'hub', zone: 'head', mass: 0.02, mode: 'pooled',
+      inputs: [{ from: 'intent:act' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'hungry', zone: 'head', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'blood:hunger' }], fn: 'step', threshold: REACTIVE_HUNGER_THRESHOLD, strict: true },
+    { id: 'hurt', zone: 'head', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'kin', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
+    // Larger animal (as the wolf's)
+    { id: 'heavy', zone: 'head', mass: 0.005, mode: 'mapped',
+      inputs: [{ from: 'feature:sizeRatio' }], fn: 'ramp', threshold: 1.5, gain: 0.5, ceiling: 1 },
+    { id: 'alive_to', zone: 'head', mass: 0.005, mode: 'mapped', combine: 'max',
+      inputs: [{ from: 'feature:moving' }, { from: 'feature:sizeMuchLarger' },
+               { from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3 },
+    { id: 'threat', zone: 'head', mass: 0.01, mode: 'mapped', bands: [1, 0.6, 0.3, 0.1],
+      inputs: [{ from: 'node:heavy' }], gate: ['alive_to'], vetoedBy: ['kin'], fn: 'ramp' },
+    { id: 'threat_level', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat' }], fn: 'ramp' },
+    { id: 'wary', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: 0.2, receptors: ALARM },
+    // A meat-eater on the air: stop feeding, and face the wind (or hold
+    // still, with no bearing)
+    { id: 'meat_air', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'feature:meatOnAir' }], fn: 'step', threshold: 1 },
+    { id: 'meat_wind', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'feature:meatUpwind' }], fn: 'step', threshold: 1 },
+    // Food: the head's template, gated by hunger
+    { id: 'food_ahead', zone: 'head', mass: 0.01, mode: 'pooled',
+      inputs: [{ from: 'feature:foodNear' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+    { id: 'food_underfoot', zone: 'front_l', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'feature:foodUnderfoot' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+    // Struck while something is in reach: shove it (front limbs)
+    { id: 'struck_by', zone: 'head', mass: 0.005, mode: 'mapped', bands: [1, 0, 0, 0],
+      inputs: [{ from: 'feature:present' }], gate: ['hurt'], fn: 'step', threshold: 0, strict: true },
+    { id: 'shove', zone: 'head', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:struck_by' }], fn: 'step', threshold: 0, strict: true },
+    // Torso: the retreat to water, and the alarm gland
+    { id: 'retreat', zone: 'torso', mass: 0.005, mode: 'pooled',
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: 0.8, receptors: ALARM,
+      inhibitedBy: [{ node: 'hub', weight: 1.0, innate: 0.5 }] },
+    { id: 'alarm_gland', zone: 'torso', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'node:retreat' }, { from: 'feature:pain' }], fn: 'step', threshold: 0, strict: true },
+  ],
+  outputs: [
+    { effect: 'gland', hormone: 'alarm', node: 'alarm_gland', zone: 'torso', release: STRESS_RELEASE_AMOUNT },
+    { effect: 'strike', label: 'shove', act: 'retaliate', node: 'shove', zone: 'front_l', bearing: 'toward' },
+    { effect: 'locomotion', label: 'retreat', act: 'flee_water', node: 'retreat', zone: 'torso', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'deliberate', node: 'hub', zone: 'torso', intensity: 1.0 },
+    { effect: 'locomotion', label: 'forage', act: 'forage_approach', node: 'food_ahead', zone: 'torso', intensity: 0.3,
+      bearing: 'toward', vetoedBy: ['wary', 'meat_air'] },
+    { effect: 'feeding', label: 'graze', act: 'graze', node: 'food_underfoot', zone: 'front_l', vetoedBy: ['wary', 'meat_air'] },
+    { effect: 'posture', label: 'still', act: 'hold', node: 'meat_air', zone: 'torso', vetoedBy: ['meat_wind'] },
+    { effect: 'orienting', label: 'wary', act: 'orient', node: 'wary', zone: 'head', bearing: 'toward' },
+    { effect: 'orienting', label: 'wind', act: 'orient', node: 'meat_wind', zone: 'head', bearing: 'toward' },
+  ],
+};
+
+// ── The chemotroph colony (Clade B) ──
+// A handful of grams of neural tissue spread through seven zones, a
+// ganglion in each; the central body reads the ground through all of them.
+// A footfall felt anywhere on it (not its own kind's) moves it away; hungry,
+// it grazes where it stands or creeps to food near. (The old colony
+// synchrony is gone; nothing here stands in for it.)
+const COLONY_ZONES = ['head', 'central_body', 'front_sensory', 'second_limbs', 'rear_limbs_a', 'rear_limbs_b', 'integument'];
+const COLONY = {
+  map: { bands: [1.5, 4, 8] },
+  nodes: [
+    { id: 'felt', zone: 'central_body', mass: 0.002, mode: 'mapped', combine: 'max', bands: [1, 1, 0, 0],
+      inputs: COLONY_ZONES.map(z => ({ from: `sense:${z}.vibration.ground` })), fn: 'step', threshold: 1 },
+    { id: 'kin', zone: 'central_body', mass: 0.001, mode: 'mapped',
+      inputs: [{ from: 'feature:recognisedKin' }], fn: 'step', threshold: 1 },
+    { id: 'tremor', zone: 'central_body', mass: 0.001, mode: 'mapped',
+      inputs: [{ from: 'node:felt' }], vetoedBy: ['kin'], fn: 'step', threshold: 1 },
+    { id: 'withdraw', zone: 'central_body', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'node:tremor' }], fn: 'step', threshold: 0, strict: true },
+    { id: 'hungry', zone: 'central_body', mass: 0.001, mode: 'pooled',
+      inputs: [{ from: 'blood:hunger' }], fn: 'step', threshold: REACTIVE_HUNGER_THRESHOLD, strict: true },
+    { id: 'food_ahead', zone: 'head', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'feature:foodNear' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+    { id: 'food_underfoot', zone: 'front_sensory', mass: 0.002, mode: 'pooled',
+      inputs: [{ from: 'feature:foodUnderfoot' }], gate: ['hungry'], fn: 'step', threshold: 1 },
+  ],
+  outputs: [
+    { effect: 'locomotion', label: 'withdraw', act: 'flee', node: 'withdraw', zone: 'central_body', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'forage', act: 'forage_approach', node: 'food_ahead', zone: 'central_body', intensity: 0.3, bearing: 'toward' },
+    { effect: 'feeding', label: 'graze', act: 'graze', node: 'food_underfoot', zone: 'front_sensory' },
+  ],
+};
+
+const CREATURE_WIRING = { hare: HARE, wolf: WOLF, dire_wolf: DIRE_WOLF, ambush_pred: LURKER,
+                          cave_crab: SHALEBACK, mushroom: COLONY };
 
 /** A creature's wiring (the player's through its species' creature), or null
  *  for one still on the reactive rules. */

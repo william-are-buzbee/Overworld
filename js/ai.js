@@ -196,6 +196,8 @@ function _actToAction(output, creature) {
       return { behavior: 'hunt_chase', magnitude: m, target: output.source, place: output.place };
     case 'hunt_attack':
       return { behavior: 'hunt_attack', magnitude: 0.3, target: output.source };
+    case 'retaliate':
+      return { behavior: 'retaliate', magnitude: 0.7, target: output.source };
     case 'eat_corpse':
       return { behavior: 'eat_corpse', magnitude: 0.3 };
     case 'approach_corpse':

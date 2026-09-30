@@ -390,6 +390,30 @@ section('The wolf (wiring.js, step 6)');
   // (the template sits in the torso beside it)
   assert(runNodes(lurker([dire(1)]), L, { intent: true }).act === 'flee_home', 'played, a ravager in reach: the retreat takes the legs (the hub is a hop late)');
   assert(runNodes(lurker([]), L, { intent: true }).type === 'deliberate', 'played, nothing near: the player moves it');
+  // The shaleback: grazes; shoves back when struck; a meat-eater on the air stops it
+  const C = CREATURE_WIRING.cave_crab;
+  assert(validateWiring({ key: 'cave_crab' }, C).length === 0, 'the shaleback\'s wiring fits its body');
+  const crab = (dets, extra = {}) => {
+    const e = { key: 'cave_crab', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.2, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); e.detectionInfo = dets; return e;
+  };
+  assert(runNodes(crab([]), C).type === 'hold', 'fed, nothing near: nothing fires (the gait\'s wander)');
+  const cw = runNodes(crab([{ ...dire(1), sizeRelative: 'smaller', sizeEstimate: { estimated: 90, lower: 70, upper: 110 } }],
+                           { tookDamageThisTurn: true }), C);
+  assert(cw.act === 'retaliate' && cw.source.key === 'dire_wolf', `struck by a ravager in reach: shoves it (${cw.type})`);
+  assert(runNodes(crab([dire(1)]), C).act !== 'flee_water', 'a ravager in reach, not struck: 90 kg reads light against 200, no retreat');
+  const smelt = runNodes(crab([], { plume: { meatSNR: 2, herbSNR: 0, upwind: { dx: 0, dy: -1 } } }), C);
+  assert(smelt.type === 'wind' && smelt.direction === 0, `meat-eater on the air from the north: faces north (${smelt.type}, ${smelt.direction})`);
+  const still = runNodes(crab([], { plume: { meatSNR: 2, herbSNR: 0, upwind: null } }), C);
+  assert(still.act === 'hold', `on the air with no wind to read: holds still (${still.type})`);
+  // The colony: a footfall felt moves it away
+  const K = CREATURE_WIRING.mushroom;
+  assert(validateWiring({ key: 'mushroom' }, K).length === 0, 'the colony\'s wiring fits its body');
+  const colony = (dets) => { const e = { key: 'mushroom', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.2, fatigue: 0 } };
+    m.initBodyMap(e); e.detectionInfo = dets; return e; };
+  const cf = runNodes(colony([{ ...hare(2), zoneSNR: { 'integument.vibration.ground': 3 } }]), K);
+  assert(cf.act === 'flee' && cf.direction === 6, `a footfall felt 2 tiles east: withdraws west (${cf.type}, ${cf.direction})`);
+  assert(runNodes(colony([{ ...hare(2), zoneSNR: { 'head.visual': 3 } }]), K).act == null, 'nothing felt: nothing');
   // Played: the hub's drive wins the generator; only a retreat can take the legs
   const played = runNodes(wolfWith([hare(3)]), W, { intent: true });
   assert(played.type === 'deliberate', `played, hungry, a hare 3 tiles off: the player decides (${played.type})`);
