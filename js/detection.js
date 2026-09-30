@@ -547,7 +547,7 @@ function _visualDetection(detector, target) {
     ? (state.fovSet && state.fovSet.has(`${target.x},${target.y}`) ? 2 : 1)
     : coverage.eyes;
   return { zone: _bestEyeZone(detector), channel: 'visual', quality: getEffectiveVisual(detector), snr,
-           moving: _isTargetMoving(target), closing: rel ? rel.closing : 0, eyes };
+           moving: _isTargetMoving(target), closing: rel ? rel.closing : 0, velocity: _velocity(target), eyes };
 }
 
 // ==================== MASTER DETECTION (Prompt P) ====================
@@ -1136,6 +1136,7 @@ function buildDetectionInfo(observer, target, detections) {
     // How fast a seen body closes on the observer (tiles per world tick,
     // positive = approaching); only the eyes resolve it
     closingSpeed: 0,
+    velocity: null,
 
     // Best SNR per zone and channel, keyed as the neural wiring names its
     // inputs ('fore_l.vibration.ground', 'head.visual'), so a ganglion reads
@@ -1186,6 +1187,9 @@ function buildDetectionInfo(observer, target, detections) {
     }
     if (det.channel === 'visual' && det.moving) info.isMoving = true;
     if (det.channel === 'visual' && det.closing > info.closingSpeed) info.closingSpeed = det.closing;
+    // Its velocity as the eyes resolve it (tiles per world tick): motion across
+    // the view and along it; only the eyes give it (prediction reads it)
+    if (det.channel === 'visual' && det.velocity) info.velocity = det.velocity;
 
     if (det.zone) {
       const key = `${det.zone.key}.${_WIRING_PATH[det.channel]}`;

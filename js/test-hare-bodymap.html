@@ -202,6 +202,41 @@ assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'bot
   refillGlands(e, wiring, 50);
   assert(approx(e.glandStores.alarm_gland, 0.45, 1e-6), `50 ticks of synthesis refill half the store (${e.glandStores.alarm_gland.toFixed(3)})`);
 }
+// The map: distance bands
+{
+  const shaleback = (dist) => {
+    const e = woundedHare([]);
+    e.detectionInfo = [{ entity: { key: 'cave_crab' }, x: 50 + dist, y: 50, distance: dist, sizeRelative: 'much_larger',
+      sizeEstimate: { estimated: 200, lower: 150, upper: 260 },
+      zoneSNR: { 'head.visual': 6, 'fore_l.vibration.ground': 3, 'fore_r.vibration.ground': 3 }, closingSpeed: 0, dietConfidence: 0 }];
+    return runNodes(e, wiring).type;
+  };
+  assert(shaleback(3) === 'flee', `a shaleback walking 3 tiles off (seen and felt): flee (${shaleback(3)})`);
+  assert(shaleback(12) === 'freeze' || shaleback(12) === 'alert', `a shaleback 12 tiles off: no flight (${shaleback(12)})`);
+}
+// Holding and prediction, on a small wiring (no wired creature holds yet)
+{
+  const holder = { map: { bands: [3] },
+    nodes: [{ id: 'seen', zone: 'head', mass: 0.1, mode: 'mapped', inputs: [{ from: 'sense:head.visual' }],
+              fn: 'step', threshold: 1, holds: true, predicts: true }],
+    outputs: [{ effect: 'locomotion', label: 'chase', node: 'seen', zone: 'torso', intensity: 1, bearing: 'toward' }] };
+  assert(validateWiring({ key: 'wolf' }, holder).length === 0, 'a holding, predicting node validates (on a wolf\'s head: 0.1 kg is more than a hare\'s)');
+  assert(validateWiring({ key: 'hare' }, holder).some(i => /head/.test(i)), 'the same node does not fit a hare\'s head');
+  const e = woundedHare([]);
+  state.turnCount = 100;
+  e.detectionInfo = [{ entity: { key: 'hare', hp: 1 }, x: 55, y: 50, distance: 5, zoneSNR: { 'head.visual': 5 },
+                       velocity: { vx: 0, vy: 0.4 } }];
+  const first = runNodes(e, holder);
+  assert(first.type === 'chase' && first.direction === 3, `perceived, moving south: aims ahead of it, south-east (${first.direction})`);
+  e.detectionInfo = []; state.turnCount = 102;
+  const held = runNodes(e, holder);
+  assert(held.type === 'chase', 'out of the senses 2 turns later: still held (0.1 kg holds 3 turns)');
+  state.turnCount = 104;
+  assert(runNodes(e, holder).type === 'hold', 'after 4 turns: let go');
+  const e2 = woundedHare(['head']); e2.detectionInfo = []; state.turnCount = 100;
+  e2._held = { seen: [{ x: 55, y: 50, v: 1, turn: 100, stamp: 0, entity: null }] };
+  assert(runNodes(e2, holder).type === 'hold', 'the head destroyed: nothing held');
+}
 assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
 assert(getWiring({ key: 'wolf' }) == null, 'the wolf has no wiring yet (reactive rules)');
 
