@@ -156,16 +156,16 @@ const HARE = {
   // holds the generator still, shuts it.
   outputs: [
     { effect: 'gland', hormone: 'alarm', node: 'alarm_gland', zone: 'torso', release: STRESS_RELEASE_AMOUNT },
-    { effect: 'locomotion', label: 'bolt',   node: 'bolt',       zone: 'torso', intensity: 1.0, bearing: 'away' },
-    { effect: 'locomotion', label: 'flee',   node: 'flee',       zone: 'torso', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'bolt',   act: 'flee', node: 'bolt', zone: 'torso', intensity: 1.0, bearing: 'away' },
+    { effect: 'locomotion', label: 'flee',   act: 'flee', node: 'flee', zone: 'torso', intensity: 1.0, bearing: 'away' },
     { effect: 'locomotion', label: 'deliberate', node: 'hub', zone: 'torso', intensity: 0.5,
       vetoedBy: ['freeze'] },
-    { effect: 'locomotion', label: 'forage', node: 'food_ahead', zone: 'torso', intensity: 0.3, bearing: 'toward',
+    { effect: 'locomotion', label: 'forage', act: 'forage_approach', node: 'food_ahead', zone: 'torso', intensity: 0.3, bearing: 'toward',
       vetoedBy: ['alert'] },
-    { effect: 'posture',    label: 'freeze', node: 'freeze',     zone: 'torso' },
-    { effect: 'orienting',  label: 'alert',  node: 'alert',      zone: 'head', bearing: 'toward' },
+    { effect: 'posture',    label: 'freeze', act: 'hold',   node: 'freeze', zone: 'torso' },
+    { effect: 'orienting',  label: 'alert',  act: 'orient', node: 'alert',  zone: 'head', bearing: 'toward' },
     // Standing on food, hungry: the graze limbs' contact feeding
-    { effect: 'feeding',    label: 'forage', node: 'food_underfoot', zone: 'mid_graze_l', vetoedBy: ['alert'] },
+    { effect: 'feeding',    label: 'graze',  act: 'graze', node: 'food_underfoot', zone: 'mid_graze_l', vetoedBy: ['alert'] },
   ],
 };
 

@@ -1,25 +1,19 @@
 // ==================== AI ====================
-// Per-creature AI tick, reactive-deliberative decision making, drive updates,
-// movement helpers, and legacy stubs.
+// Per-creature AI tick: body chemistry, the senses, the creature's wiring
+// (nodes.js) and the bridge from what it drove onto the action executor;
+// legacy stubs.
 // Split from enemy-ai.js.
 
 import { state } from './state.js';
 import { getBodyMap,
          MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, REST_BASE_RATE,
          REST_BLOOD_IMPAIRED, REST_BLOOD_WEAKENED, REST_BLOOD_CRITICAL, REST_WOUND_COEFF,
-         HUNGER_THRESHOLD, REST_THRESHOLD,
-         OVERRIDE_SCALE, STIMULUS_RESISTANCE, CRITICAL_MAGNITUDE } from './constants.js';
-import { computeIntegrationCapacity, getTier, evaluateReactiveRules,
-         processGanglionSystem,
-         canOverrideReactive, deliberativeEvaluation, updateGoalPersistence,
-         _ruleLabel, getDominantDrive } from './cognition.js';
-import { buildAllDetectionInfo, detectThreats, applySafetyFromThreats,
-         detectPrey, detectCorpses } from './detection.js';
-import { executeAction, adjacencyCombatCheck, monsterMelee, executeWander,
-         executeFlee } from './behaviors.js';
-import { isWaterTile, canMoveTo, getCorpseAt, combatCapability } from './ai-utils.js';
+         REST_THRESHOLD } from './constants.js';
+import { computeIntegrationCapacity, getTier, processGanglionSystem, updateGoalPersistence } from './cognition.js';
+import { buildAllDetectionInfo, detectThreats, applySafetyFromThreats, detectCorpses } from './detection.js';
+import { executeAction, monsterMelee, executeWander } from './behaviors.js';
+import { isWaterTile, canMoveTo } from './ai-utils.js';
 import { computeSignals } from './signals.js';
-import { getWiring } from './wiring.js';
 import { _depleteLocomotionSubstrate } from './physiology.js';
 import { noteHuntAction } from './hunt-funnel.js';
 
@@ -104,82 +98,22 @@ function getWoundRestAcceleration(creature) {
 }
 
 /**
- * Translate ganglion motor output into an action the existing execution
- * system can handle. This is a bridge — eventually the execution system
- * will read intensity directly. For now, map to existing behavior labels.
+ * What a creature's wiring drove this action, onto the action executor
+ * (behaviors.js). A bridge until the motor layer reads effects directly:
+ * each output names its `act`. When nothing fired, the locomotion
+ * generator's own gait runs (the wander profile), unless the body's rest
+ * drive holds it down.
  */
-function _ganglionOutputToAction(output, creature) {
-  if (!output) return { behavior: 'hold', magnitude: 0.1 };
+function _outputToAction(output, creature) {
+  creature._lastGanglionIntensity = output ? output.intensity : null;
+  if (output && output.act) return _actToAction(output, creature);
+  return _gait(creature);
+}
 
-  // Store ganglion intensity for substrate depletion
-  creature._lastGanglionIntensity = output.intensity;
-
-  // An output that names its act (the wolf's wiring): straight onto the executor
-  if (output.act) return _actToAction(output, creature);
-
-  if (output.intensity <= 0) {
-    // No locomotion signal — hold still or check feeding
-    if (output.type === 'alert') {
-      // Face the threat while holding still. output.direction already points
-      // at the source (it was reversed twice before, so the hare faced away).
-      return {
-        behavior: 'orient',
-        magnitude: 0.4,
-        direction: output.direction,
-      };
-    }
-    // At food tile — graze (mid-graze local ganglion contact-chemical reflex)
-    if (output.atFood && creature.hormones && creature.hormones.hunger > HUNGER_THRESHOLD) {
-      return { behavior: 'graze', magnitude: 0.3 };
-    }
-    // Check mid-graze contact feeding on corpses
-    const corpse = getCorpseAt(state.player.layer, creature.x, creature.y);
-    if (corpse && creature.hormones && creature.hormones.hunger > HUNGER_THRESHOLD) {
-      return { behavior: 'eat_corpse', magnitude: 0.3 };
-    }
-    if (output.type === 'forage' && output.direction != null) {
-      return {
-        behavior: 'forage_approach',
-        magnitude: 0.3,
-        direction: output.direction,
-      };
-    }
-    if (output.type === 'freeze') return { behavior: 'hold', magnitude: 0.1 };
-    // Nothing fired. The locomotion ganglion's normal gait (its
-    // alternating_variable pattern) runs the ambient motor program, the
-    // wander profile, unless the body's rest drive holds it down. Before
-    // this the hare held still, and held-still was scored as resting.
-    if (creature.hormones && creature.hormones.fatigue > REST_THRESHOLD) return { behavior: 'rest', magnitude: 0.1 };
-    return { behavior: 'wander', magnitude: 0.1 };
-  }
-
-  // Locomotion signal present
-  if (output.intensity >= 0.7) {
-    // High intensity — flee equivalent
-    creature.threatSource = output.source || creature.threatSource;
-    return {
-      behavior: 'flee',
-      magnitude: output.intensity,
-      direction: output.direction,    // bolt/flee bearing for fallback
-      _ganglionIntensity: output.intensity,
-    };
-  } else if (output.intensity >= 0.3) {
-    // Moderate intensity — directed movement (approach food, cautious movement)
-    return {
-      behavior: 'wander',
-      magnitude: output.intensity,
-      direction: output.direction,
-      _ganglionIntensity: output.intensity,
-    };
-  } else {
-    // Low intensity — slow approach
-    return {
-      behavior: 'wander',
-      magnitude: output.intensity,
-      direction: output.direction,
-      _ganglionIntensity: output.intensity,
-    };
-  }
+/** Nothing fired: the generator's ambient gait, or rest. */
+function _gait(creature) {
+  if (creature.hormones && creature.hormones.fatigue > REST_THRESHOLD) return { behavior: 'rest', magnitude: 0.1 };
+  return { behavior: 'wander', magnitude: 0.1 };
 }
 
 /**
@@ -223,143 +157,57 @@ function _actToAction(output, creature) {
     case 'forage_approach':
       return { behavior: 'forage_approach', magnitude: m, direction: output.direction };
     default:
-      return { behavior: 'wander', magnitude: 0.1 };
+      return _gait(creature);
   }
 }
 
 // ==================== UNIFIED AI LOOP ====================
 
-/** Main AI entry point — called once per creature per turn. */
+/** Main AI entry point: once per creature per action. Every creature runs its
+ *  wiring (wiring.js, nodes.js); what its nodes drive, the body does. */
 function runCreatureAI(creature) {
   if (creature.hp <= 0) return;
 
   // ── Reset per-turn state flags (Prompt L-A) ──
   creature.movedThisTurn = false;
   creature.inCombatThisTurn = false;
-  // Reset ganglion transient fields
   creature._lastGanglionIntensity = null;
 
-  // Immobilized creatures can't move but can still attack adjacently
-  if (creature.immobilized) {
-    updateBodyChemistry(creature);
-    creature.integrationCapacity = computeIntegrationCapacity(creature);
-    creature.tier = getTier(creature.integrationCapacity);
-    buildAllDetectionInfo(creature);
-    detectThreats(creature);
-    applySafetyFromThreats(creature);
-    detectPrey(creature);
-    detectCorpses(creature);
-    adjacencyCombatCheck(creature);
-    _updateInWater(creature);
-    computeSignals(creature);
-    return;
-  }
-
-  // Update body chemistry
   updateBodyChemistry(creature);
-  // NOTE: _regenerateSubstrate is now called from endPlayerTurn, scaled by ticksElapsed
-
-  // ── Cognitive tier (Prompt M-A1) ──
+  // (substrate regenerates in endPlayerTurn, scaled by the ticks elapsed)
   creature.integrationCapacity = computeIntegrationCapacity(creature);
   creature.tier = getTier(creature.integrationCapacity);
 
-  // ── Build continuous-uncertainty detection info (Prompt P) ──
-  // Must run before detectThreats so threat assessment can use detection-derived info
+  // The senses: percepts (with the continuous uncertainty of each channel),
+  // what reads as a threat to flee from, carrion the nose places
   buildAllDetectionInfo(creature);
-
-  // Threat detection — uses detection info for honest threat assessment
   detectThreats(creature);
   applySafetyFromThreats(creature);
-
-  // Prey and corpse detection (I-C) — still used by deliberative layer
-  detectPrey(creature);
   detectCorpses(creature);
-
-  // ── Goal persistence check ──
   updateGoalPersistence(creature);
 
-  // ══════════════════════════════════════════════════════════════
-  // ── Behavior Decision ──
-  const neural = getWiring(creature);
-  let action;
-  let reactiveAction = null;
-
-  if (neural) {
-    // ── Wired nervous system (nodes.js) ──
-    // Creature has a wiring: its nodes decide, not the reactive rules. Its
-    // glands are nodes too, and release as they fire (pain included: a gland
-    // input, felt through the body, not a special case here).
-    const ganglionOutput = processGanglionSystem(creature);
-    action = _ganglionOutputToAction(ganglionOutput, creature);
-
-    // ── Store decision trace for debugCognition() ──
-    creature._lastTrace = {
-      reactiveRule: 'GANGLION ' + (ganglionOutput ? ganglionOutput.type : 'null'),
-      reactiveBehavior: action.behavior,
-      reactiveMagnitude: action.magnitude || 0,
-      overrideRatio: 0,
-      overrideAttempted: false,
-      overrideSucceeded: false,
-      finalBehavior: action.behavior,
-      fromDeliberate: false,
-      ganglionIntensity: ganglionOutput ? ganglionOutput.intensity : 0,
-      alarm: creature.hormones ? creature.hormones.alarm : 0,
-    };
-  } else {
-    // ── Reactive-Deliberative Architecture (Prompt O) ──
-    // Step 1: Reactive layer always runs — produces recommendation + magnitude
-    reactiveAction = evaluateReactiveRules(creature);
-
-    // Step 2: Deliberative override attempt
-    action = reactiveAction;
-    let overrideAttempted = false;
-    let overrideSucceeded = false;
-    const overrideCapacity = creature.integrationCapacity * OVERRIDE_SCALE;
-    const overrideThreshold = reactiveAction.magnitude * STIMULUS_RESISTANCE;
-    const overrideRatio = (reactiveAction.magnitude >= CRITICAL_MAGNITUDE) ? 0
-      : (overrideThreshold > 0 ? overrideCapacity / overrideThreshold : Infinity);
-
-    if (canOverrideReactive(creature, reactiveAction.magnitude)) {
-      overrideAttempted = true;
-      const deliberateAction = deliberativeEvaluation(creature);
-      if (deliberateAction) {
-        overrideSucceeded = true;
-        action = deliberateAction;
-      }
-    }
-
-    // ── Store decision trace for debugCognition() ──
-    creature._lastTrace = {
-      reactiveRule: _ruleLabel(reactiveAction),
-      reactiveBehavior: reactiveAction.behavior,
-      reactiveMagnitude: reactiveAction.magnitude,
-      overrideRatio: overrideRatio,
-      overrideAttempted: overrideAttempted,
-      overrideSucceeded: overrideSucceeded,
-      finalBehavior: action.behavior,
-      fromDeliberate: !!action.fromDeliberate,
-    };
+  // ── The wiring ──
+  const output = processGanglionSystem(creature);
+  let action = _outputToAction(output, creature);
+  // No locomotion zone left: the legs cannot answer; a strike still can
+  if (creature.immobilized && action.behavior !== 'hunt_attack' && action.behavior !== 'retaliate') {
+    action = { behavior: 'hold', magnitude: 0.1 };
   }
+  creature._lastTrace = {
+    output: output ? output.type : 'none',
+    act: output ? output.act : null,
+    finalBehavior: action.behavior,
+    intensity: output ? output.intensity : 0,
+    alarm: creature.hormones ? creature.hormones.alarm : 0,
+  };
 
-  // Step 3: Execute the selected action
   creature.currentBehavior = action.behavior;
   const x0 = creature.x, y0 = creature.y;
-  let moved = executeAction(creature, action);
+  executeAction(creature, action);
   _depleteLocomotionSubstrate(creature);
-  // ══════════════════════════════════════════════════════════════
-
-  // Adjacency combat: skip if fleeing cleanly or if action already attacked
-  const behavior = creature.currentBehavior;
-  // (not for a wired creature: its own strike circuits decide what it strikes)
-  const fleeingCleanly = (behavior === 'flee' && moved && !creature.tookDamageThisTurn);
-  const alreadyAttacked = (action.behavior === 'retaliate' || action.behavior === 'attack_adjacent' ||
-                           action.behavior === 'hunt_attack');
-  if (!neural && !fleeingCleanly && !alreadyAttacked) {
-    adjacencyCombatCheck(creature);
-  }
   noteHuntAction(creature, action, x0, y0);   // tools/ecology.mjs bookkeeping; nothing in play reads it
 
-  // Prompt K-B: reset per-turn damage flag AFTER combat check
+  // The blow has been felt (pain read it this action)
   creature.tookDamageThisTurn = false;
 
   // ── Signal emission (Prompt L-A) ──

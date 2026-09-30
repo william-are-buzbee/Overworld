@@ -104,8 +104,8 @@ export const AMBIENT_DIP_OUTER      = 0.08;  // alpha for terrain pixels 2px fro
 export const AMBIENT_DIP_BLOB_SCALE = 0.5;   // multiplier for blob rendering tier
 
 // ==================== GANGLION SYSTEM (Hare Vertical Slice) ====================
-// Thresholds for the wired nervous systems (wiring.js, run by nodes.js). Only
-// creatures with a wiring run that path; all others use evaluateReactiveRules.
+// Thresholds for the wired nervous systems (wiring.js, run by nodes.js); every
+// creature runs one.
 // First pass — tune during playtesting.
 export const BASE_BOLT_THRESHOLD       = 4.0;   // vibration SNR required for bolt reflex at calm
 export const BASE_FLEE_THRESHOLD       = 1.5;   // total threat confidence required for flee ganglion (excitatory, overcomes freeze)
@@ -151,7 +151,6 @@ export const NEURAL_HUNGER_COEFF = 0.0003;    // hunger per turn per kg of neura
 export const REST_BASE_RATE      = 0.001;     // fatigue builds per action (very slow baseline)
 
 // Drive thresholds (used by selectBehavior in future prompts)
-export const SAFETY_THRESHOLD    = 0.5;       // alarm above this: the reactive rules' safety drive is active (I-B)
 export const HUNGER_THRESHOLD    = 0.6;       // above this → hunt/forage (I-C)
 export const REST_THRESHOLD      = 0.7;       // fatigue above this → rest (I-D)
 
@@ -211,8 +210,6 @@ export const DORMANT_RADIUS = 45;   // tiles — go dormant beyond this range (h
 export const MAX_DRIFT      = 15;   // tiles — maximum position drift on catch-up
 
 // --- Safety Spikes (I-B) ---
-export const SAFETY_PROXIMITY_COEFF = 0.15;   // how much proximity-based detection spikes safety per turn
-export const SAFETY_DAMAGE_COEFF    = 3.0;    // how much taking damage spikes safety (multiplied by HP fraction)
 
 // --- Rest Acceleration (I-D) ---
 export const REST_BLOOD_IMPAIRED   = 0.01;   // rest accel per turn at 50-75% blood
@@ -236,11 +233,7 @@ export const HEAL_REST_MULTIPLIER = 3.0;     // resting creatures heal 3× faste
 export const DRIVE_COMPARE_THRESHOLD = 0.01;   // integration capacity >= this → Tier 2
 export const PLANNING_THRESHOLD      = 0.08;   // integration capacity >= this → Tier 3
 
-// --- Reactive-Deliberative Override (Prompt O) ---
-export const OVERRIDE_SCALE          = 3.5;    // overrideCapacity = integrationCapacity × this
-export const STIMULUS_RESISTANCE     = 1.0;    // override threshold = reactiveMagnitude × this
-export const CRITICAL_MAGNITUDE      = 0.9;    // magnitude at which override is impossible
-export const REACTIVE_HUNGER_THRESHOLD = 0.5;  // hunger level for reactive food rules
+export const REACTIVE_HUNGER_THRESHOLD = 0.5;  // hunger at which the wirings' hunger nodes fire (the old reactive food rules' level)
 
 // --- Deliberative Seeking Range (Prompt O) ---
 export const MIN_SEEK                = 8;      // minimum deliberative seek range (tiles)
@@ -256,7 +249,6 @@ export const CHASE_LEASH_HUNGER_MULT = 15;    // additional chase tiles at hunge
 export const MEAL_HUNGER_REDUCTION   = 0.8;   // hunger reduction per (corpse mass / predator mass)
 export const BITE_MASS_FRACTION      = 0.15;  // fraction of own mass consumed per eat turn
 export const GRAZE_HUNGER_REDUCTION  = 0.03;  // hunger reduction per turn of grazing
-export const HERBIVORE_SAFETY_BONUS  = 0.25;  // herbivores treat safety as 0.25 more urgent than raw value
 export const FORAGE_SEARCH_RADIUS    = 12;    // how far herbivores look for food tiles
 
 // ==================== FIRST-PASS SPAWNING CONSTANTS ====================
