@@ -21,7 +21,8 @@ is wired in by band; nothing in the hare holds or predicts, having no tissue for
 (`creature.hormones`), gland nodes that release into it, from a store their tissue holds and refills (`creature.glandStores`),
 `blood:<hormone>` inputs and `receptors` that read it (Endocrine-Design). **Step 5 is in:** the hub (below, "The hub
 as built"): the player plays it, its wires onto reflexes are plastic, and its mass is its limit per action. **Step 6 is
-in:** the wolf (below, "The wolf as built"). Inspect with `window.debugWiring('hare')`
+in:** the wolf (below, "The wolf as built"). **Step 7 is in:** the whole cast (below, "The cast as built"); the reactive
+rules and the deliberative override are gone. Inspect with `window.debugWiring('hare')`
 (the wiring, checked against the body) and `window.debugNodes()` (what fired on each creature's last action).
 
 ---
@@ -230,16 +231,17 @@ A number that cannot be traced to the body is written in the wiring with a comme
 |---|---|
 | the hare's wiring (`wiring.js`) | fore-limb bolt arcs and relays, graze-limb relays and taste, the torso threat template with looming, flee / freeze / alert, the stress gland, the head food template: nodes |
 | the wolf's wiring (`wiring.js`, step 6) | head: prey, larger-animal, rival, carrion, trail and air templates, the map holding and leading the prey (0.15 kg of integration), the bite, the hub; torso: the drives on the generator and the alarm gland (below, "The wolf as built") |
+| the ravager, lurker, shaleback and colony wirings (step 7) | below, "The cast as built" |
 | `nodes.js` output stage | stands in for generators built from nodes: a strike first, then the strongest drive reaching the locomotion generator wins; an output's `act` names the executor's behaviour (ai.js `_actToAction`), a bridge |
 | `detection.js _identify` (pass 7) | a wired pattern library, not yet housed in nodes |
-| traces (`detection.js`), evidence summation, odour binding | still how creatures on the reactive rules hold and combine; a wired creature holds with `holds` nodes on its map (step 4). Evidence summation and odour binding stay in perception until perception is nodes |
+| traces (`detection.js`), evidence summation, odour binding | perception's own holding and combining (where a percept is placed, the threat source a flight steers from, the hunt goal's persistence); a wiring holds with `holds` nodes on its map (step 4). They stay in perception until perception is nodes |
 | feature functions in `nodes.js` (size, identity, looming time) | percepts delivered as features; PLACEHOLDER until perception itself is nodes |
-| `evaluateReactiveRules` | placeholder: universal templates wired to generators, written as code. Retired creature by creature: the hare and the wolf no longer run it |
-| `canOverrideReactive`, `deliberativeEvaluation` | placeholder for timing by hops plus inhibition |
+| `evaluateReactiveRules`, `canOverrideReactive`, `deliberativeEvaluation` | gone (step 7): every creature runs its wiring |
+| ai.js `_outputToAction` / `_actToAction`, behaviors.js `executeAction` | the executor the output stage drives through `act`; PLACEHOLDER for generators built from nodes. When nothing fires, the generator's gait is the wander profile (or rest when fatigue is high) |
+| refuge flight (`flee_home`, `flee_water` acts) | the body knows where home ground and water are (the wander's home, the nearest water): PLACEHOLDER for a route store |
 | `getMovementIntensity` by behaviour label | placeholder: intensity should come from the generator |
 | `ai-utils.js stepRoundObstacles` | placeholder for a learned route store (sequence and pattern writers) |
-| `creature.hormones` {alarm, hunger, fatigue} | blood chemistry (step 3). Wired creatures release alarm from gland nodes; the reactive placeholder releases for the rest. Hunger and fatigue are released by body tissue, not neural glands |
-| `getDominantDrive` | placeholder: the reactive rules comparing blood levels against thresholds |
+| `creature.hormones` {alarm, hunger, fatigue} | blood chemistry (step 3). Alarm comes from gland nodes (the colony has none). Hunger and fatigue are released by body tissue, not neural glands |
 
 ---
 
@@ -382,6 +384,29 @@ The draft above, with what changed on the way:
   reach; an alarmed one backs away.
 - **The harness camera** rests by ending the turn directly, not through the rest key, so a wired camera's reflexes do not
   move it (tools/ecology.mjs).
+
+### The cast as built (step 7, Sep 2026)
+
+- **The ravager** runs the wolf's plan (`pursuitPredator`), built for its body: a 40 g hub, 0.20 kg of integration holding
+  a lost prey six turns. A wolf reads smaller against 90 kg: it is prey.
+- **The lurker** is distributed and ground-led. Each sensor limb is a local mind: it reads something its size or smaller,
+  not its kind, felt through that limb and in reach, and throws the strike itself when hungry, or strikes back at what is
+  in reach when struck. A tonic node in the torso (it fires with no input) holds the generator still: the listening
+  posture, the old "movement compromises sense" as tissue. Nothing drives it to approach. A heavy animal alive to it
+  sends it home (`flee_home`). Its larger-animal template sits in the torso beside the retreat, so its hub reaches the
+  retreat a hop late: a played lurker cannot hold one.
+- **The shaleback** is centralised like the wolf: the head's food template (creep to food near, graze through the front
+  limbs' contact chemistry), the larger-animal template (it rarely fires: little reads heavier than 200 kg), meat-eater
+  volatiles on the air (stop feeding; face the wind, or hold still with none), a shove at what is in reach when struck,
+  and a retreat to water (`flee_water`). A 20 g hub.
+- **The colony**: its central body reads ground vibration through all seven zones; a footfall felt (not its own kind's)
+  moves it away; hungry, it grazes or creeps to food near. No hub, no gland (it is not playable, and has no tissue to
+  spare). The old colony synchrony is gone and nothing stands in for it yet.
+- **The hare** names its acts; nothing else about its wiring changed. With that, the bridge is one path.
+- **The output stage** now runs feeding before posture and orienting (a body held still can eat; what should stop it
+  vetoes it), and a posture takes a played body only by shutting the hub's drive (the hare's freeze).
+- **Gone**: `evaluateReactiveRules`, the deliberative override and its drive comparison, the auto-attack on an adjacent
+  player, the placeholder alarm releases for unwired creatures.
 
 ## Implementation Sequence
 

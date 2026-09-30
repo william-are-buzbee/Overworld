@@ -176,6 +176,8 @@ Rule 4 no longer makes a predator hold off, orienting, from an animal it knows (
 
 *Status (Sep 2026, node sequence step 6):* the wolf no longer runs the reactive rules or the deliberative override: it runs its wiring (Neural-Architecture-Design, "The wolf as built"), as the hare does. Its rules 1–9 are tissue there, or gone (no territory return, no cast on losing the air, no refuge). The rules still run for the ravager, the lurker, the shaleback and the colonies until step 7.
 
+*Status (Sep 2026, node sequence step 7):* the reactive rules and the deliberative override are gone. Every creature runs its wiring (Neural-Architecture-Design, "The cast as built"). What this document describes of rules 1–9, tiers and override is the history the wirings replaced; integration capacity still sets how long perception's traces hold and the chase's detour range.
+
 *Status (Sep 2026, chase detours):* a chase step (Rule 6 / 6A approach, deliberative chase) whose straight line is blocked by terrain searches round it (`ai-utils.js stepRoundObstacles`: a breadth-first search over passable ground, bodies ignored, within the deliberative seek range) for bodies whose integration tissue holds a trace (`traceHoldTurns` ≥ 1: prowler, ravager, shaleback; not the lurker or the hare). **A marked placeholder** for route memory: the tissue would hold a learned map of its ground; this reads the true ground, seen or not. Replace when spatial/episodic memory exists (Memory Architecture below). Open-ground steps are unchanged. Harness, seeds 1–8 × 500 turns at hunger 0.9: chase steps that went nowhere 88 → 0 (two wolves pressed against water with a hare on the far bank).
 
 ### Critical Override
