@@ -248,7 +248,8 @@ episodicMemory: 0.18 kg, 900 tiles).
   feels, and, hurt, what was in contact as dangerous. The torso reads both limbs: a known danger adds to the threat
   template; familiar and never harmful (familiarity less twice the danger) holds the threat template down by up to its
   whole value. This is habituation, through memory: a shaleback felt and seen day after day stops freezing a hare that
-  was never hurt by one, and a wolf still reads as a threat (its size, its smell, looming), less a little.
+  was never hurt by one. A meat-eater's smell is an innate template and does not habituate: it shuts the
+  familiar-and-harmless node (without it, wolves stalking habituated hares took 30 in the hungry harness, from 13).
 - **The lurker.** Each sensor limb's library (50 g, 250 patterns) writes what struck it while in reach, as dangerous, and a
   known danger stays that limb's strike. It stays in the limbs: read in the torso it would reach the threat template a
   hop late, the template would wait for it, and the hub could then hold the lurker's retreat. Anatomy, both ways.
