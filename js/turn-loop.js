@@ -30,6 +30,8 @@ import { getBodyPTW, processBleed, applyHealing,
          _clearStressChemistry,
          turnsToFullSpeed, getEntityTotalMass, applyTurningCost, getMovementIntensity } from './physiology.js';
 import { runCreatureAI, _updateInWater } from './ai.js';
+import { refillGlands } from './nodes.js';
+import { getWiring } from './wiring.js';
 import { isWaterTile, isWaterLocked, wouldExceedTerritory, WATER_TILES,
          rebuildSpatialGrid, canMoveTo } from './ai-utils.js';
 
@@ -155,6 +157,7 @@ function catchUpCreature(creature) {
   // 4. Stress chemistry cleared for the time away (same rate as clearance
   //    per input; a dormant creature ran no clearance while out of range).
   _clearStressChemistry(creature, turns);
+  refillGlands(creature, getWiring(creature), turns);
 
   // 5. Drift position — dormant creatures weren't actually frozen, they were wandering
   driftPosition(creature, turns);
@@ -568,6 +571,7 @@ function endPlayerTurn(action){
 
       // ── Time-scaled stress clearance (runs once per player input) ──
       _clearStressChemistry(m, worldTicksElapsed);
+      refillGlands(m, getWiring(m), worldTicksElapsed);
     }
   }
   for (const layer of Object.keys(monsters)){

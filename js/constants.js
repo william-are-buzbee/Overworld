@@ -128,6 +128,14 @@ export const THREAT_CONF_SIZE_AMBIGUOUS    = 0.1;   // confidence bonus for ambi
 export const STRESS_RELEASE_AMOUNT     = 0.3;   // alarm hormone released per gland firing (wiring.js)
 export const STRESS_CLEARANCE_BASE     = 0.04;  // alarm hormone cleared per turn before circulatory efficiency
 export const STRESS_MAX                = 1.5;   // ceiling on alarm hormone in the blood
+// A gland holds what it has made (Endocrine-Design, gland stores): a firing
+// releases up to what is in store, and the store refills by synthesis. Both
+// are properties of endocrine tissue, per kg of gland (the hare's alarm gland
+// is 1 g: a store of 0.9, three full releases, refilled over ~100 turns). A
+// scare gets the full acute response; sustained firing runs the gland dry and
+// clearance wins, so alarm cannot ratchet on its own flight.
+export const GLAND_STORE_PER_KG      = 900;   // hormone held per kg of gland tissue
+export const GLAND_SYNTHESIS_PER_KG  = 9;     // hormone made per kg of gland tissue per world tick
 
 // ==================== DRIVE SYSTEM ====================
 export const MASS_HUNGER_COEFF   = 0.000015;  // hunger per turn per kg of total mass

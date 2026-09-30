@@ -181,13 +181,15 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [x] 1. Neural-Architecture-Design: the node, circuit recipes, memory as writers and stores, the hub and the player
 - [x] 2. Node runner; the hare ported onto it (`nodes.js`, `wiring.js`; 22 of 8,956 actions differ, all the per-source bolt veto)
 - [x] 3. Glands and hunger: `creature.hormones` {alarm, hunger, fatigue} replaces `creature.drives` and `stressLevel`; gland nodes release, receptors read
-- [ ] 4. Maps: bearing and distance bands, holding, prediction
+- [x] 3b. Gland stores: a gland releases what it holds and refills by synthesis (the hare no longer ratchets alarm on its own flight)
+- [ ] 4. Maps: bearing and distance bands, holding, prediction; threat templates per distance band
 - [ ] 5. The hub: reach, inhibition, the race, plastic hub weights, its mass as the limit per action; the player drives it (hotbar from the wiring)
 - [ ] 6. The wolf wired on the system; its reactive rules retired
 - [ ] 7. The whole cast rewired; the reactive rules gone
 - [ ] Then memory: writers and stores saved with the body, one animal, then the cast
 
 ## Near-Term Plans (no particular order)
+- [ ] Habituation (Sensory-Design, gain control and adaptation): a source that stays in the senses without closing stops registering as new
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
 - [ ] Second-pass over bleed/metabolism/healing
 - [ ] Fourth-pass over cognition/ganglia (actual pattern libraries/memory)

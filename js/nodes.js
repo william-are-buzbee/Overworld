@@ -42,7 +42,8 @@
 // into the blood (physiology.js releaseHormone) as they fire.
 
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
-         REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE } from './constants.js';
+         REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE,
+         GLAND_STORE_PER_KG, GLAND_SYNTHESIS_PER_KG } from './constants.js';
 import { getSpeciesKey, meatEaterUnderfoot } from './detection.js';
 import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom } from './ai-utils.js';
 import { getBodyPTW, releaseHormone } from './physiology.js';
@@ -356,11 +357,17 @@ function runNodes(creature, wiring) {
   };
 
   // Glands: a firing gland node releases its hormone into the blood, the
-  // amount per firing its `release` (tissue that is gone releases nothing)
+  // amount per firing its `release`, but no more than the gland holds
+  // (tissue that is gone releases nothing)
   for (const out of wiring.outputs || []) {
     if (out.effect !== 'gland' || !alive(out.zone)) continue;
     const pr = firing(out.node);
-    if (pr.v > 0 && !outVetoed(out)) releaseHormone(creature, out.hormone, (out.release || 0) * pr.v);
+    if (!(pr.v > 0) || outVetoed(out)) continue;
+    const stores = creature.glandStores || (creature.glandStores = {});
+    const held = stores[out.node] != null ? stores[out.node] : _glandMax(c.byId.get(out.node));
+    const amount = Math.min((out.release || 0) * pr.v, held);
+    stores[out.node] = held - amount;
+    releaseHormone(creature, out.hormone, amount);
   }
 
   // Locomotion: the strongest drive reaching the generator (earliest listed on a tie)
@@ -390,4 +397,30 @@ function runNodes(creature, wiring) {
   return { intensity: 0, direction: null, type: 'hold' };
 }
 
-export { runNodes, compileWiring, validateWiring, FEATURES, POOLED_FEATURES };
+/** What a gland node can hold: its tissue × GLAND_STORE_PER_KG. */
+function _glandMax(node) {
+  return (node && node.mass ? node.mass : 0) * GLAND_STORE_PER_KG;
+}
+
+/**
+ * Gland synthesis: every living gland in the creature's wiring makes hormone
+ * into its store, its tissue × GLAND_SYNTHESIS_PER_KG per world tick, up to
+ * what it can hold. Once per player input (turn-loop.js), and for the time
+ * away when a dormant creature wakes. A store never written is full.
+ */
+function refillGlands(creature, wiring, ticks) {
+  if (!wiring || !creature.glandStores) return;
+  const bodyMap = getBodyMap(creature);
+  const c = compileWiring(wiring, getPathways(creature));
+  for (const out of wiring.outputs || []) {
+    if (out.effect !== 'gland') continue;
+    const node = c.byId.get(out.node);
+    if (!node || creature.glandStores[out.node] == null) continue;
+    const zone = bodyMap && bodyMap.find(z => z.key === node.zone);
+    if (zone && zone.destroyed) continue;
+    creature.glandStores[out.node] = Math.min(_glandMax(node),
+      creature.glandStores[out.node] + node.mass * GLAND_SYNTHESIS_PER_KG * (ticks || 1));
+  }
+}
+
+export { runNodes, refillGlands, compileWiring, validateWiring, FEATURES, POOLED_FEATURES };
