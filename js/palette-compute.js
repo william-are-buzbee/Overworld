@@ -12,9 +12,12 @@
 //   Layer 1  Material color under white light   (MAT table below)
 //   Layer 2  Star spectrum modification         (dim yellow-orange star)
 //   Layer 3  Chromatic adaptation               (creatures' visual systems)
-// Layers 2+3 are folded into the LOCKED toScreen() multipliers. Do not change
-// the material values or the toScreen multipliers without referencing
-// three-layer-color-system.md.
+// Layers 2+3 are folded into the toScreen() multipliers.
+//
+// SUPERSEDED (30 Sep 2026) by js/spectra.js and Notes/Spectral-Color-Design.md:
+// colour is now reflectance × light × one eye's receptors, not RGB
+// multipliers. Kept only as the planet viewer's current palette until the
+// renderer draws from spectra.js; do not extend it.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Material color tables (Layer 1, under white light)

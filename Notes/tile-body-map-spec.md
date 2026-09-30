@@ -2,7 +2,7 @@
 
 Every tile in the game is a physical place with measurable properties. The terrain type label (MUD, GRASS, FOREST) is a rendering convenience — the same way calling a creature a "predator" is a convenience. The physical state is what's real. This document defines what a tile IS, how it looks, and how gameplay reads it.
 
-Include alongside Design-Principles.md, three-layer-color-system.md, and drainage-chunk-generator-design.md for any terrain, rendering, or world integration work.
+Include alongside Design-Principles.md, Spectral-Color-Design.md, and drainage-chunk-generator-design.md for any terrain, rendering, or world integration work.
 
 ---
 
@@ -136,9 +136,9 @@ The function is documented in drainage-chunk-generator-design.md and implemented
 
 ## Per-Tile Palette Computation
 
-The palette is NOT looked up from a biome table. It is computed per tile from the physical state through the three-layer color pipeline.
+The palette is NOT looked up from a biome table. It is computed per tile from the physical state: which materials are visible at the surface (below), the light on the tile, and the player's eye (Spectral-Color-Design.md, `js/spectra.js`). The blends below are areal mixes of materials (`mixSurfaces`), and a material's chemistry is `mineralMaterial(kind, minerals)`; their colours are not authored here.
 
-### Layer 1: Material color under white light
+### What is visible at the surface
 
 Each tile's visible material is a blend determined by its physical state:
 
@@ -184,26 +184,7 @@ if terrainType == WATER:
     )
 ```
 
-Material base colors from three-layer-color-system.md:
-
-| Material | Base (white light) | Chemistry-sensitive? |
-|---|---|---|
-| Photosynthetic tissue | #8B1A1A (deep crimson) | No |
-| Dead organic (fresh) | #6B4226 (warm brown) | No |
-| Dead organic (aged/peat) | #2A1810 (near-black) | No |
-| Mineral substrate | varies by chemistry | Yes |
-| Water surface | #3A5C7A (cool blue-gray) | No |
-| Chemotrophic tissue | varies by chemistry | Yes |
-
-Chemistry-sensitive mineral substrate colors:
-
-| Dominant chemistry | Substrate color |
-|---|---|
-| Iron-rich | #7A4B2E (rust brown) |
-| Copper-rich | #4A6B42 (olive green) |
-| Manganese-rich | #5A4860 (muted purple-gray) |
-| Depleted | #8A8070 (pale warm gray) |
-| Mixed | weighted blend of above |
+Material compositions and their reference colours are in Spectral-Color-Design.md ("The planet's materials").
 
 **Foreground elements (fg color):**
 
@@ -238,34 +219,9 @@ The mid color renders intermediate detail. Blend of bg and fg, shifted toward th
 mid = blend(bg × 0.6, fg × 0.4)
 ```
 
-### Layer 2: Star modification
+### Light and eye
 
-Apply the locked star spectrum transform to all palette colors:
-
-```
-R_star = R_white × 0.95
-G_star = G_white × 0.88
-B_star = B_white × 0.72
-```
-
-The yellow-orange star suppresses blue, slightly reduces green, passes red nearly unchanged. This makes everything warmer but preserves relative color differences.
-
-### Layer 3: Chromatic adaptation
-
-Apply the visual system's compensation for the dim warm illuminant:
-
-```
-R_screen = R_star × 0.832
-G_screen = G_star × 0.916
-B_screen = B_star × 1.012
-```
-
-Net transform (Layer 1 → Layer 3):
-```
-R_final = R_white × 0.790
-G_final = G_white × 0.806
-B_final = B_white × 0.728
-```
+The light on the tile (open sky, canopy, shadow, water depth, time of day) and the eye looking (the player's) turn those reflectances into screen colours: `screenColor(eye, R, light, adaptingLight)`. The old fixed star and adaptation multipliers are gone (Spectral-Color-Design explains why).
 
 ### Continuous variation within terrain types
 
@@ -539,7 +495,7 @@ All of the following are palette/color variation, NOT sprite variation:
 - Organic content shift (high organic → darker brown toward black)
 - Flora coverage tinting (more groundCover → more crimson showing through)
 - Canopy shade (dense canopy darkens everything underneath)
-- Star modification and chromatic adaptation (the locked three-layer pipeline)
+- The light on the tile and the player's eye (Spectral-Color-Design)
 
 A player walking through a mineral gradient notices the mud shifting from rust to olive. That's palette changing tile by tile. The sprite stays MUD_SMOOTH the entire time. The variation is real, physical, and essentially free — arithmetic on physical properties the tile already has.
 
@@ -564,7 +520,7 @@ This is a bounded, completable task. Not an open-ended procedural art problem. T
 - TERRAIN_INFO lookup by terrain type — movement cost base, passability flags
 - Sprite rendering — still reads terrain type and cover type to pick sprites
 - Sprite variant system — already exists, just needs more variants and physical selection logic
-- The three-layer color pipeline — already exists, just needs per-tile input instead of per-biome input
+- The colour pipeline (`js/spectra.js`) — exists, needs per-tile materials and light as input
 - Save system — stores player modifications as diffs against generated base
 
 ### What changes
@@ -576,7 +532,7 @@ This is a bounded, completable task. Not an open-ended procedural art problem. T
 
 ### What's new
 - Per-tile physical state storage (the typed arrays in the chunk)
-- Palette computation function (material → star → adaptation per tile)
+- Palette computation function (visible materials × light × the player's eye per tile)
 - Sprite variant selection function (physical state → variant index)
 - Chunk generator (planetary data → drainage → physical state → terrain type)
 - Chunk loading/unloading system (generate on approach, cache visited, save modifications)
@@ -588,7 +544,7 @@ This is a bounded, completable task. Not an open-ended procedural art problem. T
 When implementing:
 
 - **chunk-generator.js** (new) — generates physical state from planetary data. Reads planetary-geology grid. Writes tile physical state arrays. References drainage-chunk-generator-design.md.
-- **palette-compute.js** (new or extracted from rendering.js) — computes per-tile palette from physical state. References three-layer-color-system.md material table.
+- **spectra.js** (exists) — materials, light and eyes to screen colour. The per-tile palette composes its materials from the physical state; `palette-compute.js` retires.
 - **sprites.js** (modified) — add new sprite variants. Add variant selection function.
 - **rendering.js** (modified) — pass per-tile palette instead of biome palette. Pass variant index instead of random selection.
 - **terrain.js** (modified) — terrain derivation function. Same logic as planet viewer.

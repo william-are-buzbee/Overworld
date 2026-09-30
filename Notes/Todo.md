@@ -64,7 +64,7 @@ Prompt queue and task tracker. Check things off as they're done.
 - [x] Palette revert to pre-overhaul working values
 
 ## Completed — Planet Viewer & Generation Pipeline
-- [x] Three-layer color pipeline designed and locked (material × star × adaptation, documented in three-layer-color-system.md)
+- [x] Three-layer color pipeline designed and locked (material × star × adaptation; superseded 30 Sep 2026 by the spectral pipeline, Spectral-Color-Design.md)
 - [x] Pipeline palette applied to game (11 BIOME entries updated)
 - [x] Chemotrophic sprite redesign (colony mound, mineral crust)
 - [x] Water tile texture redesign (amber wave crests)
@@ -145,7 +145,7 @@ Prompt queue and task tracker. Check things off as they're done.
 ## Up Next — Game Integration (after geography pass)
 - [ ] Sprite variants and selector completion (Piece 2 from tile body map spec — ~30 sprite patterns, variant selection from physical state)
 - [ ] Rendering integration (Piece 3 — wire per-tile palette and variant into game renderer, replace biome-lookup palettes)
-- [ ] Sync palette-compute.js with viewer's computeTilePalette (standalone module missing livingCoverColor system)
+- [ ] Retire palette-compute.js: tile palettes from `spectra.js` (visible materials × light × the player's eye); the viewer takes a copy of `spectra.js`
 - [ ] Chunk loading system (Phase C — generate on demand, cache in IndexedDB, predictive loading)
 - [ ] Full game integration (Phase D — replace BIOME_TARGET with planetary chunk generator, creature spawning, save migration)
 - [ ] Scale mapping fix for game (tile = 2m, chunk = 1km, proper context sampling across ~7 regional cells — deferred from viewer, needed for game)
@@ -193,6 +193,16 @@ The ecology is left unbalanced while the systems are built; the harness checks f
   - [x] M3. The cast remembers (hare fore limbs: danger and habituation; lurker sensor limbs; shaleback head)
 - [ ] Colony (chemotroph) and the purple biome are placeholders: remove in a later pass, keep the docs (the person, Sep 2026); spend no work on them
 
+## Up Next — Spectral colour (Sep 2026)
+Colour as spectra: reflectance × light × one eye's receptors; the screen is the only convention. See Spectral-Color-Design. One pull request per pass.
+- [x] 1. Canon: `js/spectra.js` (chromophores, Kubelka–Munk materials, star and atmosphere, canopy, water, opsin template, receptor-noise contrast, the display convention calibrated against human colorimetry), `tools/spectra.mjs`, `Utils/spectra.html`; replaces the three-layer doc; texture profiles moved to Material-Textures
+- [ ] The person decides: receptor sets per species (proposed in `PROPOSED_EYES`), star temperature, night-sky light, whether the screen draws the player's eye or reference colours
+- [ ] 2. Eyes into the body maps (receptor classes, lens, aperture, focal length, receptor width, integration time)
+- [ ] 3. Integument as material per zone; detection contrast from `contrast()` (retire hue strings, `TERRAIN_VISUAL`, `HUE_MISMATCH_PENALTY`, the bleed bonus); harness before and after
+- [ ] 4. Light from the sky: star elevation from the day cycle, canopy and shadow per tile, adaptation held in the eye with a time course
+- [ ] 5. Renderer draws tiles and creatures through `screenColor` (with the tile body map); `palette-compute.js` retires
+- [ ] 6. Planet viewer takes a copy of `spectra.js`
+
 ## Near-Term Plans (no particular order)
 - [ ] Habituation (Sensory-Design, gain control and adaptation): a source that stays in the senses without closing stops registering as new. (The hare's familiar-and-harmless memory, memory step 3, does some of this through memory; sensory adaptation itself is still open)
 - [ ] 32×32 directional sprites (8 facings per creature, mass-proportional footprints)
@@ -220,7 +230,7 @@ The ecology is left unbalanced while the systems are built; the harness checks f
 - [ ] Regional mineral zones on surface (trunk color variation by local soil chemistry)
 - [ ] Visual detection pass 2 (per-zone integument, countershading, disruptive coloration)
 - [ ] Visual detection pass 3 (atmospheric modifiers — moisture, rain, fog)
-- [ ] Visual detection pass 4 (spectral sensitivity, polarization for Clade B, bioluminescence)
+- [ ] Visual detection pass 4 (polarization for Clade B, bioluminescence; spectral sensitivity is the spectral colour work below)
 
 ## Very Long-Term Plans
 - [ ] Lore overhaul (canon events, inventions, demigod interventions, factions, wars)
@@ -240,14 +250,14 @@ For new chats, include:
 
 ### Key Documents by Topic
 
-**Planet generation & viewer:** planet-viewer.html, drainage-chunk-generator-design.md, three-layer-color-system.md, session-handoff-precipitation-drainage.md
-**Tile rendering:** tile-body-map-spec.md, palette-compute.js, sprite-select.js, sprites.js
+**Planet generation & viewer:** planet-viewer.html, drainage-chunk-generator-design.md, Spectral-Color-Design.md, session-handoff-precipitation-drainage.md
+**Tile rendering:** tile-body-map-spec.md, Spectral-Color-Design.md, Material-Textures.md, spectra.js, sprite-select.js, sprites.js
 **Creature systems:** Body-Sim-Design, Surface-Creatures, Cognition-Design, Sensory-Design, Muscle-Fiber-Design, Motor-System-Design, Endocrine-Design
 **Ecology:** Ecology-Foundations, Underground-Chemotrophic-Ecology
 
 ### Known Gotchas
 
-- **One terrain function, one palette function.** `deriveTerrainAndCover` and `computeTilePalette` are the ONLY functions that assign terrain types or compute colors. Never write a second version.
+- **One terrain function, one palette function.** `deriveTerrainAndCover` and `computeTilePalette` are the ONLY functions that assign terrain types or compose tile palettes, and colours come only from `spectra.js`. Never write a second version.
 
 - **Inheritance, not recomputation.** Each zoom level reads from the level above. Regional inherits from planetary. Tile inherits from regional. Local drainage only ADDS wetness. Never recompute saturation, groundCover, or waterTableDepth from scratch at a lower level.
 
@@ -255,9 +265,9 @@ For new chats, include:
 
 - **MUD is the dominant terrain.** ~80% of lowland tiles. MUD palette blends livingCoverColor by groundCover × 0.7.
 
-- **Three-layer color pipeline is locked.** Net: R×0.790, G×0.806, B×0.728. Adjust Layer 1 material values, never the transforms.
+- **One colour pipeline: `js/spectra.js`.** A colour is a reflectance spectrum (what the material is made of) × the light on it × one eye's receptors; only the screen step is a convention. Author materials as compositions, never screen colours. Overworld is the canon; the planet viewer is to carry a verbatim copy.
 
-- **palette-compute.js is behind the viewer.** Missing livingCoverColor system. Needs sync before game integration.
+- **palette-compute.js is superseded** by `spectra.js` and is still the viewer's three-layer palette; it retires with rendering integration.
 
 - **Shallow water threshold (0.05m) applies to LAND only.** Ocean tiles (negative elevation) are classified by depth: >25cm = deep_water, ≤25cm = water with bottom visibility. The blend zone (2-10cm) only activates for ground terrain types.
 
