@@ -93,8 +93,9 @@ function beginGame(){
   state.player.integrationCapacity = 0;
   state.player.tier = 1;
 
-  // ── Stress chemistry (Ganglion system) ──
-  state.player.stressLevel = 0;
+  // ── Blood chemistry (Endocrine-Design): the player's alarm; its hunger is
+  //    `fed` (turn-loop.js) until the player's body joins the gut model ──
+  state.player.hormones = { alarm: 0, hunger: 0, fatigue: 0 };
 
   // World seed: ?seed=<n> in the URL replays a world; otherwise one fresh
   // draw of entropy. This is the only Math.random in the game — every other

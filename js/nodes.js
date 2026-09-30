@@ -13,7 +13,9 @@
 //   inputs [{from, weight}]  'sense:<zone>.<channel path>' a transducer's SNR on
 //                            the source ('fore_l.vibration.ground', 'head.visual');
 //                            'feature:<name>[@arg]' a feature the senses deliver
-//                            (FEATURES below); 'node:<id>' another node
+//                            (FEATURES below); 'node:<id>' another node;
+//                            'blood:<hormone>' the level of a hormone, read by the
+//                            node's own receptors for it
 //   combine                  'sum' (default) or 'max' of the weighted inputs
 //   gate [ids]               nodes whose outputs multiply this node's output
 //                            (a modulating synapse: nothing passes if one is silent)
@@ -23,7 +25,7 @@
 //                            'ramp':  clamp(gain × (input − threshold), 0, ceiling)
 //                            'pass':  input if input ≥ threshold, else 0
 //   threshold, gain, ceiling, strict
-//   receptors {stress: s}    blood chemistry shifts the threshold: × (1 − level × s)
+//   receptors {alarm: s}     blood chemistry shifts the threshold: × (1 − level × s)
 //
 // A pooled node reading a mapped one takes its strongest place (lateral
 // inhibition across the map picks one) and carries that source with it.
@@ -36,13 +38,14 @@
 // them until perception itself is wired as nodes.
 //
 // Nothing in here moves anything: runNodes returns what the output stage
-// drives, in the shape ai.js _ganglionOutputToAction reads.
+// drives, in the shape ai.js _ganglionOutputToAction reads. Its glands release
+// into the blood (physiology.js releaseHormone) as they fire.
 
 import { getBodyMap, getPathways, SPECIES_DISPLAY_CONFIDENCE,
          REFERENCE_SPEED, BASE_TICKS_PER_ACTION, GROUND_EMISSION_BASE } from './constants.js';
 import { getSpeciesKey, meatEaterUnderfoot } from './detection.js';
 import { getCreatureMass, findNearestFoodTile, dist, directionToward, directionAwayFrom } from './ai-utils.js';
-import { getBodyPTW } from './physiology.js';
+import { getBodyPTW, releaseHormone } from './physiology.js';
 
 // ── Features: what the senses deliver to a node ──
 // Mapped features take (creature, percept); pooled ones (creature, arg) and may
@@ -83,9 +86,9 @@ const POOLED_FEATURES = {
     if (!(meat > 0)) return 0;
     return meat / (getCreatureMass(c) * GROUND_EMISSION_BASE);
   },
-  // PLACEHOLDER for the hunger hormone (Endocrine-Design; step 3 of the node
-  // sequence): the drive variable stands in for its level in the blood.
-  hungerDrive: (c) => (c.drives ? c.drives.hunger : 0),
+  // Pain: a blow landed on the body this action (felt through every zone's
+  // nerve endings; PLACEHOLDER for per-zone nociceptors)
+  pain: (c) => (c.tookDamageThisTurn ? 1 : 0),
   // Edible ground: PLACEHOLDER for a visual food template on the eyes (the old
   // food region read the nearest food tile, not what the eyes resolve).
   // foodNear: within 6 tiles and not underfoot; foodUnderfoot: on it.
@@ -159,6 +162,8 @@ function compileWiring(wiring, pathways) {
       } else if (r.kind === 'feature') {
         if (r.arg) t = Math.max(t, hops(r.arg, n.zone));
         if (!FEATURES[r.name] && !POOLED_FEATURES[r.name]) issues.push(`${n.id}: unknown feature ${r.name}`);
+      } else if (r.kind !== 'blood') {
+        issues.push(`${n.id}: unknown input ${inp.from}`);
       }
     }
     for (const g of n.gate || []) {
@@ -219,10 +224,13 @@ function validateWiring(entity, wiring) {
 
 function _threshold(n, creature) {
   let t = n.threshold || 0;
-  const s = n.receptors && n.receptors.stress;
-  if (s) t *= 1 - Math.min(creature.stressLevel || 0, 1) * s;
+  const h = creature.hormones;
+  for (const hormone in (n.receptors || {})) {
+    t *= 1 - Math.min(h ? (h[hormone] || 0) : 0, 1) * n.receptors[hormone];
+  }
   return t;
 }
+const _blood = (creature, hormone) => (creature.hormones ? (creature.hormones[hormone] || 0) : 0);
 
 function _fire(n, x, t) {
   switch (n.fn) {
@@ -239,8 +247,8 @@ function _fire(n, x, t) {
 /**
  * Run a creature's wiring on this action's percepts. Returns the output
  * stage's result ({ intensity, direction, source, type, isBolt, atFood }),
- * sets creature._ganglionTriggeredStress if a stress gland fired, and leaves
- * creature._nodeTrace (what fired, for the inspector; transient).
+ * releases what its glands release, and leaves creature._nodeTrace (what
+ * fired, for the inspector; transient).
  */
 function runNodes(creature, wiring) {
   const bodyMap = getBodyMap(creature);
@@ -284,6 +292,7 @@ function runNodes(creature, wiring) {
           if (r.kind === 'sense') v = alive(r.name.split('.')[0]) && d.zoneSNR ? (d.zoneSNR[r.name] || 0) : 0;
           else if (r.kind === 'feature') v = FEATURES[r.name] ? FEATURES[r.name](creature, d, r.arg) : 0;
           else if (r.kind === 'node') v = at(r.name, i);
+          else if (r.kind === 'blood') v = _blood(creature, r.name);
           const w = inp.weight != null ? inp.weight : 1;
           const wv = v === 0 ? 0 : w * v;          // 0 × Infinity is no signal
           if (n.combine === 'max') { if (wv > x) x = wv; } else x += wv;
@@ -308,6 +317,8 @@ function runNodes(creature, wiring) {
           if (got && typeof got === 'object') { v = got.value; p = got.place || null; } else v = got || 0;
         } else if (r.kind === 'node') {
           const pr = pooledRead(r.name); v = pr.v; s = pr.src; p = pr.place;
+        } else if (r.kind === 'blood') {
+          v = _blood(creature, r.name);
         }
         const w = inp.weight != null ? inp.weight : 1;
         const wv = v === 0 ? 0 : w * v;
@@ -344,10 +355,12 @@ function runNodes(creature, wiring) {
                                   : directionToward(creature.x, creature.y, p.x, p.y);
   };
 
+  // Glands: a firing gland node releases its hormone into the blood, the
+  // amount per firing its `release` (tissue that is gone releases nothing)
   for (const out of wiring.outputs || []) {
-    if (out.effect !== 'gland') continue;
-    if (!alive(out.zone)) continue;
-    if (firing(out.node).v > 0 && !outVetoed(out) && out.hormone === 'stress') creature._ganglionTriggeredStress = true;
+    if (out.effect !== 'gland' || !alive(out.zone)) continue;
+    const pr = firing(out.node);
+    if (pr.v > 0 && !outVetoed(out)) releaseHormone(creature, out.hormone, (out.release || 0) * pr.v);
   }
 
   // Locomotion: the strongest drive reaching the generator (earliest listed on a tie)

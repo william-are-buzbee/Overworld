@@ -389,37 +389,30 @@ function applyHealing(creature) {
 // ==================== STRESS CHEMISTRY (Hare Vertical Slice) ====================
 
 /**
- * Update stress chemical level — RELEASE portion only.
- * Called per creature action (inside runCreatureAI).
- * Release: triggered by ganglion threat detection (flagged during processing).
+ * Release a hormone into the blood (Endocrine-Design): a gland node firing
+ * (nodes.js), or a reactive creature's placeholder release (detection.js).
+ * Alarm is capped at STRESS_MAX; hunger and fatigue at 1.
  */
-function _releaseStressChemistry(creature) {
-  // Released only when the threat ganglion fires (flee) or the bolt reflex
-  // fires. Freeze and alert release nothing (Endocrine-Design). A per-action
-  // "mild" release on alert used to ratchet stress to STRESS_MAX under any
-  // steady sub-threshold stimulus, since clearance runs once per input.
-  if (creature._ganglionTriggeredStress === true) {
-    creature.stressLevel = Math.min(
-      STRESS_MAX,
-      (creature.stressLevel || 0) + STRESS_RELEASE_AMOUNT
-    );
-  }
-  // Clear the trigger flag
-  creature._ganglionTriggeredStress = false;
+function releaseHormone(creature, hormone, amount) {
+  const h = creature.hormones;
+  if (!h || !(amount > 0)) return;
+  const cap = hormone === 'alarm' ? STRESS_MAX : 1.0;
+  h[hormone] = Math.min(cap, (h[hormone] || 0) + amount);
 }
 
 /**
- * Clear stress chemicals — time-scaled, called once per player input.
- * Clearance is gated by circulatory efficiency and scales with world-time elapsed.
+ * Clear alarm chemistry: the circulation carries it to be broken down, once
+ * per player input, scaled by world-time elapsed and by how well the
+ * circulation moves blood (open circulation clears slower: the hare stays
+ * jumpy longer than the wolf).
  * @param {object} creature
  * @param {number} ticksElapsed — world-time that passed this player input.
  */
 function _clearStressChemistry(creature, ticksElapsed) {
+  const h = creature.hormones;
+  if (!h) return;
   const circEff = _getCirculatoryEfficiency(creature);
-  creature.stressLevel = Math.max(
-    0,
-    (creature.stressLevel || 0) - STRESS_CLEARANCE_BASE * circEff * (ticksElapsed || 1.0)
-  );
+  h.alarm = Math.max(0, (h.alarm || 0) - STRESS_CLEARANCE_BASE * circEff * (ticksElapsed || 1.0));
 }
 
 
@@ -590,5 +583,5 @@ function applyZoneDamage(entity, hitZone, dmg, opts = {}) {
 export { getBodyPTW, applyZoneDamage, getMovementIntensity, _getCirculatoryEfficiency, _getCirculatoryRegenEfficiency,
          _depleteLocomotionSubstrate, _regenerateSubstrate, spendBurst,
          processBleed, getHealingRate, applyHealing,
-         _releaseStressChemistry, _clearStressChemistry,
+         releaseHormone, _clearStressChemistry,
          turnsToFullSpeed, getEntityTotalMass, applyTurningCost };

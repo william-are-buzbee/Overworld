@@ -13,7 +13,7 @@
 // Usage:
 //   PLAYWRIGHT_MODULE=/opt/node22/lib/node_modules/playwright node tools/ecology.mjs
 //     [--seeds=1-8 | --seeds=3,7,11] [--turns=500] [--hunger=0.9] [--json=out.json]
-//   --hunger sets every predator's hunger drive at the start (predation is rare in
+//   --hunger sets every predator's hunger hormone at the start (predation is rare in
 //   short runs otherwise: hunger grows slowly with body mass).
 //
 // Besides behaviour and deaths it reports the hunt funnel (js/hunt-funnel.js):
@@ -113,7 +113,7 @@ async function runSeed(seed) {
       if (m.hp <= 0) continue;
       t.start[m.key] = (t.start[m.key] || 0) + 1;
       t.seen.add(m); t.everyone.add(m);
-      if (hunger != null && m.diet === 'predator' && m.drives) m.drives.hunger = hunger;
+      if (hunger != null && m.diet === 'predator' && m.hormones) m.hormones.hunger = hunger;
     }
     window.__ecoTick = () => {
       // The camera is kept fed: a resting player starves at turn ~612 and

@@ -41,7 +41,7 @@ function _notViableWhy(predator, info) {
   if (!info.sizeEstimate) return 'no size estimate';
   const ratio = info.sizeEstimate.estimated / getCreatureMass(predator);
   if (ratio > 1.5) return 'reads too big';
-  const minRatio = predator.drives.hunger > 0.85 ? 0.02 : 0.05;
+  const minRatio = predator.hormones.hunger > 0.85 ? 0.02 : 0.05;
   if (ratio < minRatio) return 'reads too small';
   return 'recognised as kin';
 }
@@ -50,7 +50,7 @@ function _open(predator, prey, info) {
   return {
     prey: _who(prey), preyRef: prey, turn0: state.turnCount, lastTurn: state.turnCount,
     stage: 1, perceived: 0, viable: 0, viableDelib: 0, viableReactive: 0, pursuit: 0,
-    hungerAtStart: +(predator.drives ? predator.drives.hunger : 0).toFixed(2),
+    hungerAtStart: +(predator.hormones ? predator.hormones.hunger : 0).toFixed(2),
     distAtStart: _cheb(predator.x, predator.y, prey.x, prey.y), minDist: Infinity,
     sizeCats: {}, notViable: {}, instead: {}, afterPursuit: {},
     pursuingLast: false, pursuedEver: false,
@@ -76,7 +76,7 @@ function _delibWhy(predator, prey, info) {
 
 /** What sent the predator elsewhere this action. */
 function _insteadLabel(predator, action, prey, info) {
-  const d = predator.drives || {};
+  const d = predator.hormones || {};
   const tr = predator._lastTrace || {};
   if (action && action.target && action.target !== prey && PURSUIT.has(action.behavior)) return 'pursuing another';
   if (!(d.hunger > REACTIVE_HUNGER_THRESHOLD)) return 'not hungry';
@@ -130,7 +130,7 @@ function noteHuntAction(predator, action, x0, y0) {
     actions: 0, hungry: 0, veryHungry: 0, trackActions: 0, trackBouts: 0,
     trackThen: {}, trackToViable: 0, inTrack: false,
   });
-  const d = predator.drives || {};
+  const d = predator.hormones || {};
   stats.actions++;
   if (d.hunger > REACTIVE_HUNGER_THRESHOLD) stats.hungry++;
   if (d.hunger > HUNGER_THRESHOLD) stats.veryHungry++;

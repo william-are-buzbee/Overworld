@@ -11,7 +11,7 @@ import { getBodyMap, getAvailableAttacks, selectHitZone,
          BITE_MASS_FRACTION, GRAZE_HUNGER_REDUCTION,
          REST_RECOVERY_NORMAL, REST_RECOVERY_WEAKENED, REST_RECOVERY_CRITICAL,
          REST_EATING_BONUS,
-         SAFETY_DECAY_RATE, facingSteps, MIN_SEEK, SEEK_SCALE } from './constants.js';
+         facingSteps, MIN_SEEK, SEEK_SCALE } from './constants.js';
 import { rand, randi } from './rng.js';
 import { DEFAULT_WANDER_PROFILE } from './monsters.js';
 import { chebyshev } from './world-state.js';
@@ -270,8 +270,8 @@ function executeStandardFlee(creature) {
   // Where the threat is perceived, or held to have been (pass 8)
   const tp = threat ? perceivedPosition(creature, threat) : null;
   if (!tp) {
-    // Lost track of threat, accelerate safety decay and wander
-    creature.drives.safety = Math.max(0, creature.drives.safety - SAFETY_DECAY_RATE * 3);
+    // Lost track of the threat: wander. (Alarm chemistry clears through the
+    // circulation, not faster for losing sight of the threat.)
     executeWander(creature);
     return true; // wander counts as "doing something"
   }
@@ -393,9 +393,8 @@ function executeFleeToHome(creature) {
 
   const distToHome = dist(creature.x, creature.y, home.x, home.y);
 
-  // Already home — stop fleeing, drop safety faster
+  // Already home — stop fleeing
   if (distToHome <= 2) {
-    creature.drives.safety = Math.max(0, creature.drives.safety - SAFETY_DECAY_RATE * 5);
     // Don't move — hold position at home
     return false;
   }
@@ -438,7 +437,7 @@ function executeFlee(creature) {
 /** Check if chase leash allows continued pursuit. */
 function withinChaseLeash(creature, preyEntry) {
   const baseLeash = CHASE_LEASH_BASE;
-  const hungerBonus = creature.drives.hunger * CHASE_LEASH_HUNGER_MULT;
+  const hungerBonus = creature.hormones.hunger * CHASE_LEASH_HUNGER_MULT;
   const maxChase = baseLeash + hungerBonus;
   return preyEntry.distance <= maxChase;
 }
@@ -495,10 +494,10 @@ function eatCorpse(creature, corpse, cx, cy) {
 
   // Hunger reduction proportional to corpse mass relative to predator mass
   const mealValue = (corpseMass / creatureMass) * MEAL_HUNGER_REDUCTION;
-  creature.drives.hunger = Math.max(0, creature.drives.hunger - mealValue);
+  creature.hormones.hunger = Math.max(0, creature.hormones.hunger - mealValue);
 
-  // Eating aids recovery — reduce rest slightly (I-D)
-  creature.drives.rest = Math.max(0, creature.drives.rest - REST_EATING_BONUS);
+  // Eating aids recovery — clears some fatigue (I-D)
+  creature.hormones.fatigue = Math.max(0, creature.hormones.fatigue - REST_EATING_BONUS);
 
   // Deplete corpse
   const biteMass = creatureMass * BITE_MASS_FRACTION;
@@ -641,7 +640,7 @@ function executeHunt(creature) {
 
 /** Execute graze — herbivore standing on food tile, reducing hunger. */
 function executeGraze(creature) {
-  creature.drives.hunger = Math.max(0, creature.drives.hunger - GRAZE_HUNGER_REDUCTION);
+  creature.hormones.hunger = Math.max(0, creature.hormones.hunger - GRAZE_HUNGER_REDUCTION);
 }
 
 /** Execute forage behavior (herbivores). */
@@ -677,11 +676,11 @@ function restRecoveryRate(creature) {
   return REST_RECOVERY_NORMAL;
 }
 
-/** Execute rest behavior — creature stops moving, rest drive decreases. */
+/** Execute rest behavior — creature stops moving, fatigue clears. */
 function executeRest(creature) {
-  // Apply rest recovery (rest drive decreases while resting)
+  // Apply rest recovery (fatigue clears while resting)
   const recovery = restRecoveryRate(creature);
-  creature.drives.rest = Math.max(0, creature.drives.rest - recovery);
+  creature.hormones.fatigue = Math.max(0, creature.hormones.fatigue - recovery);
 
   // Don't move. The creature stays in place. Facing doesn't change.
   // The existing bleed system handles blood regeneration and clotting per turn.

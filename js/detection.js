@@ -36,6 +36,8 @@ import { getLightLevel } from './time-cycle.js';
 import { referenceEmission } from './signals.js';
 import { groundScentAt, airborneScentAt, upwindStep, ownAirborneLevel, MOLECULAR_CLASSES } from './scent.js';
 import { MON } from './monsters.js';
+import { getWiring } from './wiring.js';
+import { releaseHormone } from './physiology.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField, sightlineOpacity } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -1417,7 +1419,11 @@ function detectThreats(creature) {
   return threats;
 }
 
-/** Spike safety based on detected threats. Uses detection distance and max range. */
+/** Alarm from detected threats, and the threat source.
+ *  PLACEHOLDER release for creatures still on the reactive rules: their alarm
+ *  gland, in effect, fed by the reactive threat assessment. A wired creature's
+ *  alarm comes from its own gland nodes (nodes.js), so this only names its
+ *  threat source. */
 function applySafetyFromThreats(creature) {
   if (!creature.detectedThreats || creature.detectedThreats.length === 0) return;
 
@@ -1434,13 +1440,16 @@ function applySafetyFromThreats(creature) {
 
   const spike = proximity * worst.threatLevel * SAFETY_PROXIMITY_COEFF;
 
-  creature.drives.safety = Math.min(1.0, creature.drives.safety + spike);
+  if (!getWiring(creature)) releaseHormone(creature, 'alarm', spike);
   creature.threatSource = worst.source;
 }
 
-/** Spike safety when creature takes damage. Called from combat resolution. */
+/** A blow landed: mark it (tookDamageThisTurn, which a wired creature's pain
+ *  input reads), name the attacker as the threat, and for a creature still on
+ *  the reactive rules release alarm (PLACEHOLDER for its gland). Called from
+ *  combat resolution. */
 function applySafetyFromDamage(creature, damageAmount, attacker) {
-  if (!creature.drives) return;
+  if (!creature.hormones) return;
 
   // Prompt K-B: mark creature as having taken damage this turn for flee retaliation
   creature.tookDamageThisTurn = true;
@@ -1459,15 +1468,15 @@ function applySafetyFromDamage(creature, damageAmount, attacker) {
   const hpFraction = damageAmount / totalMaxHp;
   let spike = hpFraction * SAFETY_DAMAGE_COEFF;
 
-  // Hungry predators dampen safety spikes — they commit to the hunt.
-  // At hunger 0.9, spike is reduced to ~30% (1 - 0.9 * 0.78 ≈ 0.30).
-  // At hunger 0.6, spike is reduced to ~53%. Below threshold, no dampening.
-  if (creature.diet === 'predator' && creature.drives.hunger > HUNGER_THRESHOLD) {
-    const hungerDamp = 1.0 - (creature.drives.hunger * 0.78);
+  // Hungry predators dampen the alarm release — they commit to the hunt
+  // (hunger hormone on the alarm gland's receptors). At hunger 0.9 the
+  // release is ~30% (1 - 0.9 * 0.78); at 0.6 ~53%; below threshold, whole.
+  if (creature.diet === 'predator' && creature.hormones.hunger > HUNGER_THRESHOLD) {
+    const hungerDamp = 1.0 - (creature.hormones.hunger * 0.78);
     spike *= Math.max(0.15, hungerDamp);  // floor at 15% — massive hits still register
   }
 
-  creature.drives.safety = Math.min(1.0, creature.drives.safety + spike);
+  if (!getWiring(creature)) releaseHormone(creature, 'alarm', spike);
 
   // Set the threat source to whoever attacked us, felt where the blow landed
   if (attacker) {
@@ -1509,7 +1518,7 @@ function isViablePrey(predator, info) {
   if (massRatio > 1.5) return false;
 
   // Too small to bother — below 5% (or 2% if starving)
-  const minRatio = predator.drives.hunger > 0.85 ? 0.02 : 0.05;
+  const minRatio = predator.hormones.hunger > 0.85 ? 0.02 : 0.05;
   if (massRatio < minRatio) return false;
 
   // Don't hunt what the channels have recognised as your own species

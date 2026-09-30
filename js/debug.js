@@ -32,9 +32,9 @@ function debugEcology() {
       tier: m.tier || '?',
       pos: `${m.x},${m.y}`,
       behavior: m.currentBehavior,
-      hunger: m.drives.hunger.toFixed(3),
-      safety: m.drives.safety.toFixed(3),
-      rest: m.drives.rest.toFixed(3),
+      hunger: m.hormones.hunger.toFixed(3),
+      alarm: m.hormones.alarm.toFixed(3),
+      fatigue: m.hormones.fatigue.toFixed(3),
       prey: m.detectedPrey ? m.detectedPrey.length : 0,
       corpses: m.detectedCorpses ? m.detectedCorpses.length : 0,
       huntTarget: m.huntTarget ? (m.huntTarget.name || m.huntTarget.key || 'player') : null,
@@ -53,7 +53,7 @@ function debugForceHunger(value = 0.85) {
   for (const m of mons) {
     if (m.hp <= 0) continue;
     if (m.diet === 'predator') {
-      m.drives.hunger = value;
+      m.hormones.hunger = value;
       count++;
     }
   }
@@ -117,7 +117,7 @@ function debugCognition() {
       override: t.overrideSucceeded ? 'YES' : (t.overrideAttempted ? 'tried' : 'no'),
       final: t.finalBehavior || '—',
       delib: t.fromDeliberate ? '✓' : '',
-      stress: (m.stressLevel || 0).toFixed(2),
+      alarm: (m.hormones ? m.hormones.alarm : 0).toFixed(2),
       gIntensity: t.ganglionIntensity != null ? t.ganglionIntensity.toFixed(2) : '',
       detections: snrSummary,
     });
@@ -247,7 +247,7 @@ function debugNodes(filterKey) {
     if (m.hp <= 0 || !getWiring(m) || (filterKey && m.key !== filterKey)) continue;
     const fired = (m._nodeTrace || []).map(n => `${n.id}=${+n.value.toFixed(2)}${n.about ? '@' + n.about : ''}`);
     rows.push({ name: m.name, at: `${m.x},${m.y}`, did: m.currentBehavior || '—',
-                stress: (m.stressLevel || 0).toFixed(2), fired: fired.join('  ') || '(nothing)' });
+                alarm: (m.hormones ? m.hormones.alarm : 0).toFixed(2), fired: fired.join('  ') || '(nothing)' });
   }
   if (!rows.length) { console.log('No wired creatures on the active layer.'); return []; }
   console.table(rows);
