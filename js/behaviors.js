@@ -23,17 +23,20 @@ import { DIRECTION_DELTAS, dist, directionToward, directionAwayFrom,
          getCreatureMass, weightedRandomChoice, movesCloserTo,
          wouldExceedTerritory, hasCladeTerritory, tileIsFood,
          findNearestFoodTile, getCorpseAt, stepRoundObstacles } from './ai-utils.js';
-import { getAdjacentPrey, applySafetyFromDamage, perceivedPosition, perceptOf, traceHoldTurns } from './detection.js';
+import { getAdjacentPrey, applySafetyFromDamage, perceivedPosition, perceptOf } from './detection.js';
+import { knownGround } from './nodes.js';
+import { getWiring } from './wiring.js';
 import { applyTurningCost, applyZoneDamage } from './physiology.js';
 import { noteStrike } from './hunt-funnel.js';
 
-/** A chase step toward where the prey is perceived or held. A body whose
- *  integration tissue holds a trace (a turn or more) goes round terrain in the
- *  way, within its deliberative seek range (ai-utils.stepRoundObstacles, a
- *  marked placeholder for route memory); one without steps straight at it. */
+/** A chase step toward where the prey is perceived or held. A body with a
+ *  route store (nodes.js, the ground it has stood on and felt around it) goes
+ *  round terrain in the way through the ground it remembers, within its seek
+ *  range (ai-utils.stepRoundObstacles); one without steps straight at it. */
 function chaseStep(creature, pos) {
-  if (traceHoldTurns(creature) >= 1) {
-    return stepRoundObstacles(creature, pos.x, pos.y, MIN_SEEK + (creature.integrationCapacity || 0) * SEEK_SCALE);
+  const known = knownGround(creature, getWiring(creature));
+  if (known) {
+    return stepRoundObstacles(creature, pos.x, pos.y, MIN_SEEK + (creature.integrationCapacity || 0) * SEEK_SCALE, known);
   }
   return moveInDirection(creature, directionToward(creature.x, creature.y, pos.x, pos.y));
 }

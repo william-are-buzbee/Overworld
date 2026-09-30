@@ -304,6 +304,8 @@ assert(runNodes(woundedHare(['fore_l', 'fore_r']), wiring).type !== 'bolt', 'bot
 assert(getWiring({ key: 'hare' }) === wiring, 'getWiring returns the hare\'s wiring');
 
 section('The wolf (wiring.js, step 6)');
+// A small flat world of grass (the wolf writes the ground it stands on), removed after
+worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
 {
   const W = CREATURE_WIRING.wolf;
   assert(getWiring({ key: 'wolf' }) === W, 'getWiring returns the wolf\'s wiring');
@@ -425,6 +427,8 @@ section('The wolf (wiring.js, step 6)');
 }
 
 
+delete worlds[0];
+
 section('Memory: stores and writers (nodes.js)');
 // On a small flat world of grass (the ground writer reads the ground), removed after
 worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
@@ -489,6 +493,39 @@ worlds[0] = Array.from({ length: 100 }, () => new Array(100).fill(0));
   const g = knownGround(w, MEM);
   assert(g && g.has('50,50') && g.size <= 10, `ground written: its own tile and what is around it, within capacity (${g ? g.size : 0} tiles)`);
   assert(JSON.stringify(JSON.parse(JSON.stringify(e.memory))) === JSON.stringify(e.memory), 'memory is plain body state: it saves');
+}
+// The wolf remembers (memory step 2)
+{
+  const W = CREATURE_WIRING.wolf;
+  const wolf = () => { const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.9, fatigue: 0 } };
+    m.initBodyMap(e); return e; };
+  // A smaller animal that fights back: 'biter', reads smaller, identified
+  const biterBody = { key: 'biter', hp: 1 };
+  const biter = (dx) => ({ entity: biterBody, x: 50 + dx, y: 50, distance: Math.abs(dx), sizeRelative: 'smaller',
+    sizeEstimate: { estimated: 8, lower: 6, upper: 10 }, species: 'biter', speciesConfidence: 0.9, dietType: 'predator',
+    dietConfidence: 0.8, zoneSNR: { 'head.visual': 5 }, isMoving: true, closingSpeed: 0 });
+  const e = wolf();
+  e.detectionInfo = [biter(3)];
+  assert(runNodes(e, W).act === 'hunt_chase', 'hungry, a smaller animal 3 tiles off, nothing learned: chases it');
+  e.detectionInfo = [biter(1)];
+  for (let k = 0; k < 3; k++) { e.tookDamageThisTurn = true; runNodes(e, W); }
+  const pat = e.memory.patterns.patterns.find(p => p.species === 'biter');
+  assert(pat && pat.assoc.danger > 0.5, `struck by it three times in reach: written, and dangerous (${pat ? pat.assoc.danger.toFixed(2) : 'nothing'})`);
+  e.tookDamageThisTurn = false; e.detectionInfo = [biter(3)];
+  const after = runNodes(e, W);
+  assert(after.act !== 'hunt_chase', `the same animal 3 tiles off: no longer prey (${after.type})`);
+  e.detectionInfo = [biter(1)];
+  assert(runNodes(e, W).type === 'wary' || runNodes(e, W).type === 'retreat', `in reach again: it reads as a threat (${runNodes(e, W).type})`);
+  const other = wolf(); other.memory = JSON.parse(JSON.stringify(e.memory));
+  other.detectionInfo = [{ ...biter(3), entity: { key: 'hare', hp: 1 }, species: 'hare', dietType: 'herbivore', sizeRelative: 'much_smaller' }];
+  assert(runNodes(other, W).act === 'hunt_chase', 'a hare (another pattern) is still prey');
+  // Ground: the wolf writes where it stands every action
+  const g = wolf(); g.detectionInfo = [];
+  runNodes(g, W);
+  const known = knownGround(g, W);
+  assert(known && known.has('50,50') && known.size === 9, `one action on open ground: 9 tiles known (${known ? known.size : 0})`);
+  assert(e.memory.ground && e.memory.ground.count > 0 && JSON.parse(JSON.stringify(e.memory)).ground.count === e.memory.ground.count,
+         'the ground store is body state: it saves');
 }
 delete worlds[0];
 
