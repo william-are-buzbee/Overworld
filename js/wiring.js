@@ -126,12 +126,13 @@ const HARE = {
       inputs: [{ from: 'feature:predatorDietConfidence' }], fn: 'step', threshold: 0.3, strict: true, gain: 0.3 },
     // Memory, read in the torso: what the fore limbs know is dangerous, and
     // what they know well and never came to harm from (habituation: familiar
-    // and harmless holds the threat template down)
+    // and harmless holds the threat template down). A meat-eater's smell is
+    // an innate template, and does not habituate: it shuts the latter
     { id: 'known_danger', zone: 'torso', mass: 0.001, mode: 'mapped', combine: 'max',
       inputs: [{ from: 'memory:lib_l.danger' }, { from: 'memory:lib_r.danger' }], fn: 'pass', threshold: 0, strict: true },
     { id: 'familiar_harmless', zone: 'torso', mass: 0.001, mode: 'mapped',
       inputs: [{ from: 'memory:lib_l.familiar', weight: 0.5 }, { from: 'memory:lib_r.familiar', weight: 0.5 },
-               { from: 'node:known_danger', weight: -2 }], fn: 'ramp', ceiling: 1 },
+               { from: 'node:known_danger', weight: -2 }], vetoedBy: ['meat_eater'], fn: 'ramp', ceiling: 1 },
     // Wired in per distance band as a body's image falls off with distance:
     // full out to pouncing range, then about 3 / distance (band middles 6 and
     // 12 tiles). A shaleback grazing far off reads as little; one near as much.
