@@ -125,20 +125,19 @@ export const THREAT_CONF_CHANNEL_CAP       = 0.7;   // max confidence from any s
 export const THREAT_CONF_SIZE_MUCH_LARGER  = 0.3;   // confidence bonus for much-larger threat
 export const THREAT_CONF_SIZE_LARGER       = 0.2;   // confidence bonus for larger threat
 export const THREAT_CONF_SIZE_AMBIGUOUS    = 0.1;   // confidence bonus for ambiguous-size threat
-export const STRESS_RELEASE_AMOUNT     = 0.3;   // stress added per threat-ganglion trigger
-export const STRESS_CLEARANCE_BASE     = 0.04;  // stress cleared per turn before circ efficiency
-export const STRESS_MAX                = 1.5;   // ceiling on stress accumulation
+export const STRESS_RELEASE_AMOUNT     = 0.3;   // alarm hormone released per gland firing (wiring.js)
+export const STRESS_CLEARANCE_BASE     = 0.04;  // alarm hormone cleared per turn before circulatory efficiency
+export const STRESS_MAX                = 1.5;   // ceiling on alarm hormone in the blood
 
 // ==================== DRIVE SYSTEM ====================
 export const MASS_HUNGER_COEFF   = 0.000015;  // hunger per turn per kg of total mass
 export const NEURAL_HUNGER_COEFF = 0.0003;    // hunger per turn per kg of neural mass
-export const SAFETY_DECAY_RATE   = 0.02;      // safety decays toward 0 per turn
-export const REST_BASE_RATE      = 0.001;     // rest increases per turn (very slow baseline)
+export const REST_BASE_RATE      = 0.001;     // fatigue builds per action (very slow baseline)
 
 // Drive thresholds (used by selectBehavior in future prompts)
-export const SAFETY_THRESHOLD    = 0.5;       // above this → flee (I-B)
+export const SAFETY_THRESHOLD    = 0.5;       // alarm above this: the reactive rules' safety drive is active (I-B)
 export const HUNGER_THRESHOLD    = 0.6;       // above this → hunt/forage (I-C)
-export const REST_THRESHOLD      = 0.7;       // above this → rest (I-D)
+export const REST_THRESHOLD      = 0.7;       // fatigue above this → rest (I-D)
 
 
 // ── Chemical scent system ──

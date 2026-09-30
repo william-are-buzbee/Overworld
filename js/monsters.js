@@ -460,15 +460,11 @@ function spawnMonster(key){
   m.integrationCapacity = 0;
   m.tier = 1;
 
-  // ── Stress chemistry (Ganglion system) ──
-  m.stressLevel = 0;
-
-  // ── Drive system initialization (Prompt I-A) ──
-  m.drives = {
-    hunger: 0.15 + rand() * 0.30,   // random 0.15–0.45
-    safety: 0.0,
-    rest:   rand() * 0.15,           // random 0.0–0.15
-  };
+  // ── Blood chemistry (Endocrine-Design; was the drive floats and stress) ──
+  // Draws in the same order as the old drives, so worlds replay.
+  const hunger = 0.15 + rand() * 0.30;   // 0.15–0.45
+  const fatigue = rand() * 0.15;         // 0.0–0.15
+  m.hormones = { alarm: 0, hunger, fatigue };
 
   // ── Threat detection / flee (Prompt I-B) ──
   const DIET_MAP = {

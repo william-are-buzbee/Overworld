@@ -113,7 +113,7 @@ function findRefuge(creature) {
 
 /** Is this creature hungry enough for reactive food rules? */
 function isReactivelyHungry(creature) {
-  return creature.drives && creature.drives.hunger > REACTIVE_HUNGER_THRESHOLD;
+  return creature.hormones && creature.hormones.hunger > REACTIVE_HUNGER_THRESHOLD;
 }
 
 /** Blood state category. */
@@ -127,24 +127,27 @@ function getBloodState(creature) {
 
 // ==================== DRIVE COMPARISON ====================
 
-/** Get the dominant active drive. Highest urgency above threshold wins. */
+/** Get the dominant active drive. Highest urgency above threshold wins.
+ *  PLACEHOLDER (reactive-deliberative creatures): compares the blood's alarm,
+ *  hunger and fatigue levels against thresholds; a wired creature's nodes
+ *  read them through their own receptors instead. */
 function getDominantDrive(creature) {
-  const drives = creature.drives;
+  const h = creature.hormones;
   const active = [];
 
-  if (drives.safety > SAFETY_THRESHOLD) {
-    let safetyUrgency = drives.safety;
+  if (h.alarm > SAFETY_THRESHOLD) {
+    let safetyUrgency = h.alarm;
     // Herbivores weigh safety more heavily — survival over food
     if (creature.diet === 'herbivore') {
       safetyUrgency += HERBIVORE_SAFETY_BONUS;
     }
     active.push({ drive: 'safety', urgency: safetyUrgency });
   }
-  if (drives.hunger > HUNGER_THRESHOLD) {
-    active.push({ drive: 'hunger', urgency: drives.hunger });
+  if (h.hunger > HUNGER_THRESHOLD) {
+    active.push({ drive: 'hunger', urgency: h.hunger });
   }
-  if (drives.rest > REST_THRESHOLD) {
-    active.push({ drive: 'rest', urgency: drives.rest });
+  if (h.fatigue > REST_THRESHOLD) {
+    active.push({ drive: 'rest', urgency: h.fatigue });
   }
 
   if (active.length === 0) return { drive: 'none', urgency: 0 };

@@ -5,9 +5,9 @@
 
 import { state } from './state.js';
 import { getBodyMap,
-         MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, SAFETY_DECAY_RATE, REST_BASE_RATE,
+         MASS_HUNGER_COEFF, NEURAL_HUNGER_COEFF, REST_BASE_RATE,
          REST_BLOOD_IMPAIRED, REST_BLOOD_WEAKENED, REST_BLOOD_CRITICAL, REST_WOUND_COEFF,
-         HUNGER_THRESHOLD, REST_THRESHOLD, STRESS_MAX, STRESS_RELEASE_AMOUNT,
+         HUNGER_THRESHOLD, REST_THRESHOLD,
          OVERRIDE_SCALE, STIMULUS_RESISTANCE, CRITICAL_MAGNITUDE } from './constants.js';
 import { computeIntegrationCapacity, getTier, evaluateReactiveRules,
          processGanglionSystem,
@@ -20,7 +20,7 @@ import { executeAction, adjacencyCombatCheck, monsterMelee, executeWander,
 import { isWaterTile, canMoveTo, getCorpseAt, combatCapability } from './ai-utils.js';
 import { computeSignals } from './signals.js';
 import { getWiring } from './wiring.js';
-import { _depleteLocomotionSubstrate, _releaseStressChemistry } from './physiology.js';
+import { _depleteLocomotionSubstrate } from './physiology.js';
 import { noteHuntAction } from './hunt-funnel.js';
 
 // ==================== WATER STATE HELPER (Prompt L-A) ====================
@@ -30,11 +30,21 @@ function _updateInWater(creature) {
   creature.inWater = isWaterTile(layer, creature.x, creature.y);
 }
 
-// ==================== DRIVE SYSTEM ====================
+// ==================== BODY CHEMISTRY (Endocrine-Design) ====================
+// What used to be `creature.drives` is chemistry in the blood,
+// `creature.hormones` (physiology.js owns it):
+//   hunger   released by the gut as the body burns its reserves: a rate set by
+//            living mass and, more steeply, neural mass. Eating suppresses it.
+//   fatigue  the waste of activity building up (sleep pressure): a slow base
+//            rate, faster with blood loss and wounds. Rest and food clear it.
+//   alarm    released by glands (a wired creature's gland nodes; the reactive
+//            rules' placeholder releases); cleared by the circulation once per
+//            player input (physiology.js _clearStressChemistry).
 
-/** Update creature drives based on body composition. Called once per turn. */
-function updateDrives(creature) {
-  if (!creature.drives) return;
+/** The tissue-driven part of body chemistry, once per action. */
+function updateBodyChemistry(creature) {
+  const h = creature.hormones;
+  if (!h) return;
 
   // Compute total mass and neural mass from surviving body zones
   const bodyMap = getBodyMap(creature);
@@ -52,18 +62,13 @@ function updateDrives(creature) {
     }
   }
 
-  // Hunger: increases based on body mass and neural mass
-  creature.drives.hunger = Math.min(1.0, creature.drives.hunger +
-    (totalMass * MASS_HUNGER_COEFF + totalNeural * NEURAL_HUNGER_COEFF));
+  // Hunger: the gut releases as mass and neural tissue burn reserves
+  h.hunger = Math.min(1.0, h.hunger + (totalMass * MASS_HUNGER_COEFF + totalNeural * NEURAL_HUNGER_COEFF));
 
-  // Safety: decays toward 0 (threats spike it via applySafetyFromThreats)
-  creature.drives.safety = Math.max(0, creature.drives.safety - SAFETY_DECAY_RATE);
-
-  // Rest: base rate + wound acceleration + blood acceleration (I-D)
+  // Fatigue: base rate + wound acceleration + blood acceleration (I-D)
   const bloodAccel = getBloodRestAcceleration(creature);
   const woundAccel = getWoundRestAcceleration(creature);
-  const restRate = REST_BASE_RATE + bloodAccel + woundAccel;
-  creature.drives.rest = Math.min(1.0, creature.drives.rest + restRate);
+  h.fatigue = Math.min(1.0, h.fatigue + REST_BASE_RATE + bloodAccel + woundAccel);
 }
 
 /** Rest acceleration from blood loss (I-D). Mirrors bleed penalty thresholds. */
@@ -121,12 +126,12 @@ function _ganglionOutputToAction(output, creature) {
       };
     }
     // At food tile — graze (mid-graze local ganglion contact-chemical reflex)
-    if (output.atFood && creature.drives && creature.drives.hunger > HUNGER_THRESHOLD) {
+    if (output.atFood && creature.hormones && creature.hormones.hunger > HUNGER_THRESHOLD) {
       return { behavior: 'graze', magnitude: 0.3 };
     }
     // Check mid-graze contact feeding on corpses
     const corpse = getCorpseAt(state.player.layer, creature.x, creature.y);
-    if (corpse && creature.drives && creature.drives.hunger > HUNGER_THRESHOLD) {
+    if (corpse && creature.hormones && creature.hormones.hunger > HUNGER_THRESHOLD) {
       return { behavior: 'eat_corpse', magnitude: 0.3 };
     }
     if (output.type === 'forage' && output.direction != null) {
@@ -141,7 +146,7 @@ function _ganglionOutputToAction(output, creature) {
     // alternating_variable pattern) runs the ambient motor program, the
     // wander profile, unless the body's rest drive holds it down. Before
     // this the hare held still, and held-still was scored as resting.
-    if (creature.drives && creature.drives.rest > REST_THRESHOLD) return { behavior: 'rest', magnitude: 0.1 };
+    if (creature.hormones && creature.hormones.fatigue > REST_THRESHOLD) return { behavior: 'rest', magnitude: 0.1 };
     return { behavior: 'wander', magnitude: 0.1 };
   }
 
@@ -185,11 +190,10 @@ function runCreatureAI(creature) {
   creature.inCombatThisTurn = false;
   // Reset ganglion transient fields
   creature._lastGanglionIntensity = null;
-  creature._ganglionTriggeredStress = false;
 
   // Immobilized creatures can't move but can still attack adjacently
   if (creature.immobilized) {
-    updateDrives(creature);
+    updateBodyChemistry(creature);
     creature.integrationCapacity = computeIntegrationCapacity(creature);
     creature.tier = getTier(creature.integrationCapacity);
     buildAllDetectionInfo(creature);
@@ -203,8 +207,8 @@ function runCreatureAI(creature) {
     return;
   }
 
-  // Update drives
-  updateDrives(creature);
+  // Update body chemistry
+  updateBodyChemistry(creature);
   // NOTE: _regenerateSubstrate is now called from endPlayerTurn, scaled by ticksElapsed
 
   // ── Cognitive tier (Prompt M-A1) ──
@@ -234,21 +238,11 @@ function runCreatureAI(creature) {
 
   if (neural) {
     // ── Wired nervous system (nodes.js) ──
-    // Creature has a wiring: its nodes decide, not the reactive rules.
-    // Pre-check: damage this turn spikes stress (pain is a physical signal
-    // that bypasses the sensory ganglion pathway)
-    if (creature.tookDamageThisTurn) {
-      creature.stressLevel = Math.min(
-        STRESS_MAX,
-        (creature.stressLevel || 0) + STRESS_RELEASE_AMOUNT
-      );
-    }
-
+    // Creature has a wiring: its nodes decide, not the reactive rules. Its
+    // glands are nodes too, and release as they fire (pain included: a gland
+    // input, felt through the body, not a special case here).
     const ganglionOutput = processGanglionSystem(creature);
     action = _ganglionOutputToAction(ganglionOutput, creature);
-
-    // ── Stress chemistry release (per-action; clearance runs in endPlayerTurn) ──
-    _releaseStressChemistry(creature);
 
     // ── Store decision trace for debugCognition() ──
     creature._lastTrace = {
@@ -261,7 +255,7 @@ function runCreatureAI(creature) {
       finalBehavior: action.behavior,
       fromDeliberate: false,
       ganglionIntensity: ganglionOutput ? ganglionOutput.intensity : 0,
-      stressLevel: creature.stressLevel || 0,
+      alarm: creature.hormones ? creature.hormones.alarm : 0,
     };
   } else {
     // ── Reactive-Deliberative Architecture (Prompt O) ──
@@ -360,7 +354,7 @@ function moveMonsterTowardPlayer(mon){ moveMonsterToward(mon, state.player.x, st
 function enemyAct(mon){ runCreatureAI(mon); }
 
 // ==================== EXPORTS ====================
-export { runCreatureAI, updateDrives, _updateInWater,
+export { runCreatureAI, updateBodyChemistry, _updateInWater,
          playerInTerritory, monInOwnTerritory,
          syncSwarmAI, mushroomPackAI, mushroomTouch,
          wanderInTerritory, moveMonsterToward, wanderMonster, moveMonsterTowardPlayer,

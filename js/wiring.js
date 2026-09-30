@@ -13,15 +13,16 @@ import { SPECIES_TEMPLATES,
          BASE_BOLT_THRESHOLD, BASE_FLEE_THRESHOLD, BASE_FREEZE_THRESHOLD, BASE_ALERT_THRESHOLD,
          STRESS_NEURAL_SENSITIVITY, CONFIDENCE_NORMALIZATION,
          THREAT_CONF_CHANNEL_CAP, THREAT_CONF_SIZE_MUCH_LARGER, THREAT_CONF_SIZE_LARGER,
-         THREAT_CONF_SIZE_AMBIGUOUS, LOOM_WINDOW_ACTIONS, HUNGER_THRESHOLD } from './constants.js';
+         THREAT_CONF_SIZE_AMBIGUOUS, LOOM_WINDOW_ACTIONS, HUNGER_THRESHOLD,
+         STRESS_RELEASE_AMOUNT } from './constants.js';
 
-const STRESS = { stress: STRESS_NEURAL_SENSITIVITY };   // alarm chemistry lowers these thresholds
+const ALARM = { alarm: STRESS_NEURAL_SENSITIVITY };     // receptors: alarm chemistry lowers these thresholds
 const CHANNEL = 1 / (CONFIDENCE_NORMALIZATION * 2);      // SNR → template evidence, per channel
 
 // ── The hare (small grazer, Clade B) ──
 // Fore-limbs: hair-trigger ground-vibration sensors with their own bolt arcs.
 // Graze limbs: feel the ground too, and taste it. Torso: the threat template,
-// the locomotion generator and the stress gland. Head: eyes, and the food
+// the locomotion generator and the alarm gland. Head: eyes, and the food
 // template. No integration tissue: nothing here holds anything past the action.
 const HARE = {
   nodes: [
@@ -33,10 +34,10 @@ const HARE = {
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'ramp' },
     { id: 'bolt_arc_l', zone: 'fore_l', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_l.vibration.ground' }], fn: 'pass',
-      threshold: BASE_BOLT_THRESHOLD, receptors: STRESS },
+      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM },
     { id: 'bolt_arc_r', zone: 'fore_r', mass: 0.004, mode: 'mapped',
       inputs: [{ from: 'sense:fore_r.vibration.ground' }], fn: 'pass',
-      threshold: BASE_BOLT_THRESHOLD, receptors: STRESS },
+      threshold: BASE_BOLT_THRESHOLD, receptors: ALARM },
     // Graze-limb ganglia: pass on their ground vibration; read meat-eater
     // volatiles underfoot through their contact chemistry
     { id: 'graze_relay_l', zone: 'mid_graze_l', mass: 0.003, mode: 'mapped',
@@ -98,18 +99,21 @@ const HARE = {
     { id: 'threat_level', zone: 'torso', mass: 0.001, mode: 'pooled',
       inputs: [{ from: 'node:threat' }, { from: 'node:meat_underfoot' }], fn: 'ramp' },
     { id: 'flee', zone: 'torso', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FLEE_THRESHOLD, receptors: STRESS },
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FLEE_THRESHOLD, receptors: ALARM },
     { id: 'freeze', zone: 'torso', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FREEZE_THRESHOLD, receptors: STRESS },
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_FREEZE_THRESHOLD, receptors: ALARM },
     { id: 'alert', zone: 'torso', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_ALERT_THRESHOLD, receptors: STRESS },
-    // The stress gland answers the bolt and the flee circuit, not freeze or alert
-    { id: 'stress_gland', zone: 'torso', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'node:bolt' }, { from: 'node:flee' }], fn: 'step', threshold: 0, strict: true },
+      inputs: [{ from: 'node:threat_level' }], fn: 'step', threshold: BASE_ALERT_THRESHOLD, receptors: ALARM },
+    // The alarm gland answers the bolt, the flee circuit and pain; not freeze
+    // or alert (Endocrine-Design)
+    { id: 'alarm_gland', zone: 'torso', mass: 0.001, mode: 'pooled',
+      inputs: [{ from: 'node:bolt' }, { from: 'node:flee' }, { from: 'feature:pain' }],
+      fn: 'step', threshold: 0, strict: true },
 
-    // Head: food. The template's gain rides on hunger.
+    // Head: food. The template's gain rides on hunger: receptors for the
+    // gut's hunger hormone in the blood
     { id: 'hungry', zone: 'head', mass: 0.001, mode: 'pooled',
-      inputs: [{ from: 'feature:hungerDrive' }], fn: 'step', threshold: HUNGER_THRESHOLD, strict: true },
+      inputs: [{ from: 'blood:hunger' }], fn: 'step', threshold: HUNGER_THRESHOLD, strict: true },
     { id: 'food_ahead', zone: 'head', mass: 0.004, mode: 'pooled',
       inputs: [{ from: 'feature:foodNear' }], gate: ['hungry'], fn: 'step', threshold: 1 },
     { id: 'food_underfoot', zone: 'head', mass: 0.002, mode: 'pooled',
@@ -120,7 +124,7 @@ const HARE = {
   // drives the four locomotion limbs; the strongest drive reaching it wins.
   // Alert inhibits the food drive there (and freeze is always above alert).
   outputs: [
-    { effect: 'gland', hormone: 'stress', node: 'stress_gland', zone: 'torso' },
+    { effect: 'gland', hormone: 'alarm', node: 'alarm_gland', zone: 'torso', release: STRESS_RELEASE_AMOUNT },
     { effect: 'locomotion', label: 'bolt',   node: 'bolt',       zone: 'torso', intensity: 1.0, bearing: 'away' },
     { effect: 'locomotion', label: 'flee',   node: 'flee',       zone: 'torso', intensity: 1.0, bearing: 'away' },
     { effect: 'locomotion', label: 'forage', node: 'food_ahead', zone: 'torso', intensity: 0.3, bearing: 'toward',

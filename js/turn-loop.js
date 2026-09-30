@@ -114,8 +114,8 @@ function catchUpCreature(creature) {
   const turns = creature._dormantTurns;
   if (turns <= 0) return;
 
-  // 1. Advance hunger (same rate as updateDrives)
-  if (creature.drives) {
+  // 1. Advance hunger (same rate as updateBodyChemistry)
+  if (creature.hormones) {
     const bodyMap = getBodyMap(creature);
     let totalMass = creature.totalMass || 0;
     let totalNeural = 0;
@@ -129,7 +129,7 @@ function catchUpCreature(creature) {
       }
     }
     const hungerPerTurn = totalMass * MASS_HUNGER_COEFF + totalNeural * NEURAL_HUNGER_COEFF;
-    creature.drives.hunger = Math.min(1.0, creature.drives.hunger + hungerPerTurn * turns);
+    creature.hormones.hunger = Math.min(1.0, creature.hormones.hunger + hungerPerTurn * turns);
   }
 
   // 2. Heal wounds (if blood was sufficient — dormant creature was effectively resting)
@@ -162,14 +162,10 @@ function catchUpCreature(creature) {
   // 5b. No banked action points: it should not burst on waking.
   creature._accumulatedAP = 0;
 
-  // 6. Reset rest drive — if dormant long enough, the creature rested fully
-  if (creature.drives && turns > 10) {
-    creature.drives.rest = 0;
-  }
-
-  // 7. Reset safety drive — no threats while dormant
-  if (creature.drives) {
-    creature.drives.safety = 0;
+  // 6. Fatigue cleared — if dormant long enough, the creature rested fully.
+  //    (Alarm was cleared at the circulation's rate in step 4.)
+  if (creature.hormones && turns > 10) {
+    creature.hormones.fatigue = 0;
   }
 }
 
@@ -539,7 +535,6 @@ function endPlayerTurn(action){
         m.movedThisTurn = false;
         m.inCombatThisTurn = false;
         m._lastGanglionIntensity = null;
-        m._ganglionTriggeredStress = false;
 
         // Run the creature's full AI cycle
         const x0 = m.x, y0 = m.y;

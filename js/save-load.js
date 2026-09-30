@@ -173,7 +173,6 @@ const TRANSIENT_FIELDS = [
     '_dormantTurns',        // number: how many turns the creature has been dormant
 
     // Ganglion system: per-turn flags (not persistent)
-    '_ganglionTriggeredStress',  // flag: stress release trigger this turn
     '_lastGanglionIntensity',    // float: ganglion motor output intensity this turn
 
     // AP system: accumulated action points and per-input action count (runtime only)
@@ -236,7 +235,6 @@ function initTransientFields(entity) {
     entity.bleedPenalty = 0;           // Prompt Q: recomputed from computeBleedPenalty
     entity._dormant = false;           // Prompt S: not dormant on load (activity check runs first turn)
     entity._dormantTurns = 0;          // Prompt S: no dormant turns accumulated
-    entity._ganglionTriggeredStress = false;  // Ganglion: no stress trigger pending
     entity._lastGanglionIntensity = null;     // Ganglion: no intensity from last turn
     entity._accumulatedAP = 0;                // AP system: no carryover on load
     entity._actionsThisTurn = 0;              // AP system: no actions taken yet
@@ -377,6 +375,9 @@ function deserializePlayer(raw) {
   }
   // Backwards compat: immobilized flag
   if (p.immobilized == null) p.immobilized = false;
+  // Blood chemistry replaced stressLevel (Endocrine-Design)
+  if (!p.hormones) p.hormones = { alarm: p.stressLevel || 0, hunger: 0, fatigue: 0 };
+  delete p.stressLevel;
   // Backwards compat: ecology fields added in Prompt K-A
   // Old saves won't have diet/fleeMode/wanderProfile on the player.
   // Derive from species key using the same mappings as freshPlayer.
@@ -531,14 +532,20 @@ function deserializeMonsters(allLayers) {
         if (mon.originalNeural == null && mon.bodyMap) {
           mon.originalNeural = mon.bodyMap.reduce((sum, z) => sum + (z.neural || 0), 0);
         }
-        // Prompt I-A: ensure drive/wander state exists (backward compat for old saves)
-        if (!mon.drives) {
-          mon.drives = {
-            hunger: 0.15 + rand() * 0.30,
-            safety: 0.0,
-            rest: rand() * 0.15,
-          };
+        // Blood chemistry (Endocrine-Design). Saves from before it carry
+        // drives {hunger, safety, rest} and stressLevel: alarm is the larger
+        // of safety and stress, fatigue is rest. Older saves still: fresh.
+        if (!mon.hormones) {
+          if (mon.drives) {
+            mon.hormones = { alarm: Math.max(mon.drives.safety || 0, mon.stressLevel || 0),
+                             hunger: mon.drives.hunger || 0, fatigue: mon.drives.rest || 0 };
+          } else {
+            const hunger = 0.15 + rand() * 0.30;
+            mon.hormones = { alarm: mon.stressLevel || 0, hunger, fatigue: rand() * 0.15 };
+          }
         }
+        delete mon.drives;
+        delete mon.stressLevel;
         if (!mon.wanderProfile) {
           const wp = (mon.key && WANDER_PROFILES[mon.key]) || DEFAULT_WANDER_PROFILE;
           mon.wanderProfile = { ...wp, homePosition: null };
