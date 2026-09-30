@@ -35,7 +35,6 @@ function debugEcology() {
       hunger: m.hormones.hunger.toFixed(3),
       alarm: m.hormones.alarm.toFixed(3),
       fatigue: m.hormones.fatigue.toFixed(3),
-      prey: m.detectedPrey ? m.detectedPrey.length : 0,
       corpses: m.detectedCorpses ? m.detectedCorpses.length : 0,
       huntTarget: m.huntTarget ? (m.huntTarget.name || m.huntTarget.key || 'player') : null,
       dominant: dom.type + '(' + dom.value + ')',
@@ -61,9 +60,9 @@ function debugForceHunger(value = 0.85) {
   return count;
 }
 
-/** Dump the full reactive-deliberative decision trace for all creatures.
- *  Shows which reactive rule fired, override probability and result,
- *  and what SNR-based info each creature has about its detections.
+/** Dump each creature's last decision: what its wiring drove (the output
+ *  that won, and the executor's behaviour for it), and what SNR-based info
+ *  it has about its detections.
  *  Call from console: window.debugCognition() */
 function debugCognition() {
   const mons = monstersHere();
@@ -105,20 +104,17 @@ function debugCognition() {
 
     rows.push({
       name: m.name,
-      system: getWiring(m) ? 'NODES' : 'REACTIVE',
+      system: getWiring(m) ? 'NODES' : '—',
       IC: ic,
       domSense: dom.type,
       apRate: getBodyPTW(m, getMovementIntensity(m)).toFixed(4),
       accAP: (m._accumulatedAP || 0).toFixed(0),
       actions: m._actionsThisTurn != null ? m._actionsThisTurn : '—',
-      rule: t.reactiveRule || '—',
-      mag: t.reactiveMagnitude != null ? t.reactiveMagnitude.toFixed(1) : '—',
-      'ovr': t.overrideRatio != null ? (t.overrideRatio === Infinity ? '∞' : t.overrideRatio.toFixed(2)) : '—',
-      override: t.overrideSucceeded ? 'YES' : (t.overrideAttempted ? 'tried' : 'no'),
+      output: t.output || '—',
+      act: t.act || '',
       final: t.finalBehavior || '—',
-      delib: t.fromDeliberate ? '✓' : '',
       alarm: (m.hormones ? m.hormones.alarm : 0).toFixed(2),
-      gIntensity: t.ganglionIntensity != null ? t.ganglionIntensity.toFixed(2) : '',
+      intensity: t.intensity != null ? t.intensity.toFixed(2) : '',
       detections: snrSummary,
     });
   }
@@ -129,25 +125,6 @@ function debugCognition() {
   }
 
   console.table(rows);
-
-  // Also log a compact override-effectiveness summary
-  const bySpecies = {};
-  for (const m of mons) {
-    if (m.hp <= 0) continue;
-    const k = m.key || m.name;
-    if (!bySpecies[k]) bySpecies[k] = { key: k, ic: m.integrationCapacity, overrides: 0, reactive: 0, total: 0 };
-    bySpecies[k].total++;
-    if (m._lastTrace) {
-      if (m._lastTrace.overrideSucceeded) bySpecies[k].overrides++;
-      else bySpecies[k].reactive++;
-    }
-  }
-  console.log('\n── Override summary ──');
-  for (const sp of Object.values(bySpecies)) {
-    const rate = sp.total > 0 ? ((sp.overrides / sp.total) * 100).toFixed(0) : '0';
-    console.log(`  ${sp.key} (IC=${sp.ic.toFixed(3)}): ${sp.overrides}/${sp.total} overrode (${rate}%)`);
-  }
-
   return rows;
 }
 

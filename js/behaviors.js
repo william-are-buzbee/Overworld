@@ -808,38 +808,6 @@ function executeWander(creature) {
   }
 }
 
-// ==================== ADJACENCY COMBAT CHECK ====================
-
-/** Proactive adjacency attack — predators attack if they wander next to the player. */
-function adjacencyCombatCheck(creature) {
-  const player = state.player;
-  if (player.hp <= 0) return;
-
-  // Only if the senses put the player on an adjacent tile, and it is
-  // actually there to be struck (the strike itself is contact)
-  const pp = perceptOf(creature, player);
-  if (!pp || chebyshev(creature.x, creature.y, pp.x, pp.y) > 1) return;
-  if (chebyshev(creature.x, creature.y, player.x, player.y) > 1) return;
-
-  // Check if creature has proactive (non-defensive) attacks
-  const monBodyMap = getBodyMap(creature);
-  if (!monBodyMap) return;
-  const attacks = getAvailableAttacks(monBodyMap);
-  if (attacks.length === 0) return;
-
-  // Herbivores don't attack proactively — only counter-attack when attacked.
-  // cave_crab (large herbivore) has shove/kick which are defensive only.
-  // hare (small herbivore) has no attacks at all.
-  // mushroom uses enzyme touch, not standard melee.
-  // Prompt K-B: herbivores that took damage this turn DO retaliate.
-  if (creature.key === 'cave_crab' || creature.key === 'hare' || creature.key === 'mushroom') {
-    if (!creature.tookDamageThisTurn) return;
-  }
-
-  // Creature with attacks is adjacent to player — attack
-  monsterMelee(creature);
-}
-
 // ==================== MONSTER MELEE ====================
 
 function monsterMelee(mon){
@@ -983,6 +951,6 @@ export {
   executeGraze, executeForage,
   restRecoveryRate, executeRest,
   pickWanderDirection, executeWander,
-  adjacencyCombatCheck, monsterMelee,
+  monsterMelee,
   performBonusMove,
 };

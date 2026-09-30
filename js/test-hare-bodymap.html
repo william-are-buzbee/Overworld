@@ -308,7 +308,9 @@ section('The wolf (wiring.js, step 6)');
   const W = CREATURE_WIRING.wolf;
   assert(getWiring({ key: 'wolf' }) === W, 'getWiring returns the wolf\'s wiring');
   assert(validateWiring({ key: 'wolf' }, W).length === 0, `the wolf's wiring fits its body (${validateWiring({ key: 'wolf' }, W).join('; ') || 'no issues'})`);
-  assert(getWiring({ key: 'dire_wolf' }) == null, 'the dire wolf is still on the reactive rules');
+  const D = CREATURE_WIRING.dire_wolf;
+  assert(getWiring({ key: 'dire_wolf' }) === D && validateWiring({ key: 'dire_wolf' }, D).length === 0,
+         'the ravager runs the same plan, built for its body, and it fits');
   const wolfWith = (dets, hunger = 0.9, extra = {}) => {
     const e = { key: 'wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
     m.initBodyMap(e);
@@ -356,6 +358,62 @@ section('The wolf (wiring.js, step 6)');
   assert(held.act === 'hunt_chase' && held.place && held.place.x === 53, `out of the senses 3 turns later: still goes for where it was (${held.type})`);
   state.turnCount = 206;
   assert(runNodes(hunter, W).act !== 'hunt_chase', 'after 6 turns (0.15 kg holds 4.5): let go');
+  // The ravager: a wolf reads smaller against its body, and is prey
+  const ravager = { key: 'dire_wolf', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.9, fatigue: 0 } };
+  m.initBodyMap(ravager);
+  ravager.detectionInfo = [{ ...brother(3), species: null, speciesConfidence: 0, sizeRelative: 'much_smaller',
+                             sizeEstimate: { estimated: 22, lower: 18, upper: 26 } }];
+  const rv = runNodes(ravager, D);
+  assert(rv.act === 'hunt_chase', `a hungry ravager, a wolf 3 tiles off: chases it (${rv.type})`);
+  // The lurker: still, listening; strikes what its sensor limbs feel in reach
+  const L = CREATURE_WIRING.ambush_pred;
+  assert(validateWiring({ key: 'ambush_pred' }, L).length === 0, 'the lurker\'s wiring fits its body');
+  const lurker = (dets, hunger = 0.9, extra = {}) => {
+    const e = { key: 'ambush_pred', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); e.detectionInfo = dets; return e;
+  };
+  const walker = (dx, over = {}) => ({ entity: { key: 'wolf', hp: 1 }, x: 50 + dx, y: 50, distance: Math.abs(dx),
+    sizeRelative: 'similar', sizeEstimate: { estimated: 22, lower: 18, upper: 26 },
+    zoneSNR: { 'sensor_l.vibration.ground': 6, 'sensor_r.vibration.ground': 6 }, isMoving: true, closingSpeed: 0, ...over });
+  assert(runNodes(lurker([]), L).act === 'hold', 'nothing near: held still, listening');
+  assert(runNodes(lurker([walker(3)]), L).act === 'hold', 'something its size 3 tiles off: still (nothing drives it to approach)');
+  const ls = runNodes(lurker([walker(1)]), L);
+  assert(ls.effect === 'strike' && ls.source.key === 'wolf', `hungry, something its size felt in reach: strikes (${ls.type})`);
+  assert(runNodes(lurker([walker(1)], 0.2), L).act === 'hold', 'fed, the same: still');
+  assert(runNodes(lurker([walker(1, { zoneSNR: {} })]), L).act === 'hold', 'seen in reach but not felt through a sensor limb: still');
+  assert(runNodes(lurker([walker(1)], 0.2, { tookDamageThisTurn: true }), L).effect === 'strike', 'struck, fed: strikes back');
+  const lk = runNodes(lurker([walker(1, { entity: { key: 'ambush_pred', hp: 1 }, species: 'ambush_pred', speciesConfidence: 0.9 })]), L);
+  assert(lk.effect !== 'strike', `another lurker in reach: no strike (${lk.type})`);
+  const ld = runNodes(lurker([dire(1)]), L);
+  assert(ld.act === 'flee_home', `a ravager in reach: goes home (${ld.type})`);
+  // Played: only a retreat can take the legs, and the hub reaches it late
+  // (the template sits in the torso beside it)
+  assert(runNodes(lurker([dire(1)]), L, { intent: true }).act === 'flee_home', 'played, a ravager in reach: the retreat takes the legs (the hub is a hop late)');
+  assert(runNodes(lurker([]), L, { intent: true }).type === 'deliberate', 'played, nothing near: the player moves it');
+  // The shaleback: grazes; shoves back when struck; a meat-eater on the air stops it
+  const C = CREATURE_WIRING.cave_crab;
+  assert(validateWiring({ key: 'cave_crab' }, C).length === 0, 'the shaleback\'s wiring fits its body');
+  const crab = (dets, extra = {}) => {
+    const e = { key: 'cave_crab', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.2, fatigue: 0 }, ...extra };
+    m.initBodyMap(e); e.detectionInfo = dets; return e;
+  };
+  assert(runNodes(crab([]), C).type === 'hold', 'fed, nothing near: nothing fires (the gait\'s wander)');
+  const cw = runNodes(crab([{ ...dire(1), sizeRelative: 'smaller', sizeEstimate: { estimated: 90, lower: 70, upper: 110 } }],
+                           { tookDamageThisTurn: true }), C);
+  assert(cw.act === 'retaliate' && cw.source.key === 'dire_wolf', `struck by a ravager in reach: shoves it (${cw.type})`);
+  assert(runNodes(crab([dire(1)]), C).act !== 'flee_water', 'a ravager in reach, not struck: 90 kg reads light against 200, no retreat');
+  const smelt = runNodes(crab([], { plume: { meatSNR: 2, herbSNR: 0, upwind: { dx: 0, dy: -1 } } }), C);
+  assert(smelt.type === 'wind' && smelt.direction === 0, `meat-eater on the air from the north: faces north (${smelt.type}, ${smelt.direction})`);
+  const still = runNodes(crab([], { plume: { meatSNR: 2, herbSNR: 0, upwind: null } }), C);
+  assert(still.act === 'hold', `on the air with no wind to read: holds still (${still.type})`);
+  // The colony: a footfall felt moves it away
+  const K = CREATURE_WIRING.mushroom;
+  assert(validateWiring({ key: 'mushroom' }, K).length === 0, 'the colony\'s wiring fits its body');
+  const colony = (dets) => { const e = { key: 'mushroom', layer: 0, x: 50, y: 50, hormones: { alarm: 0, hunger: 0.2, fatigue: 0 } };
+    m.initBodyMap(e); e.detectionInfo = dets; return e; };
+  const cf = runNodes(colony([{ ...hare(2), zoneSNR: { 'integument.vibration.ground': 3 } }]), K);
+  assert(cf.act === 'flee' && cf.direction === 6, `a footfall felt 2 tiles east: withdraws west (${cf.type}, ${cf.direction})`);
+  assert(runNodes(colony([{ ...hare(2), zoneSNR: { 'head.visual': 3 } }]), K).act == null, 'nothing felt: nothing');
   // Played: the hub's drive wins the generator; only a retreat can take the legs
   const played = runNodes(wolfWith([hare(3)]), W, { intent: true });
   assert(played.type === 'deliberate', `played, hungry, a hare 3 tiles off: the player decides (${played.type})`);

@@ -70,7 +70,7 @@ This applies to all creature-level stats. If something is described as a single 
 
 Sometimes necessary. Always dangerous. A placeholder that works well enough gets treated as real by the next implementation pass. If a placeholder must exist, mark it explicitly in the code with a comment explaining what physical system it's standing in for and what the replacement path is. Never let a placeholder become load-bearing without documentation.
 
-The current reactive rules in `evaluateReactiveRules` are the largest placeholder. They work. They produce plausible behavior. They are not physical. They are being replaced creature-by-creature with the ganglion system. Every creature still on reactive rules is on a placeholder. Don't build new features on top of the reactive rules — build them on top of the physical system and let the reactive rules serve as fallback for unconverted creatures.
+The reactive rules (`evaluateReactiveRules`) were the largest placeholder: plausible behaviour, not physical. They were replaced creature by creature with wired nervous systems (Neural-Architecture-Design) and removed in Sep 2026: every creature now runs its wiring. The largest placeholders left are the ones that wiring lists in "Where today's code sits": percept features standing in for perception as nodes, and the output stage's `act` bridge onto the old behaviour executor.
 
 ### "Clade X has trait Y"
 

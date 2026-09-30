@@ -7,8 +7,6 @@ import { state, worlds, groundItems } from './state.js';
 import { getBodyMap,
          CHEM_RANGE_COEFF, VIB_GROUND_RANGE_COEFF, VIB_AIR_RANGE_COEFF, VIS_RANGE_COEFF,
          MAX_DETECTION_DISTANCE,
-         SAFETY_PROXIMITY_COEFF, SAFETY_DAMAGE_COEFF,
-         HUNGER_THRESHOLD,
          CHEM_MASS_COEFF,
          SIZE_UNCERTAINTY_BASE,
          DIET_CONF_MIN, DIET_CONF_FULL, SPECIES_CONF_MIN, SPECIES_CONF_FULL,
@@ -36,8 +34,6 @@ import { getLightLevel } from './time-cycle.js';
 import { referenceEmission } from './signals.js';
 import { groundScentAt, airborneScentAt, upwindStep, ownAirborneLevel, MOLECULAR_CLASSES } from './scent.js';
 import { MON } from './monsters.js';
-import { getWiring } from './wiring.js';
-import { releaseHormone } from './physiology.js';
 import { hasLOS, EYE_OFFSETS, isInEyeField, sightlineOpacity } from './fov.js';
 import { chebyshev, getCover } from './world-state.js';
 import { tileConcealmentData, getTerrainVisual } from './terrain.js';
@@ -1424,66 +1420,25 @@ function detectThreats(creature) {
   return threats;
 }
 
-/** Alarm from detected threats, and the threat source.
- *  PLACEHOLDER release for creatures still on the reactive rules: their alarm
- *  gland, in effect, fed by the reactive threat assessment. A wired creature's
- *  alarm comes from its own gland nodes (nodes.js), so this only names its
- *  threat source. */
+/** The threat source: the most threatening detected animal, which flight
+ *  steers away from. (Alarm comes from each creature's own gland nodes,
+ *  nodes.js; the placeholder release for creatures on the reactive rules went
+ *  with them.) */
 function applySafetyFromThreats(creature) {
   if (!creature.detectedThreats || creature.detectedThreats.length === 0) return;
-
-  // Use the most threatening detected entity
   const worst = creature.detectedThreats.reduce((a, b) =>
     a.threatLevel > b.threatLevel ? a : b);
-
   if (worst.threatLevel <= 0) return;
-
-  // Use bestSNR to determine proximity: SNR 1 = edge of detection, higher = closer
-  // Proximity = 1 - 1/bestSNR, clamped [0, 1]
-  const bestSNR = worst.bestSNR || 1;
-  const proximity = Math.max(0, 1.0 - (1.0 / bestSNR));
-
-  const spike = proximity * worst.threatLevel * SAFETY_PROXIMITY_COEFF;
-
-  if (!getWiring(creature)) releaseHormone(creature, 'alarm', spike);
   creature.threatSource = worst.source;
 }
 
-/** A blow landed: mark it (tookDamageThisTurn, which a wired creature's pain
- *  input reads), name the attacker as the threat, and for a creature still on
- *  the reactive rules release alarm (PLACEHOLDER for its gland). Called from
- *  combat resolution. */
+/** A blow landed: mark it (tookDamageThisTurn, which the pain input of a
+ *  creature's wiring reads), and name the attacker as the threat, felt where
+ *  the blow landed. Called from combat resolution. */
 function applySafetyFromDamage(creature, damageAmount, attacker) {
   if (!creature.hormones) return;
-
-  // Prompt K-B: mark creature as having taken damage this turn for flee retaliation
   creature.tookDamageThisTurn = true;
-  // Prompt L-A: creature is in combat (was attacked)
   creature.inCombatThisTurn = true;
-  // Compute total max HP from surviving body map zones
-  const bodyMap = getBodyMap(creature);
-  let totalMaxHp = 1;
-  if (bodyMap) {
-    totalMaxHp = 0;
-    for (const zone of bodyMap) {
-      totalMaxHp += zone.maxHp || 0;
-    }
-    if (totalMaxHp <= 0) totalMaxHp = 1;
-  }
-  const hpFraction = damageAmount / totalMaxHp;
-  let spike = hpFraction * SAFETY_DAMAGE_COEFF;
-
-  // Hungry predators dampen the alarm release — they commit to the hunt
-  // (hunger hormone on the alarm gland's receptors). At hunger 0.9 the
-  // release is ~30% (1 - 0.9 * 0.78); at 0.6 ~53%; below threshold, whole.
-  if (creature.diet === 'predator' && creature.hormones.hunger > HUNGER_THRESHOLD) {
-    const hungerDamp = 1.0 - (creature.hormones.hunger * 0.78);
-    spike *= Math.max(0.15, hungerDamp);  // floor at 15% — massive hits still register
-  }
-
-  if (!getWiring(creature)) releaseHormone(creature, 'alarm', spike);
-
-  // Set the threat source to whoever attacked us, felt where the blow landed
   if (attacker) {
     creature.threatSource = attacker;
     recordContact(creature, attacker);

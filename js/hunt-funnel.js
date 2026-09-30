@@ -4,8 +4,9 @@
 // perceives through the stages that lead to a kill, per predator–prey pair:
 //
 //   1 detected   the predator perceives it (an episode opens)
-//   2 viable     the predator judges it prey: isViablePrey (the deliberative
-//                test) or a 'smaller' size reading (the reactive rules' test)
+//   2 viable     it reads as prey: isViablePrey (detection.js, the old
+//                deliberative test) or a 'smaller' size reading (what the
+//                wired prey templates read)
 //   3 pursued    an action aimed at it (approach, chase, strike)
 //   4 adjacent   the two bodies on neighbouring tiles
 //   5 attacked   a strike thrown at it
@@ -15,8 +16,8 @@
 // An episode closes when the predator neither perceives the animal nor holds
 // a trace of it, when either dies, when either leaves the active radius, or
 // at the end of the run; it records why. On every action the predator spends
-// on a viable, perceived animal without pursuing it, the reactive rule (and
-// any deliberative override) that sent it elsewhere is tallied.
+// on a viable, perceived animal without pursuing it, what its wiring drove
+// instead (the output that won) is tallied.
 //
 // Transient fields on the predator (save-load.js strips them):
 //   _hunts     Map<animal, episode>: open episodes
@@ -25,9 +26,7 @@
 import { state } from './state.js';
 import { perceptOf, perceivedPosition, traceOf, isViablePrey } from './detection.js';
 import { getCreatureMass } from './ai-utils.js';
-import { REACTIVE_HUNGER_THRESHOLD, HUNGER_THRESHOLD, MIN_SEEK, SEEK_SCALE } from './constants.js';
-import { DIET_DECISION_THRESHOLD } from './sensory-constants.js';
-import { getDominantDrive } from './cognition.js';
+import { REACTIVE_HUNGER_THRESHOLD, HUNGER_THRESHOLD } from './constants.js';
 
 const PURSUIT = new Set(['approach_food', 'hunt_chase', 'hunt_attack', 'attack_adjacent', 'retaliate']);
 const STAGES = ['detected', 'viable', 'pursued', 'adjacent', 'attacked', 'hit', 'killed'];
@@ -61,32 +60,15 @@ function _open(predator, prey, info) {
   };
 }
 
-/** Why the deliberative layer (cognition.js deliberativeEvaluation) did not
- *  send the predator after this animal. */
-function _delibWhy(predator, prey, info) {
-  const dom = getDominantDrive(predator).drive;
-  if (dom !== 'hunger') return 'drive ' + dom;
-  if (!(predator.detectedPrey || []).some(p => p.target === prey)) return 'fails isViablePrey';
-  const seek = MIN_SEEK + (predator.integrationCapacity || 0) * SEEK_SCALE;
-  if (info.distance > seek) return 'beyond seek range';
-  if (info.threatAssessment === 'overwhelming' || info.threatAssessment === 'stronger') return 'assessed ' + info.threatAssessment;
-  if (info.dietConfidence < DIET_DECISION_THRESHOLD) return 'diet unresolved';
-  return 'chose another';
-}
-
 /** What sent the predator elsewhere this action. */
 function _insteadLabel(predator, action, prey, info) {
   const d = predator.hormones || {};
   const tr = predator._lastTrace || {};
   if (action && action.target && action.target !== prey && PURSUIT.has(action.behavior)) return 'pursuing another';
   if (!(d.hunger > REACTIVE_HUNGER_THRESHOLD)) return 'not hungry';
-  let label = tr.reactiveRule || ('? ' + (action ? action.behavior : ''));
-  if (tr.overrideAttempted) {
-    label += tr.overrideSucceeded ? ' → delib ' + tr.finalBehavior : ' (delib had nothing)';
-    label += ' {' + _delibWhy(predator, prey, info) + '}';
-  } else label += ' (no override)';
+  let label = 'drove ' + (tr.output || '?') + (action ? ' (' + action.behavior + ')' : '');
   if (action && action.target && action.target !== prey && action.target.key) label += ' @' + _who(action.target);
-  if (info && info.distance > 4 && /^R(7|8|9)|^R\?/.test(label)) label += ' [prey >4 tiles]';
+  if (info && info.distance > 4) label += ' [prey >4 tiles]';
   return label;
 }
 

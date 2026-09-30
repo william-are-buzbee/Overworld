@@ -76,8 +76,8 @@ function bodyTakes(kind) {
 
   // A drive at the generator the hub did not win: it takes the legs
   if (out.effect === 'locomotion' && out.type !== 'deliberate') return _reflexRun(p, out);
-  if (out.type === 'freeze' && kind !== 'rest') {
-    log('You freeze. The body will not move.', LOG_CATEGORIES.COMBAT);
+  if (out.effect === 'posture' && kind !== 'rest') {
+    log(out.type === 'freeze' ? 'You freeze. The body will not move.' : `Your body holds still (${out.type}).`, LOG_CATEGORIES.COMBAT);
     endPlayerTurn('rest');
     return true;
   }
@@ -142,8 +142,10 @@ function hubReport(entity) {
   // listed after it) never takes the body
   const outs = wiring.outputs || [];
   const hubLoco = outs.findIndex(o => o.node === hubNode.id && o.effect === 'locomotion');
-  const losesToHub = (o) => hubLoco >= 0 && o.effect === 'locomotion' &&
-    (o.intensity < outs[hubLoco].intensity || (o.intensity === outs[hubLoco].intensity && outs.indexOf(o) > hubLoco));
+  // (a posture takes it only by shutting the hub's drive, as the hare's freeze does)
+  const losesToHub = (o) => hubLoco >= 0 && (o.effect === 'locomotion'
+    ? (o.intensity < outs[hubLoco].intensity || (o.intensity === outs[hubLoco].intensity && outs.indexOf(o) > hubLoco))
+    : !(outs[hubLoco].vetoedBy || []).includes(o.node));
   const reflexes = [];
   for (const o of outs) {
     if (o.node === hubNode.id || (o.effect !== 'locomotion' && o.effect !== 'posture')) continue;
