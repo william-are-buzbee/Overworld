@@ -1,194 +1,231 @@
-# Neural Architecture Design — Structure Types
+# Neural Architecture Design — Nodes and Circuits
 
-How a nervous system is built in the body map: the small set of structure types every creature's nervous system is assembled
-from, what each one physically does, and what an animal gains from it. The theory is in Cognition-Design (layers, override,
-memory), the motor side in Motor-System-Design (pathways, activation parameters, reflex / template / integration levels),
-the senses in Sensory-Design, the chemistry in Endocrine-Design. This document is the parts list those are built from.
+How a nervous system is built in the body map: one physical unit, the node, wired into circuits. A creature's behaviour is
+read off its wiring. The theory is in Cognition-Design (layers, override, memory), the motor side in Motor-System-Design
+(pathways, activation parameters), the senses in Sensory-Design, the chemistry in Endocrine-Design. This document is the
+parts list and the ways parts are put together.
 
 Include it alongside Design-Principles and Cognition-Design when designing or converting any creature's nervous system.
 
-**Status (Sep 2026): draft for discussion with the person.** Nothing here is implemented beyond what the hare already has
-(its `CREATURE_NEURAL` entry, `cognition.js processGanglionSystem`). The structure list in "The Structure Types" is the
-load-bearing decision; the rest follows from it.
+**Status (Sep 2026): draft, settled in discussion with the person.** Nothing here is implemented yet beyond the hare's
+existing `CREATURE_NEURAL` entry (`cognition.js processGanglionSystem`), which this design replaces.
 
 ---
 
-## Principle: Pipes and Pumps
+## Principle: Physical First
 
 There are very many ways to build a mind. Cephalopods and mammals reached comparable intelligence with no shared ancestor
-that had any; similar parts arranged differently mean different things. So the code must not hold per-species behaviour. It
-holds a few structure types, and a species is a wiring of them: which structures exist, in which zones, with how much
-tissue, fed by which transducers and which other structures, driving which effectors, able to suppress which others.
-Convergent behaviour then comes for free: two unrelated wirings that do the same job produce the same observable result.
+that had any; similar parts arranged differently mean different things. So the code holds no per-species behaviour and no
+cognitive concepts. There is no "object", no "decision", no "arbitration" in it. There is tissue, wired. What we call
+recognising a predator is a node crossing its threshold; what we call deciding not to flee is a negative weight arriving
+before the bolt fires; what we call remembering is a node that was written and still exists.
 
-Every structure, whatever its type:
+A species is a wiring: which nodes exist, in which zones, with how much tissue, fed by what, driving what. An animal can be
+highly reactive in an intelligent way and know almost nothing about its world: many well-weighted nodes, almost none that
+persist. Another can hold a map, remember, predict. Both are the same parts.
 
-- **lives in a zone** and dies with it (the hare already works this way: `_livingArchitecture`);
-- **has neural mass**, taken from that zone's `neural` × the matching `neuralAllocation`; mass is its capacity (how many
-  templates it holds, how many objects it keeps, how many independent outputs it times);
-- **has wired inputs**: named transducers (`fore_l.vibration.ground`, `head.visual`) or other structures' outputs
-  (`fore_ganglion_l.processed`); it hears nothing else;
-- **has wired outputs**: effector zones, or other structures;
-- may **suppress or modulate** named others, and only those (edges, below).
-
-The test for any structure is the one in Design-Principles: point to it in the body map, destroy its zone and the behaviour it
-produces stops, and a reader of the wiring can predict the behaviour without the code.
+The test is the one in Design-Principles: point to the node, destroy its zone and what it did stops, and a reader of the
+wiring can predict the behaviour without the code.
 
 ---
 
-## What Flows Between Structures
+## The Node
 
-- **Readings**: what a transducer delivers, per zone and channel (SNR and the features that channel resolves at that SNR,
-  Sensory-Design). Already carried as `detectionInfo.zoneSNR` and the percept.
-- **Matches**: a template matcher's output: which template, how confident (the margin over the runner-up), for which source.
-- **Objects**: an integration workspace's held representation of one thing: where, what, how sure, since when, moving how.
-  Traces (perception pass 8) are the first version.
-- **Activation**: intensity, duration, pattern, down motor pathways to effector zones (Motor-System-Design). No named
-  programs.
-- **Suppression and modulation**: a signal that lowers another structure's output or scales its intensity.
-- **Chemistry**: hormones, broadcast through the blood, shifting thresholds everywhere at once (Endocrine-Design). Not a
-  wiring edge; every structure with receptors reads it.
+The one neural unit. A node is a population of cells in one zone doing one physical thing: summing what arrives and firing
+if the sum crosses its threshold. Not a neuron; a lump of tissue with one job.
 
-**Timing is anatomy.** A short path acts before a long one. A reflex arc fires on the action its input arrives; a signal
-that has to reach a hub, be held, compared and sent back arrives later, so the hub can only suppress what has not already
-fired. The current override formula approximates this race (Cognition-Design, "The Physical Basis of Override").
+| property | what it is physically |
+|---|---|
+| **zone** | where the tissue is. Destroy the zone and the node is gone. |
+| **mass** | kg of neural tissue, drawn from that zone's `neural` × the relevant `neuralAllocation`. The zone's allocation must cover all its nodes. |
+| **inputs** | wired sources, each with a **weight**: transducer features (`fore_l.vibration.ground.cadence`) or other nodes. A negative weight is inhibition. |
+| **threshold** | how much summed input it takes to fire. |
+| **gain** | how hard it fires once past threshold (its output level). |
+| **persistence** | how long it keeps firing after its input stops, in actions. Zero for most tissue (a simple node fires while stimulated and stops). Non-zero only for tissue built to hold activity (recurrent wiring), and it costs mass. |
+| **mode** | **mapped**: evaluated per source, laid out by bearing, and its output carries that bearing ("away from *there*"). **Pooled**: sums over everything sensed ("how threatening is it around here"). |
+| **outputs** | other nodes, effector zones (activation: intensity, duration), or the blood (a hormone). |
+| **plastic** | whether its weights, or the node itself, can be written by experience (Memory, below). Most nodes are not. |
+
+Hormones reach every node with receptors for them and shift its threshold and gain (Endocrine-Design). That is the only
+non-wired influence.
+
+### What else is physical but not a node
+
+- **Transducers**: already in the body map; they deliver features per zone and channel at some SNR (Sensory-Design).
+- **Pathways**: the wires between zones, with bandwidth (how much gets through) and length in hops. **Timing is anatomy**:
+  a signal crossing more hops arrives later, so a short circuit acts before a long one can inhibit it. This replaces the
+  override formula's approximation of the signal race.
+- **Effectors**: muscle zones, which respond to activation as Motor-System-Design and Muscle-Fiber-Design describe.
+- **Blood**: carries hormones; its circulation sets how fast (Endocrine-Design, Circulatory-Immune-Design).
+
+### Evaluation
+
+Each action, signals flow from transducers through the wiring in hop order. A node fires when its weighted input (plus
+whatever its persistence still carries) crosses its threshold, shifted by the hormones it has receptors for. Mapped nodes are
+evaluated once per sensed source, on that source's bearing; pooled nodes once. Outputs reach effectors as activation and the
+blood as hormone. Nothing else decides anything.
 
 ---
 
-## The Structure Types
+## Circuit Recipes
 
-Six structure types and one kind of link. The first five are in the hare's wiring already; memory and endocrine tissue are designed (Cognition-Design, Endocrine-Design) but not built.
+Named arrangements of nodes. These are for people reading and designing wirings; they are not code types. Any wiring can mix
+them, copy them, or do something none of them describe.
 
-### 1. Reflex arc (local ganglion)
+### Reflex arc
 
-One or a few inputs, one threshold, one fixed output. It does not compare anything. The hare's fore-limb ganglia (ground
-vibration spike → bolt) and graze ganglia (edible contact → chew) are this. Cheap, fast, local: the first thing to fire and
-the last thing to die, since each limb carries its own.
+One transducer feature → one node → one effector. Fast and local: the hare's fore-limb bolt, a limb pulled back from pain.
 
-*Gains the animal:* speed. It acts before anything can think.
+### Template, and the pattern library
 
-### 2. Template matcher (pattern library)
+A node whose inputs are features of one or more channels, weighted toward the values a thing has: meat-eater outline (+),
+meat-eater odour (+), heavy footfall cadence (+). It fires when enough of the pattern is present. That node *is* a stored
+pattern. A **pattern library** is many template nodes in one zone's tissue; its size is limited by that tissue's mass.
+Wired templates are there from birth (the species' evolution; their weights are read from the bodies of the animals they
+match, as `detection.js _identify` does now). Learned templates are written by experience (Memory).
 
-Compares an input's features against stored templates and outputs the best match and its confidence. This is the pattern
-library, physically: templates are stored in the tissue of the zone that holds them, and how many it can hold is its mass ×
-`patternLibrary` allocation. Destroy the zone and the templates are gone. The hare's `threat_classification` and
-`food_identification` regions are this, and so is pass 7's identification (`detection.js _identify`), which matches mass,
-limb count, brightness and volatile mix against one wired template per species.
+**Stacking.** A template's inputs can be other templates: this odour template + this outline template = a hare. Scenes,
+multimodal packages and sequences are built this way, each level costing tissue.
 
-A template is a point in the feature space of the channel(s) the matcher is wired to, with a tolerance. Matching is
-distance in that space; confidence is the margin between the best and the second-best template (so look-alikes collide at
-the margin, as decided for perception honesty). What each channel can offer as features:
+What each channel offers as features:
 
 | channel | features it resolves as SNR rises |
 |---|---|
-| ground vibration | footfall cadence and weight, limb count from the cadence, gait (walk / bolt), direction |
-| air vibration | rhythm, size of the source, wingbeat or breath |
+| ground vibration | footfall cadence and weight, limb count from the cadence, gait, bearing |
+| air vibration | rhythm, size of the source, breath or wingbeat |
 | vision | outline and size, limb count from the silhouette, brightness, motion across and toward, looming |
-| airborne chemistry | volatile mix (diet, species, wound, condition), freshness, upwind bearing |
+| airborne chemistry | volatile mix (diet, species, wound), freshness, upwind bearing |
 | contact chemistry | edible or not, meat-eater traces underfoot |
 
-**Wired or learned.** Wired (crystallized) templates are fixed at birth: evolution put them there. Learned templates are
-added and reshaped by experience, and need memory (type 6). All current templates are wired.
+### Parallel responses
 
-**Stacked patterns.** A matcher's inputs can be other matchers' outputs. That is how larger patterns are built without a
-new mechanism: a multimodal package (this smell + this footfall = hare), a scene (this clearing looks as it did, or does
-not), a sequence (freeze, then bolt). Each level costs tissue, which gives each species a natural ceiling.
+Several nodes on the same inputs with different weights, thresholds and outputs. The example the design is built around:
 
-*Gains the animal:* recognition: knowing what a signal is, not only that it is there.
+- **bolt node**: outline + odour + footfall, high threshold, output the locomotion generator at maximum, mapped (away from
+  the source's bearing);
+- **alarm gland node**: the same inputs weighted toward odour, low threshold, graded output of alarm chemistry into the blood
+  (the adrenaline- and cortisol-like hormones of Endocrine-Design);
+- **freeze node**: footfall at middling strength, output to posture, with a negative weight onto the gait.
 
-### 3. Pattern generator (coordinating center)
+A smell alone trips the gland, not the bolt: the animal is washed in alarm chemistry and grows jumpy. A sudden footfall or
+looming outline trips all three. No rule says so: it falls out of the weights.
 
-Produces activation (intensity, duration, pattern) for a set of effector zones, and times them against each other
-(Motor-System-Design "Coordinating Centers"). Its tissue limits how many independent outputs it can time: the hare's
-0.01 kg `central_loco` has two patterns, all-at-once and alternating. There are no verbs in it. A handful of generator
-kinds covers the repertoire:
+### Inhibition
 
-| generator | what varying its parameters produces |
+A negative weight from one node onto another's input or output. "Holding a response down" is nothing more: a node that
+recognises another hare, wired with a negative weight onto the bolt node, keeps a hare grazing when another hare thumps past.
+Without that wire nothing can hold the bolt down, and the animal bolts at shadows.
+
+### Priming
+
+A pooled node that sums a general threat level while grazing, with some persistence, wired as a positive input onto other
+nodes. A primed animal bolts on less. Alarm chemistry does the same through the blood, slower and body-wide.
+
+### Pattern generator
+
+Two nodes inhibiting each other, each with a little persistence (a half-centre oscillator), produce alternation: a gait. A
+single node with a burst output produces a pounce or a bolt from standing. Driven harder, the same circuit produces a faster
+gait (intensity); no named programs. The phase within one step is not simulated; each action the generator delivers an
+intensity and a pattern (alternating, all at once) to the effectors it is wired to. How many independent outputs it can time
+is its mass. Generator circuits a body needs, in some form:
+
+| circuit | what varying its drive produces |
 |---|---|
-| rhythmic locomotion | creep, walk, trot, sprint (intensity); swim, climb (the substrate the limbs meet) |
-| burst | leap, pounce, lunge, bolt from standing (all locomotion zones at once, one pulse) |
-| orienting | turning head or body toward a source; sniffing is orienting plus breathing |
-| strike / grasp | bite, claw, kick, hook (a pulse to one zone); hold (sustained) |
-| posture | rest, crouch, brace, freeze (sustained low activation, or none) |
+| rhythmic locomotion | creep, walk, trot, sprint; swim, climb (the substrate the limbs meet) |
+| burst | leap, pounce, lunge, bolt |
+| orienting | head or body turned toward a bearing; sniffing is orienting plus breathing |
+| strike / grasp | bite, claw, kick, hook; hold (sustained) |
+| posture | rest, crouch, brace, freeze |
 
-Build a basic version of each, apply it to every creature, then give clades their differences: ancestral Clade A times its
-limbs from one central generator fed by the head; ancestral Clade B lets each limb run its own and coordinates loosely
-(Cognition-Design, clade notes). Whether a creature can do something at all is whether it has a generator wired to zones
-that can do it.
+### Gland
 
-*Gains the animal:* coordinated movement. Without one, muscle is inert.
+A node whose output is a hormone released into the blood. Endocrine tissue is wired like anything else: which nodes drive a
+gland and which nodes have receptors for its hormone is the wiring.
 
-### 4. Integration workspace
+### Maps: combining senses, holding, predicting
 
-Holds a few objects over time and works on them. Its capacity is mass × `integration` allocation (the existing
-`integrationCapacity`). Integration is not one thing; each of its functions has to earn its place by what the animal does
-differently with it:
+A **map** is a set of mapped nodes laid out by bearing (and, with enough tissue, distance), as a real midbrain maps space.
+Signals from vision, vibration and smell that arrive from the same bearing land on the same node. There is no "object":
+combining senses is two inputs arriving at the same place on the map, and the node fires on less evidence from each because
+they add.
 
-| function | what it is | what the animal does with it | status |
+- **Holding**: map nodes with persistence keep firing where something was after it drops out of the senses. How long is how
+  much of that tissue there is (today's traces: integrationCapacity × PERSISTENCE_SCALE).
+- **Working memory bank**: persistent map nodes written by something else, overwritten as the animal moves: where the exits
+  are (passable ground on each bearing), read by the bolt to choose a direction.
+- **Prediction**: a map node that also takes motion input (the eyes resolve velocity across and along the line of sight)
+  and excites the neighbouring node in the direction of travel. The circuit fires ahead of the thing. A pursuit predator
+  wired this way runs to where the prey is going.
+
+### Memory
+
+Memory is writing: nodes that create or change other nodes. Three writers, each a node (or small circuit) in some zone, each
+with its own store:
+
+| writer | what it writes | the animal gains | its store |
 |---|---|---|---|
-| corroboration | two channels on one source raise confidence | commits on weaker single-channel evidence when two agree | partly (best-channel confidence) |
-| binding | features from different channels tied to one object | knows this smell is that shape | pass 6b-2 (odour bound to a seen animal) |
-| holding | an object kept after the senses lose it | goes to where the prey was; flees from where the threat was | pass 8 (traces, evidence summation) |
-| prediction | where a moving object will be | runs to where the prey is going, not where it is (intercept) | new: the wolf's first |
-| arbitration | holds a lower structure's output down, or scales it | does not bolt at a harmless shape; sets a hunt's pace | override (a formula standing in for the signal race) |
-| comparison | self against other | declines fights it would lose | fight assessment (`assessFightOutcome`) |
+| **pattern writer** | a new template node from the current feature combination | recognition, familiarity: "seen this before" | a pattern library (plastic template nodes) |
+| **association writer** | the weight from a stored template onto another circuit (bolt, alarm gland, approach) | what a pattern means: this smell is danger, this place has food | the weights themselves, in the template's tissue |
+| **sequence writer** | links between templates in the order they fired | episodes; replaying forward is prediction from experience | a sequence store (the head's `episodicMemory` allocation, in Clade A) |
 
-Corroboration is the "accuracy" view of integration and it is real, but for a pursuit predator the larger gains are in time:
-holding and prediction. A workspace too small for a function simply lacks it; the lurker's 0.014 holds almost nothing.
+Writes are triggered physically: a writer fires when its inputs say something happened that matters (pain, food, a spike of
+alarm chemistry). That is why frightening events stick.
 
-*Gains the animal:* context: acting on more than this instant's strongest input.
+Damage reads straight off the wiring:
 
-### 5. Suppression and modulation links
+| destroyed | result |
+|---|---|
+| a writer | no new memories of that kind; the stored ones still work (anterograde amnesia) |
+| a store | those memories are gone; the writer can write new ones if it has tissue to write into |
+| the association writer only | it learns to recognise new things but can never learn what they mean: familiar with a new predator's smell, and unafraid of it |
+| the sequence writer only | it recognises and associates, but keeps no episodes |
 
-Not a structure: edges between structures. `canSuppress` lowers a named structure's output; `canModulate` scales its
-intensity. They are physical inhibitory pathways: without one, the upper structure cannot touch the lower one, and the
-lower one fires whatever the upper one "thinks" (why startled animals bolt at shadows). The hare's threat region can
-suppress its bolt arcs; its workspace can modulate its locomotion.
+Capacity is the store's mass; a full store overwrites what has fired least. Written nodes and weights are body state and are
+saved with the body (unlike traces and percepts, which are stripped). Clade A ancestrally keeps its stores and writers in
+the head (lose the head, lose everything); ancestral Clade B keeps pattern stores in its limbs, loosely indexed across the
+body (Cognition-Design, Memory Architecture).
 
-### 6. Memory index (episodic)
+---
 
-Links activations of patterns in the order they happened: time as a highway. A cue (a smell, a place) matches a stored
-fragment; the index reactivates what came with it and what came after. Replaying forward is prediction from experience
-("last time this smell was on this bank, a hare came out of that thicket"). Clade A indexes centrally (the head's
-`episodicMemory`, total amnesia if the head goes); ancestral Clade B remembers in its limbs' pattern libraries, loosely and
-robustly (Cognition-Design, Memory Architecture). Learned templates (type 2) need it.
+## Where the Numbers Come From
 
-*Gains the animal:* a past to act on. Deferred: after the wolf's wiring works on wired templates.
+Weights, thresholds and gains are evolution's choices, authored per species like zone masses: visible in the wiring,
+destroyable with their zone. They must not become the tuning levers Design-Principles forbids. Where a number can be read
+from the body, it is:
 
-### 7. Endocrine tissue
+- a template's target feature values come from the bodies it matches (as identification does now);
+- how much a transducer feature contributes follows the transducer's quality and SNR;
+- a node's mass is its capacity (templates held, actions of persistence, outputs timed);
+- hormonal shifts come from Endocrine-Design's receptor model.
 
-Releases hormones on neural command; the blood carries them; every structure with receptors shifts its thresholds
-(Endocrine-Design). This is where drives live: hunger, alarm, rest are concentrations, not variables on the animal. It is
-listed here so the wiring can say which structures command a release and which read which hormone.
+A number that cannot be traced to the body is written in the wiring with a comment saying what it stands for.
 
 ---
 
 ## Where Today's Code Sits
 
-| in the code | type | note |
-|---|---|---|
-| hare `fore_ganglion_*`, `graze_ganglion_*` | 1 reflex arc | as designed |
-| hare `threat_classification`, `food_identification` | 2 template matcher | wired templates |
-| `detection.js _identify` (pass 7) | 2 template matcher | wired, one per species; not yet housed in a structure |
-| hare `central_loco` | 3 pattern generator | two patterns |
-| hare `integration_workspace`, traces, binding, evidence summation | 4 workspace | holding, binding, corroboration |
-| `canSuppress`, `canModulate` | 5 links | hare only |
-| `evaluateReactiveRules` | 2 + 3, as a placeholder | universal templates wired to generators, written as code. Retired creature by creature |
-| `canOverrideReactive`, `deliberativeEvaluation` | 4 arbitration | formula for the signal race; the drive comparison inside is endocrine (type 7) standing in |
-| `getMovementIntensity` by behaviour label | 3, as a placeholder | intensity should come from the generator |
-| `ai-utils.js stepRoundObstacles` | 6, as a placeholder | route memory; searches the true ground |
-| drives (`creature.drives`) | 7, as a placeholder | Endocrine-Design |
+| in the code | in this design |
+|---|---|
+| hare `fore_ganglion_*`, `graze_ganglion_*` | reflex arcs |
+| hare `threat_classification`, `food_identification`, the looming circuit | templates (and a prediction-like motion input for looming) |
+| `detection.js _identify` (pass 7) | a wired pattern library, not yet housed in nodes |
+| hare `central_loco` | a pattern generator with two patterns |
+| hare `integration_workspace`, traces, evidence summation, odour binding | map nodes with persistence; combining senses |
+| `canSuppress`, `canModulate` | inhibitory and modulating weights |
+| `evaluateReactiveRules` | placeholder: universal templates wired to generators, written as code. Retired creature by creature |
+| `canOverrideReactive`, `deliberativeEvaluation` | placeholder for timing by hops plus inhibition |
+| `getMovementIntensity` by behaviour label | placeholder: intensity should come from the generator |
+| `ai-utils.js stepRoundObstacles` | placeholder for a learned route store (sequence and pattern writers) |
+| `creature.drives` | placeholder for glands and hormone levels |
 
 ---
 
 ## The Player
 
-The player is the integration layer. Reflex arcs and wired templates in the player's body fire on their own, as in any
-creature's: a grazer body bolts when its forelimbs feel a heavy footfall, whatever the player intended. The player's
-actions are what a workspace would send down: they can only use generators the body has, wired to zones that survive. A
-hotbar of the body's generators (and, later, learned patterns) is the natural interface: the keys are the body's motor
-repertoire, read from its wiring. How far a player's intent can suppress its own reflexes is set by the same suppression
-links as for anything else.
+The player's intent stands where the top of a wiring would. Reflex arcs and wired templates in the player's body fire on
+their own, as in any creature: a grazer body bolts when its forelimbs feel a heavy footfall, whatever the player intended,
+unless the body has an inhibitory wire the player's intent can drive. The player can only drive generators the body has,
+wired to zones that survive; a hotbar of the body's generators (and later its learned patterns) is the natural interface.
 
 ---
 
@@ -203,41 +240,37 @@ The prowler's nervous system from its body map:
 | front limbs | 0.05 each | motor control 0.04, chemical processing 0.01 |
 | mid and rear limbs | 0.04 each | motor control 0.04 |
 
-Pathways: head → torso (bandwidth 0.9), torso → each limb (0.5–0.7). A centralized, nose-led, Clade A body: most of its
-mind is in its head, and everything reaches the limbs through the torso.
+Pathways: head → torso (bandwidth 0.9), torso → each limb (0.5–0.7). Centralized and nose-led: most of its mind is in its
+head, and everything reaches the limbs through the torso, two hops away.
 
-A draft wiring, to be settled before code:
+A draft of its circuits, to be settled before code:
 
-| structure | type | zone | wired from | drives / effect |
+| circuit | recipe | tissue | inputs | outputs |
 |---|---|---|---|---|
-| odour matcher | 2 | head (chemical processing, pattern library) | head airborne and contact chemistry | prey / carrion / predator / kin odour, with upwind bearing |
-| shape and motion matcher | 2 | head (visual processing, pattern library) | head eyes | outline, size, limb count, motion |
-| threat matcher | 2 | head (threat assessment) | the two matchers above | larger predator, larger animal closing |
-| workspace | 4 | head (integration) | all matchers, traces | corroboration, binding, holding, prediction, arbitration, comparison |
-| gait generator | 3 | torso (motor relay), timed from head (motor coordination) | workspace, threat matcher | rhythmic locomotion and burst to all six limbs |
-| orienting generator | 3 | head | odour matcher, workspace | head and body toward a source; sniffing |
-| bite generator | 3 | head | workspace, contact | a strike pulse to the jaw |
-| claw generators | 3 | front limbs (motor control) | workspace via torso | strike pulses to each foreleg |
-| limb withdrawal arcs | 1 | each limb | that limb's contact / pain | pull the limb in |
-| trail reader | 2 | front limbs + torso (chemical processing) | contact chemistry underfoot | the trail's fresher end |
-| memory index | 6 | head (episodic memory) | the workspace | deferred |
+| prey, carrion, predator, kin odours | templates | head chemical processing + pattern library | head airborne chemistry | the map; alarm gland (predator odour) |
+| prey and threat outlines, motion | templates | head visual processing + pattern library | head eyes | the map |
+| larger-animal template | template | head threat assessment | size and motion features | inhibits approach; drives retreat on the map |
+| bearing map with holding and prediction | map | head integration | the templates above, eye motion | orienting, gait (toward or away from a bearing) |
+| trail reader | template | forelimb + torso chemical processing | contact chemistry underfoot | orienting (the trail's fresher end) |
+| gait | pattern generator | torso motor relay, timed from head motor coordination | the map, hunger chemistry | six locomotion limbs |
+| pounce | burst | torso motor relay | the map (prey within reach) | all locomotion limbs at once |
+| orienting | pattern generator | head | the map, odour templates | head and body |
+| bite, claws | strike | head; forelimb motor control | the map (prey adjacent), contact | jaw; each foreleg |
+| limb withdrawal | reflex arcs | each limb | that limb's pain | that limb |
+| hunger, alarm | glands | torso (to place) | gut state; predator templates | blood |
+| memory writers and stores | memory | head episodic memory + pattern library | the map, pain, food, alarm | deferred |
 
-What the wolf's reactive rules become:
+What its reactive rules become:
 
 | rule | becomes |
 |---|---|
-| 1–2 damage responses | limb withdrawal arcs, threat matcher, workspace arbitration |
-| 3–4 threats near and adjacent | threat matcher → gait generator (away) or orienting; workspace can hold it down |
-| 4B competitor spacing | threat matcher on kin odour + orienting |
-| 5–6 prey adjacent and near | odour / shape matchers → workspace → gait and strike generators |
-| 6A where the prey was | workspace holding |
-| 6B–6C trail, plume | trail reader, odour matcher → orienting and gait |
-| 7–9 territory, rest, default | endocrine (rest) and the gait generator's resting state |
-
-Prediction, the wolf's new function: the eyes already resolve a seen body's velocity across and along the line of sight
-(perception pass 4). The workspace holds that velocity on the object and sends the gait generator toward where the object
-will be after the steps it takes to get there, rather than where it is. Its reach is limited by how long the workspace holds
-the object and how well the eyes resolve the motion; a nose-only percept gives no velocity and so no prediction.
+| 1–2 damage | limb withdrawal arcs, the larger-animal template, alarm gland |
+| 3–4 threats near and adjacent | larger-animal template on the map → gait away, or orienting; inhibition from prey templates when hungry |
+| 4B competitor spacing | kin odour template → orienting and a weak gait-away |
+| 5–6 prey adjacent and near | prey templates on the map → gait, pounce, strike |
+| 6A where the prey was | holding on the map |
+| 6B–6C trail, plume | trail reader and odour templates → orienting and gait |
+| 7–9 territory, rest, default | glands (rest) and the gait generator's resting drive |
 
 ---
 
@@ -246,28 +279,27 @@ the object and how well the eyes resolve the motion; a nose-only percept gives n
 One pass per pull request.
 
 1. This document, settled with the person.
-2. A generic structure runner: the types above as code, read from a creature's wiring. Port the hare onto it with no
-   behaviour change (harness tallies identical).
-3. The wolf's wiring on the runner. Its reactive rules retired (the other predators keep them until their turns).
-4. Prediction in the wolf's workspace.
-5. Later: memory index and learned templates; the other predators and the shaleback; endocrine drives replacing
-   `creature.drives`; the player's generators on a hotbar.
+2. The node runner: nodes, weights, persistence, mapped and pooled evaluation, hop timing, glands, generators built from
+   nodes. Port the hare onto it with no behaviour change (harness tallies identical).
+3. The wolf's wiring on the runner; its reactive rules retired (the other predators keep them until their turns).
+4. The wolf's map: holding (replacing traces for it) and prediction.
+5. Memory writers and stores, saved with the body; the detour placeholder replaced by a learned route store.
+6. Later: the other creatures, glands replacing `creature.drives`, the player's generators on a hotbar.
 
-The harness (`tools/ecology.mjs`) checks each step for regressions and for systems not doing what their doc says. It does not
-set targets for the ecology.
+The harness (`tools/ecology.mjs`) checks each step for regressions and for systems not doing what their doc says. It does
+not set targets for the ecology.
 
 ---
 
-## Open Questions (the person's)
+## Open Questions
 
-- Is this the right list of types? In particular: is prediction a workspace function, or its own structure?
-- One pattern library per zone per channel (the hare's per-limb libraries), or one per matcher (the wolf's head library)?
-  Both are physical; the first suits Clade B, the second Clade A.
-- How much can a player's intent suppress its body's reflexes?
-- Hunger, alarm and rest become endocrine (type 7) when? Before or after the wolf?
+- Glands and hunger: before the wolf, or with it?
+- How far can a player's intent inhibit its body's reflexes: only through inhibitory wires the body has, or more?
+- Distance on the map: bearing only at first, or bearing and distance?
 
 ## What NOT to Change
 
 - Per-species behaviour code. A species is a wiring.
-- Named motor programs. Generators take intensity, duration and pattern.
-- Structures without a zone, or with capacity not drawn from that zone's neural tissue.
+- Cognitive concepts in the code (objects, decisions, arbitration). Nodes, weights, persistence, hormones.
+- Named motor programs. Generators deliver intensity and pattern.
+- Nodes without a zone, or with capacity not drawn from that zone's neural tissue.

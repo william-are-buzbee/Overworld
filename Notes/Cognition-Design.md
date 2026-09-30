@@ -4,7 +4,7 @@ This document captures the design theory for how cognition works in the game. It
 
 Include alongside Surface-Creatures.md, Sensory-Design.md, and Ecology-Foundations.md when working on AI behavior, perception, or creature design.
 
-The structure types a nervous system is assembled from (reflex arcs, template matchers, pattern generators, the integration workspace and what each of its functions buys, memory, endocrine tissue) are in Neural-Architecture-Design.md, with the wolf's draft wiring.
+How a nervous system is physically built (one unit, the node, wired into circuits: reflexes, templates and pattern libraries, generators, glands, maps that combine senses, hold and predict, and memory as nodes that write other nodes) is in Neural-Architecture-Design.md, with the wolf's draft wiring.
 
 ## Core Principle
 
