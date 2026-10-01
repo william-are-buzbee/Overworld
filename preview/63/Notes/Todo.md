@@ -148,7 +148,8 @@ See `Direction.md`. Brainstorm-grade; nothing here is to be built until the pers
 - [ ] Reconcile `Mutation-Design.md` with the organ as surplus spent on edits
 - [x] Decide `Lore.md`'s demigod against the demigod as apex of the energy flow (Lore is not authoritative)
 - [x] Mutagen as substance (juice) and machine (organ); aging as repair; inheritance by deliberate signature; juice taken by eating
-- [ ] Organ or juice first
+- [x] Organ or juice first (juice first: juice that is not burned seeds an organ)
+- [ ] Aging and death by age for every body, the player's included (low priority)
 - [ ] Settle the open questions in `Direction.md` (edits and their costs, sapient minds, length of a life, what ends a run)
 
 ## Up Next — Game Integration (after geography pass)

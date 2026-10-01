@@ -86,7 +86,8 @@ only, full command) are one progression.
 Aging is damage outpacing repair; repair costs energy. A body that can afford more repair ages slower. Lifespan is not a
 special power of mutagen; it is juice spent on repair, as a function of the ecology like everything else. The non-eaters last
 centuries because nearly all they have goes to repair. Near-indefinite life is possible and costs a continuous, enormous repair
-bill paid by the island. **For now the player does not die of old age** (the person, 1 Oct 2026); everything else ages.
+bill paid by the island. Aging and death by age are real for every body, the player's included; low priority, and not
+expected to be hard to build (the person, 1 Oct 2026).
 
 ### Inheritance
 
@@ -94,20 +95,17 @@ The organ passes on to offspring only when it is deliberately driven to: it must
 Without that, a mutie's children are ordinary members of its base species. So a lineage of muties is something kept up on
 purpose, and a line that stops doing it (or cannot) ends.
 
-### Which comes first, organ or juice (open)
+### Juice first
 
-One makes the other; the person has not chosen. Proposal: **juice first.** Juice that stays in a body long enough seeds an
-organ; that is what juice does when it is not burned.
+Juice comes first and makes the organ (the person, 1 Oct 2026). Juice that stays in a body long enough seeds an organ; that is
+what juice does when it is not burned.
 
 - Small doses are burned as calories before they seed anything. A starving body burns all of it. A well-fed body that eats
-  enough mutie keeps enough to seed one. "Most of the time" becomes a dose against a burn rate, not a probability.
+  enough mutie keeps enough to seed one. "Most of the time" is a dose against a burn rate, not a probability.
 - That gives two ways to be a mutie: **seeded** (ate juice; a raw organ on an unedited body, which builds whatever it builds)
   and **inherited** (the parent's signature; the parent's edits carried on). Wild muties and lineages.
 - It explains how muties arise from ordinary species and how mutation spreads across water: by being eaten. Predators,
   eating most, are the likeliest to be seeded.
-
-Organ first is simpler (the organ is the identity, and juice is only its product) but leaves where new muties come from
-without an answer.
 
 ## The ecology is the commons
 
@@ -192,18 +190,17 @@ start would leave nothing to climb.
 
 ## Open
 
-- Organ or juice first (proposal above).
 - How reproduction enters play: lineage play, or one individual per run.
 - Which edits exist, what each costs, and how the player chooses them.
 - How a sapient mind runs. The node wiring runs reflexes; planning and memory of individuals is a far bigger problem.
   Exchanges of objects and signals before words is cheaper and truer than dialogue trees.
-- How long a life is, in turns and in minutes (with no death of old age for the player, a run ends some other way).
+- How long a life is, in turns and in minutes.
 - What ends a run, and what ends the game.
 
 ## Docs this moves
 
 - `Mutation-Design.md` predates this: mutations there come from what you eat (eat a clade, grow its organs). That is magic in
-  the mechanism. To be reconciled with the organ as surplus spent on edits.
+  the mechanism. To be reconciled with juice and organ; its consumption tracking may survive as the record of juice taken.
 - `Lore.md` is not authoritative (the person, 1 Oct 2026). What stands: a planet with stable characteristics and alien flora
   and fauna; at some point something brought mutagen into the world. Its shapeshifting demigod outside the physics does not.
 - `Design-Principles.md` holds; this extends it to muties.
