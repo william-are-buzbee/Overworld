@@ -7,7 +7,8 @@ system you are touching. `Notes/Direction.md` says where the game is heading (mu
 ## What this is
 
 A turn-based roguelike about surviving as an alien creature on a believably simulated world (see `readme.md` and
-`Notes/Lore.md`): two founder lineages radiated into every niche, and the player is one of their descendants. Inspired by
+`Notes/Direction.md`; `Notes/Lore.md` is not authoritative): two founder lineages radiated into every niche, and the player is
+a mutie among their descendants. Inspired by
 Biblaridion's *Alien Biospheres*, Nethack and Caves of Qud.
 
 **The core rule** (`Notes/Design-Principles.md`): everything is physical, everything is observable, everything is downstream of
