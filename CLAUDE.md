@@ -1,7 +1,8 @@
 # CLAUDE.md — Overworld
 
 Read this first. Then `Notes/Design-Principles.md` before designing or implementing any system, and the `Notes/` doc for the
-system you are touching. `Notes/Todo.md` is the person's prompt queue.
+system you are touching. `Notes/Direction.md` says where the game is heading (muties, the mutagen organ, the island).
+`Notes/Todo.md` is the person's prompt queue.
 
 ## What this is
 
