@@ -146,8 +146,10 @@ Prompt queue and task tracker. Check things off as they're done.
 See `Direction.md`. Brainstorm-grade; nothing here is to be built until the person picks it up.
 - [x] Write down the direction: the mutagen organ, unexplained never unpaid, the ecology as commons, muties as base + edits, communication by channel, starts with capacities
 - [ ] Reconcile `Mutation-Design.md` with the organ as surplus spent on edits
-- [ ] Decide `Lore.md`'s demigod against the demigod as apex of the energy flow
-- [ ] Settle the open questions in `Direction.md` (inheritance, edits and their costs, sapient minds, length of a life, what ends a run)
+- [x] Decide `Lore.md`'s demigod against the demigod as apex of the energy flow (Lore is not authoritative)
+- [x] Mutagen as substance (juice) and machine (organ); aging as repair; inheritance by deliberate signature; juice taken by eating
+- [ ] Organ or juice first
+- [ ] Settle the open questions in `Direction.md` (edits and their costs, sapient minds, length of a life, what ends a run)
 
 ## Up Next — Game Integration (after geography pass)
 - [ ] Sprite variants and selector completion (Piece 2 from tile body map spec — ~30 sprite patterns, variant selection from physical state)
