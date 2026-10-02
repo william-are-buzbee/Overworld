@@ -142,6 +142,16 @@ Prompt queue and task tracker. Check things off as they're done.
 - [ ] If rain shadows still too subtle after bgPrecipRate bump, iterate further
 - [ ] Target: windward deep crimson, leeward visibly lighter/drier
 
+## Up Next — Direction (Oct 2026)
+See `Direction.md`. Brainstorm-grade; nothing here is to be built until the person picks it up.
+- [x] Write down the direction: the mutagen organ, unexplained never unpaid, the ecology as commons, muties as base + edits, communication by channel, starts with capacities
+- [ ] Reconcile `Mutation-Design.md` with the organ as surplus spent on edits
+- [x] Decide `Lore.md`'s demigod against the demigod as apex of the energy flow (Lore is not authoritative)
+- [x] Mutagen as substance (juice) and machine (organ); aging as repair; inheritance by deliberate signature; juice taken by eating
+- [x] Organ or juice first (juice first: juice that is not burned seeds an organ)
+- [ ] Aging and death by age for every body, the player's included (low priority)
+- [ ] Settle the open questions in `Direction.md` (edits and their costs, sapient minds, length of a life, what ends a run)
+
 ## Up Next — Game Integration (after geography pass)
 - [ ] Sprite variants and selector completion (Piece 2 from tile body map spec — ~30 sprite patterns, variant selection from physical state)
 - [ ] Rendering integration (Piece 3 — wire per-tile palette and variant into game renderer, replace biome-lookup palettes)

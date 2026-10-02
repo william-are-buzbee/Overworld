@@ -1,5 +1,9 @@
 # Mutation System Design
 
+> **Superseded in part (1 Oct 2026).** `Direction.md` replaces where mutation comes from: juice (dense stored energy, taken by
+> eating) seeds the mutagen organ, and the organ spends juice on edits. Eating a clade does not grow that clade's organs. This
+> doc stands until it is reconciled; read `Direction.md` first.
+
 System design for the player mutation mechanic. The player changes over time based on what they consume. Mutations physically modify the player's body map — growing neural tissue in new zones, developing sensory organs that shouldn't exist on a Clade A body, redistributing mass between tissue types. This document covers the data pipeline, accumulation logic, mutation catalog, and how mutations surface to the player.
 
 Include alongside Body-Sim-Design.md, Stat-System-Design.md, Ecology-Foundations.md, and the relevant code files when implementing.
