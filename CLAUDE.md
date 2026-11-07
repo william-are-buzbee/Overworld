@@ -1,5 +1,9 @@
 # CLAUDE.md — Overworld
 
+**This repository is frozen (7 Nov 2026).** Overworld moved to the Game-Template-and-Library repository, at
+`games/overworld`, with this repository's history. Do not work here: open that repository and read its `CLAUDE.md` and
+`games/overworld/CLAUDE.md`. Nothing below is kept current.
+
 Read this first. Then `Notes/Design-Principles.md` before designing or implementing any system, and the `Notes/` doc for the
 system you are touching. `Notes/Direction.md` says where the game is heading (muties, the mutagen organ, the island).
 `Notes/Todo.md` is the person's prompt queue.
