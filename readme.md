@@ -1,5 +1,11 @@
 # Overworld - Alien Ecology Simulation
 
+> **Moved, 7 Nov 2026.** Overworld lives in
+> [Game-Template-and-Library](https://github.com/william-are-buzbee/Game-Template-and-Library/tree/main/games/overworld)
+> now, with this repository's history. Play it at
+> https://william-are-buzbee.github.io/Game-Template-and-Library/games/overworld/ (the old address sends you there, saves
+> and all). This repository is frozen and will be archived: work on Overworld there, not here.
+
 A game about survival on a believably simulated alien world. 
 
 ---------
